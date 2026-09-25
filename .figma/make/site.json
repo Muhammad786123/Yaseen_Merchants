@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to quickly create and customize web applications with intuitive tools, streamlining development for professionals and beginners alike.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

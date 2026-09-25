@@ -1,0 +1,59 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import MainLayout from '../components/layout/MainLayout.jsx';
+
+import Dashboard from '../pages/Dashboard/Dashboard.jsx';
+import Parties from '../pages/Parties/Parties.jsx';
+import Items from '../pages/Items/Items.jsx';
+import Qualities from '../pages/Qualities/Qualities.jsx';
+import Warehouses from '../pages/Warehouses/Warehouses.jsx';
+import Purchase from '../pages/Purchase/Purchase.jsx';
+import Issue from '../pages/Issue/Issue.jsx';
+import Production from '../pages/Production/Production.jsx';
+import Sale from '../pages/Sale/Sale.jsx';
+import Receipt from '../pages/Receipt/Receipt.jsx';
+import Payment from '../pages/Payment/Payment.jsx';
+import Stock from '../pages/Stock/Stock.jsx';
+import StockLedger from '../pages/StockLedger/StockLedger.jsx';
+import PartyLedger from '../pages/PartyLedger/PartyLedger.jsx';
+import CashBank from '../pages/CashBank/CashBank.jsx';
+import CashBook from '../pages/CashBook/CashBook.jsx';
+import SalePurchaseLedger from '../pages/SalePurchaseLedger/SalePurchaseLedger.jsx';
+import Receivable from '../pages/Receivable/Receivable.jsx';
+import Payable from '../pages/Payable/Payable.jsx';
+import Expenses from '../pages/Expenses/Expenses.jsx';
+import Reports from '../pages/Reports/Reports.jsx';
+import Settings from '../pages/Settings/Settings.jsx';
+
+export default function AppRoutes() {
+  return (
+    <MainLayout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/parties" element={<Parties />} />
+        <Route path="/items" element={<Items />} />
+        <Route path="/qualities" element={<Qualities />} />
+        <Route path="/warehouses" element={<Warehouses />} />
+        <Route path="/purchase" element={<Purchase />} />
+        <Route path="/issue" element={<Issue />} />
+        <Route path="/production" element={<Production />} />
+        <Route path="/sale" element={<Sale />} />
+        <Route path="/receipt" element={<Receipt />} />
+        <Route path="/payment" element={<Payment />} />
+        <Route path="/stock" element={<Stock />} />
+        <Route path="/stock-ledger" element={<StockLedger />} />
+        <Route path="/cash-book" element={<CashBook />} />
+        <Route path="/party-ledger" element={<PartyLedger />} />
+        <Route path="/sale-purchase-ledger" element={<SalePurchaseLedger />} />
+        <Route path="/cash-bank" element={<CashBank />} />
+        <Route path="/receivable" element={<Receivable />} />
+        <Route path="/payable" element={<Payable />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </MainLayout>
+  );
+}
