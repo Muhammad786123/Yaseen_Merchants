@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PageHeader from '../../components/common/PageHeader.jsx';
+import PrintDocument from '../../components/common/PrintDocument.jsx';
 import { Table, TR, TD } from '../../components/ui/Table.jsx';
 import Button from '../../components/ui/Button.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
@@ -10,7 +11,7 @@ import ProductionForm from '../../components/forms/ProductionForm.jsx';
 import { useProductions } from '../../hooks/useProductions.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Eye } from 'lucide-react';
 
 export default function Production() {
   const { productions, addProduction, deleteProduction } = useProductions();
@@ -18,6 +19,7 @@ export default function Production() {
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [viewingProduction, setViewingProduction] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const filtered = productions.filter(
@@ -74,7 +76,14 @@ export default function Production() {
               </Badge>
             </TD>
             <TD>
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={() => setViewingProduction(prd)}
+                  className="p-1.5 hover:bg-blue-50 rounded text-blue-600"
+                  title="View & Print Production Slip"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() => setDeletingId(prd.id)}
                   className="p-1.5 hover:bg-red-50 rounded text-red-500"
@@ -87,6 +96,69 @@ export default function Production() {
           </TR>
         ))}
       </Table>
+
+      {/* View Details / Print Slip Modal */}
+      <Modal
+        isOpen={!!viewingProduction}
+        onClose={() => setViewingProduction(null)}
+        title={`Production Run Slip - ${viewingProduction?.no}`}
+        maxWidth="max-w-3xl"
+      >
+        {viewingProduction && (
+          <PrintDocument
+            id="production-print-area"
+            title="PRODUCTION RUN SLIP"
+            documentNo={viewingProduction.no}
+            date={formatDate(viewingProduction.date)}
+            actionTitle={`Production Run Slip — ${viewingProduction.no}`}
+            printButtonText="Print Production Slip"
+            metadata={[
+              { label: 'Output Product', value: viewingProduction.product },
+              { label: 'Yield Percentage', value: `${viewingProduction.yieldPct}% (Efficiency)` },
+            ]}
+            signatures={[
+              { label: 'Production Incharge', sub: 'Machine Floor' },
+              { label: 'Verified By', sub: 'QC Department' },
+              { label: 'Authorized By', sub: 'Plant Supervisor' },
+            ]}
+          >
+            <div className="mb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Manufacturing Metrics</h4>
+              <table
+                className="invoice-table print-table w-full text-xs text-left border-collapse border border-gray-400"
+                style={{ width: '100%', borderCollapse: 'collapse' }}
+              >
+                <thead>
+                  <tr className="bg-[#F0EDE8] border-b border-gray-400 text-[#1E3A5F]">
+                    <th className="p-2 font-bold border border-gray-400">Parameter / Metric</th>
+                    <th className="p-2 font-bold border border-gray-400 text-right">Quantity (KG)</th>
+                    <th className="p-2 font-bold border border-gray-400 text-right">Share (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-white">
+                    <td className="p-2 border border-gray-400 font-semibold text-gray-900">Total Raw Material Input</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono font-bold">{viewingProduction.totalInput} KG</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono text-gray-500">100%</td>
+                  </tr>
+                  <tr className="bg-emerald-50/40">
+                    <td className="p-2 border border-gray-400 font-semibold text-emerald-800">Finished Product Output</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono font-bold text-emerald-700">{viewingProduction.outputQty} KG</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono text-emerald-700 font-semibold">{viewingProduction.yieldPct}%</td>
+                  </tr>
+                  <tr className="bg-red-50/40">
+                    <td className="p-2 border border-gray-400 font-semibold text-red-800">Waste / Scrap Generated</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono font-bold text-red-600">{viewingProduction.wasteQty} KG</td>
+                    <td className="p-2 border border-gray-400 text-right font-mono text-red-600 font-semibold">
+                      {(100 - viewingProduction.yieldPct).toFixed(1)}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </PrintDocument>
+        )}
+      </Modal>
 
       <Modal
         isOpen={isAddModalOpen}

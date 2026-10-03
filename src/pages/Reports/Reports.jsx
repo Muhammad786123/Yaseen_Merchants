@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/database.js';
 import PageHeader from '../../components/common/PageHeader.jsx';
+import PrintHeader from '../../components/common/PrintHeader.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
@@ -134,7 +135,7 @@ export default function Reports() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white p-1.5 rounded-xl border border-[#E0DBD3] overflow-x-auto">
+      <div className="flex gap-1 bg-white p-1.5 rounded-xl border border-[#E0DBD3] overflow-x-auto no-print">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -152,7 +153,7 @@ export default function Reports() {
 
       {/* Date & Search Controls for Reports */}
       {activeTab !== 'pl' && activeTab !== 'tb' && activeTab !== 'stock' && (
-        <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-[#E0DBD3]">
+        <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-[#E0DBD3] no-print">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-gray-500 font-medium">From:</span>
             <input
@@ -174,6 +175,24 @@ export default function Reports() {
           <SearchInput value={search} onChange={setSearch} placeholder="Filter records..." />
         </div>
       )}
+
+      <div className="print-area space-y-6">
+        <PrintHeader
+          documentTitle={
+            activeTab === 'purchase'
+              ? 'PURCHASE SUMMARY REPORT'
+              : activeTab === 'sale'
+              ? 'SALE REVENUE REPORT'
+              : activeTab === 'stock'
+              ? 'STOCK INVENTORY VALUATION REPORT'
+              : activeTab === 'production'
+              ? 'PRODUCTION YIELD REPORT'
+              : activeTab === 'tb'
+              ? 'TRIAL BALANCE STATEMENT'
+              : 'PROFIT & LOSS TRADING & BALANCE SHEET STATEMENT'
+          }
+          subtitle="Internal controlling financial report derived directly from live ledger entries"
+        />
 
       {/* Purchase Report */}
       {activeTab === 'purchase' && (
@@ -519,6 +538,7 @@ export default function Reports() {
           </Card>
         </div>
       )}
+      </div>
 
       {/* Modal for Capital Entry */}
       <Modal

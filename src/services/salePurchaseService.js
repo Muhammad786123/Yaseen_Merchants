@@ -17,6 +17,11 @@ export const salePurchaseService = {
 
     // 1. Purchase of goods (Mal Kharid) -> Debit Mall A/C
     purchases.forEach((p) => {
+      const totalQty = p.items ? p.items.reduce((s, i) => s + Number(i.quantity || 0), 0) : Number(p.quantity || 0);
+      const totalWeight = p.items ? p.items.reduce((s, i) => s + Number(i.weight || 0), 0) : Number(p.weight || 0);
+      const firstItem = p.items && p.items[0];
+      const rate = firstItem ? Number(firstItem.rate || 0) : Number(p.rate || 0);
+
       entries.push({
         id: p.id,
         rawId: p.id,
@@ -28,6 +33,9 @@ export const salePurchaseService = {
         description: p.items
           ? p.items.map((i) => (i.type === 'service' ? i.serviceDescription : i.itemName)).join(', ')
           : 'Raw Material Purchase',
+        quantity: totalQty || undefined,
+        weight: totalWeight || undefined,
+        rate: rate || undefined,
         debit: Number(p.total || 0),
         credit: 0,
       });
@@ -35,6 +43,11 @@ export const salePurchaseService = {
 
     // 2. Sale of goods (Mal Farokht) -> Credit Mall A/C
     sales.forEach((s) => {
+      const totalQty = s.items ? s.items.reduce((acc, i) => acc + Number(i.quantity || 0), 0) : Number(s.quantity || 0);
+      const totalWeight = s.items ? s.items.reduce((acc, i) => acc + Number(i.weight || 0), 0) : Number(s.weight || 0);
+      const firstItem = s.items && s.items[0];
+      const rate = firstItem ? Number(firstItem.rate || 0) : Number(s.rate || 0);
+
       entries.push({
         id: s.id,
         rawId: s.id,
@@ -46,6 +59,9 @@ export const salePurchaseService = {
         description: s.items
           ? s.items.map((i) => (i.type === 'service' ? i.serviceDescription : i.itemName)).join(', ')
           : 'Finished Product Sale',
+        quantity: totalQty || undefined,
+        weight: totalWeight || undefined,
+        rate: rate || undefined,
         debit: 0,
         credit: Number(s.total || 0),
       });

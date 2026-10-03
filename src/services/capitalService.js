@@ -12,10 +12,10 @@ export const capitalService = {
 
   async getBalance() {
     try {
-      if (!db.capitalEntries) return 500000;
+      if (!db.capitalEntries) return 0;
       const entries = await db.capitalEntries.toArray();
       if (entries.length === 0) {
-        return 500000; // Default baseline owner capital injection
+        return 0; // Clean baseline zero balance
       }
       let balance = 0;
       entries.forEach((e) => {
@@ -27,7 +27,7 @@ export const capitalService = {
       });
       return balance;
     } catch {
-      return 500000;
+      return 0;
     }
   },
 

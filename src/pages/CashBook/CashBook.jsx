@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PageHeader from '../../components/common/PageHeader.jsx';
+import PrintHeader from '../../components/common/PrintHeader.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
@@ -23,6 +24,7 @@ import {
   UserCheck,
   Plus,
   Eye,
+  Printer,
 } from 'lucide-react';
 
 export default function CashBook() {
@@ -151,6 +153,14 @@ export default function CashBook() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
+              variant="outline"
+              size="sm"
+              icon={Printer}
+              onClick={() => window.print()}
+            >
+              Print Statement
+            </Button>
+            <Button
               variant="primary"
               size="sm"
               icon={ArrowUpRight}
@@ -198,33 +208,8 @@ export default function CashBook() {
         }
       />
 
-      {/* Top Stat Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Physical Cash in Hand"
-          value={fmt(currentCashBalance)}
-          sub="Current Cash Book Running Balance"
-          icon={Wallet}
-          color="text-[#1E3A5F]"
-        />
-        <StatCard
-          label="Filtered Total Cash In (Credit)"
-          value={fmt(totalCashIn)}
-          sub="Cash Received / Withdrawn"
-          icon={ArrowDownLeft}
-          color="text-emerald-600"
-        />
-        <StatCard
-          label="Filtered Total Cash Out (Debit)"
-          value={fmt(totalCashOut)}
-          sub="Cash Paid / Deposited"
-          icon={ArrowUpRight}
-          color="text-red-600"
-        />
-      </div>
-
       {/* Controls & Date Filter */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3]">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3] no-print">
         <SearchInput
           value={search}
           onChange={setSearch}
@@ -264,6 +249,37 @@ export default function CashBook() {
           )}
         </div>
       </div>
+
+      <div className="print-area space-y-6">
+        <PrintHeader
+          documentTitle="PHYSICAL CASH BOOK LEDGER STATEMENT"
+          subtitle="Central audit register for physical cash movements, cash-to-bank transfers, and party settlements"
+        />
+
+        {/* Top Stat Summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard
+            label="Physical Cash in Hand"
+            value={fmt(currentCashBalance)}
+            sub="Current Cash Book Running Balance"
+            icon={Wallet}
+            color="text-[#1E3A5F]"
+          />
+          <StatCard
+            label="Filtered Total Cash In (Credit)"
+            value={fmt(totalCashIn)}
+            sub="Cash Received / Withdrawn"
+            icon={ArrowDownLeft}
+            color="text-emerald-600"
+          />
+          <StatCard
+            label="Filtered Total Cash Out (Debit)"
+            value={fmt(totalCashOut)}
+            sub="Cash Paid / Deposited"
+            icon={ArrowUpRight}
+            color="text-red-600"
+          />
+        </div>
 
       {/* Cash Book Ledger Table */}
       <Table
@@ -327,6 +343,7 @@ export default function CashBook() {
           </TR>
         ))}
       </Table>
+      </div>
 
       {/* Deposit Modal */}
       <Modal
@@ -495,18 +512,27 @@ export default function CashBook() {
         title="Cash Book Transaction Details"
       >
         {viewingEntry && (
-          <div className="space-y-4">
-            <div className="bg-[#FAF9F7] p-4 rounded-xl border border-[#E0DBD3] space-y-3 text-xs">
+          <div
+            id="cashbook-print-area"
+            className="print-area w-full bg-white text-black space-y-4"
+            style={{ margin: '0 auto', boxSizing: 'border-box' }}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-[#E0DBD3] no-print">
+              <h3 className="text-sm font-bold text-[#1E3A5F]">Transaction Details</h3>
+              <Button variant="primary" size="sm" icon={Printer} onClick={() => window.print()}>
+                Print Receipt
+              </Button>
+            </div>
+
+            <PrintHeader
+              documentTitle="CASH TRANSACTION RECEIPT"
+              documentNo={viewingEntry.id}
+              dateStr={formatDate(viewingEntry.date)}
+            />
+
+            <div className="bg-[#FAF9F7] p-4 rounded-xl border border-[#D1D5DB] space-y-3 text-xs">
               <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500">Transaction ID:</span>
-                <span className="font-mono font-bold text-[#1E3A5F]">{viewingEntry.id}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500">Date:</span>
-                <span className="font-bold">{formatDate(viewingEntry.date)}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500">Type:</span>
+                <span className="text-gray-500 font-semibold">Transaction Type:</span>
                 <Badge variant="blue">{viewingEntry.type}</Badge>
               </div>
               {viewingEntry.partyName && (
@@ -540,7 +566,7 @@ export default function CashBook() {
               <span className="font-semibold text-gray-700">Description:</span>{' '}
               {viewingEntry.description || 'No notes provided'}
             </div>
-            <div className="flex justify-end pt-3">
+            <div className="flex justify-end pt-3 no-print">
               <Button variant="secondary" onClick={() => setViewingEntry(null)}>
                 Close
               </Button>

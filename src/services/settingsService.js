@@ -10,6 +10,11 @@ export const settingsService = {
     return map;
   },
 
+  async getSetting(key) {
+    const record = await db.settings.where({ key }).first();
+    return record ? record.value : null;
+  },
+
   async saveSetting(key, value) {
     const existing = await db.settings.where({ key }).first();
     if (existing) {
@@ -17,6 +22,33 @@ export const settingsService = {
     } else {
       await db.settings.add({ id: 's_' + Date.now(), key, value });
     }
+  },
+
+  async getCompanyProfile() {
+    const profile = await this.getSetting('companyProfile');
+    if (profile && typeof profile === 'object') {
+      return profile;
+    }
+    const settings = await this.getSettings();
+    return {
+      legalName: settings.companyName || 'Shahid Yaseen Cotton Waste Merchant',
+      tagline: settings.tagline || 'Wholesale Cotton Waste, Fabrics & Textile Fibers Merchant',
+      address: settings.city || 'Faisalabad, Pakistan',
+      phone: settings.phone || '+92 300 1234567',
+      fiscalYear: settings.fiscalYear || '2026-2027',
+      logoUrl: settings.logoUrl || '',
+    };
+  },
+
+  async saveCompanyProfile(profileData) {
+    await this.saveSetting('companyProfile', profileData);
+    if (profileData.legalName) await this.saveSetting('companyName', profileData.legalName);
+    if (profileData.address) await this.saveSetting('city', profileData.address);
+    if (profileData.phone) await this.saveSetting('phone', profileData.phone);
+    if (profileData.fiscalYear) await this.saveSetting('fiscalYear', profileData.fiscalYear);
+    if (profileData.tagline) await this.saveSetting('tagline', profileData.tagline);
+    if (profileData.logoUrl !== undefined) await this.saveSetting('logoUrl', profileData.logoUrl);
+    return profileData;
   },
 
   async getUsers() {

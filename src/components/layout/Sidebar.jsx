@@ -1,5 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import CompanyLogo from '../common/CompanyLogo.jsx';
+import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
 import {
   LayoutGrid,
   Users,
@@ -24,6 +26,7 @@ import {
   Hash,
   User,
   X,
+  LogOut,
 } from 'lucide-react';
 
 const navGroups = [
@@ -92,26 +95,26 @@ const navGroups = [
 export default function Sidebar({ onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { profile } = useCompanyProfile();
+  const legalName = profile?.legalName || 'Shahid Yaseen Cotton Waste Merchant';
 
   const handleNav = (path) => {
     navigate(path);
     if (onClose) onClose();
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('isLoggedIn');
+    navigate('/login');
+    if (onClose) onClose();
+  };
+
   return (
-    <div className="w-56 h-full bg-[#1E3A5F] flex flex-col overflow-y-auto border-r border-[#1E3A5F]">
+    <div className="w-60 h-full bg-[#1E3A5F] flex flex-col overflow-y-auto border-r border-[#1E3A5F] no-print">
       {/* Brand Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-white/10 sticky top-0 bg-[#1E3A5F] z-10">
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => handleNav('/dashboard')}>
-          <div className="w-8 h-8 rounded-lg bg-[#C97B2E] flex items-center justify-center shrink-0 shadow-xs">
-            <span className="text-white text-sm font-bold">Y</span>
-          </div>
-          <div>
-            <div className="text-white font-bold text-sm leading-tight tracking-tight">
-              Yaseen Merchants
-            </div>
-            <div className="text-white/50 text-[10px]">Cotton Waste Merchant</div>
-          </div>
+      <div className="flex items-center justify-between px-3 py-3.5 border-b border-white/10 sticky top-0 bg-[#1E3A5F] z-10">
+        <div className="cursor-pointer" onClick={() => handleNav('/dashboard')} title={legalName}>
+          <CompanyLogo variant="onDark" size="sm" showTagline={true} />
         </div>
         {onClose && (
           <button
@@ -122,6 +125,9 @@ export default function Sidebar({ onClose }) {
           </button>
         )}
       </div>
+
+      {/* Brand Accent Bar (Green -> Teal -> Blue gradient dots line) */}
+      <div className="h-0.5 w-full bg-gradient-to-r from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></div>
 
       {/* Navigation items */}
       <nav className="flex-1 px-3 py-4 space-y-4">
@@ -145,14 +151,17 @@ export default function Sidebar({ onClose }) {
                   <button
                     key={item.path}
                     onClick={() => handleNav(item.path)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-all ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-all relative ${
                       active
                         ? 'bg-[#C97B2E] text-white shadow-xs font-semibold'
                         : 'text-white/70 hover:bg-white/10 hover:text-white'
                     }`}
                   >
+                    {active && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-gradient-to-b from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></span>
+                    )}
                     <ItemIcon className="w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                   </button>
                 );
               })}
@@ -161,12 +170,24 @@ export default function Sidebar({ onClose }) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/10 text-center bg-[#1E3A5F] sticky bottom-0">
-        <div className="text-[10px] text-white/30 font-medium">
-          Yaseen Merchants ERP v1.0
+      {/* Footer with Logout */}
+      <div className="px-3 py-3 border-t border-white/10 bg-[#1E3A5F] sticky bottom-0 space-y-2">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-600 transition-all border border-red-500/20 cursor-pointer"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Logout</span>
+        </button>
+
+        <div className="text-center">
+          <div className="text-[10px] text-white/40 font-semibold truncate" title={legalName}>
+            {legalName}
+          </div>
+          <div className="text-[9px] text-white/25 mt-0.5">SYCWM ERP v1.0</div>
         </div>
       </div>
     </div>
   );
 }
+

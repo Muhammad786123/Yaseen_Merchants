@@ -41,7 +41,7 @@ export const purchaseService = {
       supplierId: purchaseData.supplierId,
       supplierName: purchaseData.supplierName,
       warehouseId: purchaseData.warehouseId,
-      warehouseName: purchaseData.warehouseName,
+      warehouseName: (purchaseData.warehouseName || '').replace(/wirehouse/gi, 'Warehouse'),
       items: purchaseData.items || [],
       total,
       paid,

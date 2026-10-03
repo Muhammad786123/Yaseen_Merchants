@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Nastaliq+Urdu:wght@400;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -15,6 +15,11 @@
   --color-warning: #D97706;
   --font-sans: 'Outfit', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  --font-urdu: 'Noto Nastaliq Urdu', 'Outfit', system-ui, sans-serif;
+}
+
+.font-urdu {
+  font-family: var(--font-urdu);
 }
 
 * {
@@ -39,3 +44,435 @@ body {
 
 /* Smooth transitions */
 * { transition-property: background-color, border-color, color, opacity, box-shadow, transform; transition-duration: 150ms; transition-timing-function: ease; }
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+/* Global Print Stylesheet */
+@media print {
+  html, body {
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* When modal is open (via portal or direct), hide #root entirely so background elements consume zero height */
+  body:has(.modal-overlay) > #root {
+    display: none !important;
+  }
+
+  .modal-overlay,
+  [class*="fixed"][class*="inset-0"],
+  [class*="flex"][class*="items-center"][class*="justify-center"] {
+    display: block !important;
+    position: static !important;
+    align-items: unset !important;
+    justify-content: unset !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: none !important;
+  }
+
+  .print-document {
+    position: static !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    top: 0 !important;
+  }
+
+  /* 1. Hide non-printable elements */
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* 2. Hide everything by default (fallback if no modal) */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 3. Make print-area, print-document and all children visible */
+  .print-document,
+  .print-document *,
+  #print-document-area,
+  #print-document-area *,
+  #invoice-print-area,
+  #invoice-print-area *,
+  #sale-invoice-print-area,
+  #sale-invoice-print-area *,
+  [id$="-print-area"],
+  [id$="-print-area"] *,
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+
+  /* 4. Full page/body/root reset — strip all spacing, layout, backgrounds */
+  html,
+  body,
+  #root,
+  #root > div,
+  main {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  .modal-overlay,
+  .fixed.inset-0.z-50,
+  div[class*="fixed"][class*="inset-0"],
+  div[class*="modal-overlay"] {
+    display: block !important;
+    position: static !important;
+    align-items: unset !important;
+    justify-content: unset !important;
+    align-content: unset !important;
+    place-items: unset !important;
+    place-content: unset !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-block: 0 !important;
+    margin-inline: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    overflow: visible !important;
+    inset: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+  }
+
+  .modal-dialog,
+  div[class*="modal-dialog"],
+  [class*="max-w-"] {
+    display: block !important;
+    position: static !important;
+    align-items: unset !important;
+    justify-content: unset !important;
+    align-content: unset !important;
+    place-items: unset !important;
+    place-content: unset !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-block: 0 !important;
+    margin-inline: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    overflow: visible !important;
+    inset: auto !important;
+  }
+
+  .modal-content,
+  div[class*="modal-content"] {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* 6. Print Content Container - full A4 width, zero extra padding/margins (starts immediately at 12mm page margin) */
+  .print-document,
+  #print-document-area,
+  #invoice-print-area,
+  #sale-invoice-print-area,
+  #receipt-print-area,
+  #payment-print-area,
+  #cashbook-print-area,
+  #issue-print-area,
+  #production-print-area,
+  [id$="-print-area"],
+  .print-area {
+    display: block !important;
+    position: static !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  /* 6b. Invoice Table & Visual Borders */
+  .print-document table.invoice-table,
+  .print-document table.print-table,
+  #invoice-print-area table,
+  #sale-invoice-print-area table,
+  #receipt-print-area table,
+  #payment-print-area table,
+  #cashbook-print-area table,
+  #issue-print-area table,
+  #production-print-area table,
+  .invoice-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 8px 0 !important;
+  }
+
+  .print-document table.invoice-table th,
+  .print-document table.print-table th,
+  #invoice-print-area th,
+  #sale-invoice-print-area th,
+  #issue-print-area th,
+  #production-print-area th,
+  .invoice-table th {
+    background-color: #F0EDE8 !important;
+    color: #1E3A5F !important;
+    border: 1px solid #333333 !important;
+    padding: 6px 8px !important;
+    font-weight: 700 !important;
+    font-size: 10.5px !important;
+  }
+
+  .print-document table.invoice-table td,
+  .print-document table.print-table td,
+  #invoice-print-area td,
+  #sale-invoice-print-area td,
+  #issue-print-area td,
+  #production-print-area td,
+  .invoice-table td {
+    border: 1px solid #444444 !important;
+    padding: 6px 8px !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+  }
+
+  /* 7. Preserve table and inline elements display */
+  table  { display: table !important; width: 100% !important; border-collapse: collapse !important; }
+  thead  { display: table-header-group !important; }
+  tbody  { display: table-row-group !important; }
+  tfoot  { display: table-footer-group !important; }
+  tr     { display: table-row !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+  th, td { display: table-cell !important; }
+
+  /* 8. Preserve inline / span / heading / paragraph display */
+  span, a, strong, em, b, i, label { display: inline !important; }
+  h1, h2, h3, h4, h5, h6, p { display: block !important; }
+
+  /* 9. Keep images visible */
+  img { display: inline-block !important; visibility: visible !important; }
+
+  /* 10. Page break helpers */
+  .print-header-block {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .print-summary-block,
+  .print-footer-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 11. Compact Party Statement Table Styling for print */
+  .statement-table {
+    font-size: 9.5px !important;
+  }
+  .statement-table th,
+  .statement-table td {
+    padding: 3px 5px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* 12. Strip screen-only card wrapper inside Urdu statement.
+   *     The .print-area-inner div is the rounded border card used for the
+   *     header block on-screen. In print it must be flat — no extra padding,
+   *     no border-radius, no box-shadow — so it doesn't add double-padding
+   *     inside the already-padded [id$="-print-area"] wrapper.
+   *     NOTE: div already resets these via rule 5 above; this rule is an
+   *     explicit reinforcement targeted at this specific class.
+   */
+  .print-area-inner {
+    padding: 0 !important;
+    margin-bottom: 6px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* 13. Mall A/C Statement (PERBALACC bordered grid) — restore cell borders.
+   *     Rule 5 sets border:none on all divs (needed to kill modal borders), but
+   *     the MallAcStatement uses inline style borders on th/td for the grid.
+   *     Inline styles have higher specificity than the class rule so they survive,
+   *     but this explicit reinforcement ensures they are not overridden.
+   */
+  #mallac-print-area .mallac-grid-table th,
+  #mallac-print-area .mallac-grid-table td {
+    border: 1px solid #222 !important;
+    padding: 2px 4px !important;
+    font-size: 8.5px !important;
+    line-height: 1.3 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+  }
+
+  /* 14. The mallac print-area wrapper has display:none on screen — override to
+   *     block at print time so it renders on paper. The visibility:visible rule
+   *     from section 3 makes its children visible; this makes the container itself
+   *     participate in layout.
+   */
+  #mallac-print-area {
+    display: block !important;
+    visibility: visible !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 15. thead should repeat on every page for the Mall A/C bordered table */
+  #mallac-print-area thead {
+    display: table-header-group !important;
+  }
+
+  /* 16. Prevent nested print-area containers from compounding padding/margins */
+  .print-area .print-area,
+  [id$="-print-area"] [id$="-print-area"],
+  #party-ledger-print-area #urdu-statement-print-area,
+  #party-details-print-area #urdu-statement-print-area {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 17. English Party Statement (Bordered Table Grid) */
+  #party-ledger-print-area .overflow-x-auto,
+  #party-details-print-area .overflow-x-auto {
+    overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  #party-ledger-print-area table,
+  #party-details-print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 4px !important;
+  }
+
+  #party-ledger-print-area .overflow-x-auto table th,
+  #party-ledger-print-area .overflow-x-auto table td,
+  #party-details-print-area .overflow-x-auto table th,
+  #party-details-print-area .overflow-x-auto table td {
+    border: 1px solid #222 !important;
+    padding: 3px 5px !important;
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+  }
+
+  #party-ledger-print-area .overflow-x-auto thead th,
+  #party-details-print-area .overflow-x-auto thead th {
+    background-color: #f5f4f0 !important;
+    font-weight: 800 !important;
+    color: #1E3A5F !important;
+    border: 1px solid #222 !important;
+  }
+
+  /* Make sure signature tables have no outer or cell borders */
+  .sig-table,
+  .sig-table td,
+  .sig-table tr {
+    border: none !important;
+  }
+
+  /* 18. Urdu Party Statement Single-Row Flex & Scoped Header Layout */
+  #urdu-statement-print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    visibility: visible !important;
+    margin: 0 !important;
+  }
+
+  /* Force pure monochrome & uniform font across Urdu statement */
+  #urdu-statement-print-area,
+  #urdu-statement-print-area *,
+  .print-footer-ur,
+  .print-footer-ur * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border-color: #000000 !important;
+    font-family: 'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif !important;
+  }
+
+  .statement-header-line {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-bottom: 1px !important;
+    gap: 5px !important;
+  }
+
+  .urdu-statement-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    direction: ltr !important;
+    box-sizing: border-box !important;
+  }
+
+  .urdu-statement-table th,
+  .urdu-statement-table td {
+    box-sizing: border-box !important;
+    word-wrap: break-word !important;
+  }
+
+  .statement-detail-line,
+  .statement-date-line {
+    display: block !important;
+    width: 100% !important;
+  }
+  .statement-detail-line {
+    text-align: right !important;
+    direction: rtl !important;
+  }
+  .statement-date-line {
+    text-align: left !important;
+    direction: ltr !important;
+  }
+}
+

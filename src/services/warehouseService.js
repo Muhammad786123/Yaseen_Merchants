@@ -7,7 +7,8 @@ export const warehouseService = {
 
   async add(data) {
     const id = data.id || 'w_' + Date.now();
-    const item = { id, name: data.name, type: data.type || 'Raw Material', location: data.location || '' };
+    const cleanName = (data.name || '').replace(/wirehouse/gi, 'Warehouse');
+    const item = { id, name: cleanName, type: data.type || 'Raw Material', location: data.location || '' };
     await db.warehouses.add(item);
     return item;
   },
@@ -15,7 +16,8 @@ export const warehouseService = {
   async update(id, data) {
     const existing = await db.warehouses.get(id);
     if (!existing) throw new Error('Warehouse not found');
-    const updated = { ...existing, ...data };
+    const cleanName = data.name ? data.name.replace(/wirehouse/gi, 'Warehouse') : existing.name;
+    const updated = { ...existing, ...data, name: cleanName };
     await db.warehouses.put(updated);
     return updated;
   },

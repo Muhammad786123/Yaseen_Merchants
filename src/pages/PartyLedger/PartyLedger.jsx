@@ -1,180 +1,234 @@
 import React, { useState } from 'react';
 import PageHeader from '../../components/common/PageHeader.jsx';
+import PrintHeader from '../../components/common/PrintHeader.jsx';
+import UrduPartyStatement from '../../components/common/UrduPartyStatement.jsx';
+import PrintFooter from '../../components/common/PrintFooter.jsx';
 import { Table, TR, TD } from '../../components/ui/Table.jsx';
 import Select from '../../components/ui/Select.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import Button from '../../components/ui/Button.jsx';
 import { useParties } from '../../hooks/useParties.js';
-import { usePurchases } from '../../hooks/usePurchases.js';
-import { useSales } from '../../hooks/useSales.js';
-import { useFinances } from '../../hooks/useFinances.js';
-import { useCashBook } from '../../hooks/useCashBook.js';
-import { fmt, formatDate } from '../../utils/formatters.js';
+import { usePartyLedger } from '../../hooks/usePartyLedger.js';
+import { fmt, fmtNum, formatDate } from '../../utils/formatters.js';
+import { Printer, Globe } from 'lucide-react';
 
 export default function PartyLedger() {
   const { parties } = useParties();
-  const { purchases } = usePurchases();
-  const { sales } = useSales();
-  const { receipts, payments } = useFinances();
-  const { cashBookEntries } = useCashBook();
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const [selectedPartyId, setSelectedPartyId] = useState(searchParams?.get('party') || parties[0]?.id || 'p1');
+  const [viewMode, setViewMode] = useState(searchParams?.get('mode') || 'english'); // 'english' | 'urdu'
 
-  const [selectedPartyId, setSelectedPartyId] = useState(parties[0]?.id || 'p1');
+  const { selectedParty, ledgerRows, openingBalance } = usePartyLedger(selectedPartyId);
 
-  const selectedParty = parties.find((p) => p.id === selectedPartyId);
+  // Compute summary totals for English statement & footer
+  const totalDebit = ledgerRows.reduce((sum, r) => sum + Number(r.debit || 0), 0);
+  const totalCredit = ledgerRows.reduce((sum, r) => sum + Number(r.credit || 0), 0);
+  const totalQty = ledgerRows.reduce(
+    (sum, r) => sum + (typeof r.quantity === 'number' ? r.quantity : (Number(r.quantity) || 0)),
+    0
+  );
+  const totalWeight = ledgerRows.reduce(
+    (sum, r) => sum + (typeof r.weight === 'number' ? r.weight : (Number(r.weight) || 0)),
+    0
+  );
+  const closingBalance =
+    ledgerRows.length > 0
+      ? Number(ledgerRows[ledgerRows.length - 1].balance || 0)
+      : openingBalance;
 
-  // Combine purchase, sale, receipt, payment, and direct cash book transactions for party ledger
-  const transactions = [];
-
-  purchases.forEach((p) => {
-    if (p.supplierId === selectedPartyId) {
-      transactions.push({
-        date: p.date,
-        refNo: p.no,
-        type: 'Purchase Invoice',
-        debit: 0,
-        credit: p.total,
-        note: `Purchase from ${p.supplierName}`,
-      });
-    }
-  });
-
-  sales.forEach((s) => {
-    if (s.customerId === selectedPartyId) {
-      transactions.push({
-        date: s.date,
-        refNo: s.no,
-        type: 'Sale Invoice',
-        debit: s.total,
-        credit: 0,
-        note: `Sale to ${s.customerName}`,
-      });
-    }
-  });
-
-  receipts.forEach((r) => {
-    if (r.partyId === selectedPartyId) {
-      transactions.push({
-        date: r.date,
-        refNo: r.no,
-        type: 'Receipt (Customer Payment)',
-        debit: 0,
-        credit: r.amount,
-        note: r.description || `Payment received into ${r.account}`,
-      });
-    }
-  });
-
-  payments.forEach((p) => {
-    if (p.partyId === selectedPartyId) {
-      transactions.push({
-        date: p.date,
-        refNo: p.no,
-        type: 'Payment (Supplier Settlement)',
-        debit: p.amount,
-        credit: 0,
-        note: p.description || `Payment paid from ${p.account}`,
-      });
-    }
-  });
-
-  // Direct Cash Book Given / Received entries
-  cashBookEntries.forEach((cb) => {
-    if (cb.partyId === selectedPartyId) {
-      if (cb.type === 'CashGiven') {
-        transactions.push({
-          date: cb.date,
-          refNo: 'CB-GIVE',
-          type: 'Cash Given to Party',
-          debit: cb.debit,
-          credit: 0,
-          note: cb.description || 'Physical cash given to party',
-        });
-      } else if (cb.type === 'CashReceived') {
-        transactions.push({
-          date: cb.date,
-          refNo: 'CB-RCV',
-          type: 'Cash Received from Party',
-          debit: 0,
-          credit: cb.credit,
-          note: cb.description || 'Physical cash received from party',
-        });
-      }
-    }
-  });
-
-  transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  let runningBalance = Number(selectedParty?.openingBalance || 0);
-  const ledgerRows = transactions.map((t) => {
-    runningBalance += t.debit - t.credit;
-    return { ...t, balance: runningBalance };
-  });
+  const handlePrint = (mode) => {
+    setViewMode(mode);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Party Statement & Ledger"
         subtitle="Complete financial debit/credit audit ledger reflecting purchases, sales, settlements, and physical cash movements"
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              icon={Printer}
+              onClick={() => handlePrint('english')}
+            >
+              Print English Statement
+            </Button>
+            <Button
+              variant="primary"
+              icon={Printer}
+              onClick={() => handlePrint('urdu')}
+            >
+              پرنٹ (Urdu Statement)
+            </Button>
+          </div>
+        }
       />
 
-      <div className="bg-white p-4 rounded-xl border border-[#E0DBD3] max-w-md">
-        <Select
-          label="Select Party Account"
-          value={selectedPartyId}
-          onChange={setSelectedPartyId}
-          options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.type} - ${p.city})` }))}
-        />
+      {/* Filter and View Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-4 no-print">
+        <div className="bg-white p-4 rounded-xl border border-[#E0DBD3] w-full sm:w-80">
+          <Select
+            label="Select Party Account"
+            value={selectedPartyId}
+            onChange={setSelectedPartyId}
+            options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.type} - ${p.city})` }))}
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-[#E0DBD3]">
+          <button
+            onClick={() => setViewMode('english')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              viewMode === 'english'
+                ? 'bg-[#1E3A5F] text-white shadow-xs'
+                : 'text-gray-600 hover:bg-[#F5F4F0]'
+            }`}
+          >
+            English Statement
+          </button>
+          <button
+            onClick={() => setViewMode('urdu')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              viewMode === 'urdu'
+                ? 'bg-[#1E3A5F] text-white shadow-xs'
+                : 'text-gray-600 hover:bg-[#F5F4F0]'
+            }`}
+          >
+            پارٹی اسٹیٹمنٹ (Urdu)
+          </button>
+        </div>
       </div>
 
-      {selectedParty && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3] text-xs">
-          <div>
-            <span className="text-gray-500">Party Type:</span>{' '}
-            <Badge variant="blue">{selectedParty.type}</Badge>
-          </div>
-          <div>
-            <span className="text-gray-500">Opening Balance:</span>{' '}
-            <span className="font-bold">{fmt(selectedParty.openingBalance || 0)}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Current Balance:</span>{' '}
-            <span
-              className={`font-bold text-sm ${
-                selectedParty.balance > 0 ? 'text-red-600' : 'text-emerald-600'
-              }`}
-            >
-              {fmt(selectedParty.balance || 0)}
-            </span>
-          </div>
-        </div>
-      )}
+      <div id="party-ledger-print-area" className="print-area space-y-6">
+        {viewMode === 'urdu' ? (
+          <UrduPartyStatement
+            party={selectedParty}
+            ledgerRows={ledgerRows}
+            openingBalance={openingBalance}
+          />
+        ) : (
+          <>
+            <PrintHeader
+              documentTitle="PARTY STATEMENT OF ACCOUNT"
+              partyName={selectedParty ? `${selectedParty.name} (${selectedParty.city || ''})` : ''}
+              subtitle="Complete ledger audit statement reflecting purchases, sales, settlements, and physical cash movements"
+            />
 
-      <Table
-        headers={['Date', 'Ref #', 'Transaction Type', 'Description / Details', 'Debit (Dr)', 'Credit (Cr)', 'Running Balance']}
-        emptyText="No ledger transactions recorded for this party."
-      >
-        <TR highlight>
-          <TD>-</TD>
-          <TD mono>-</TD>
-          <TD><Badge variant="gray">Opening</Badge></TD>
-          <TD className="text-gray-500 italic">Initial opening balance record</TD>
-          <TD mono right>-</TD>
-          <TD mono right>-</TD>
-          <TD mono right className="font-bold">{fmt(selectedParty?.openingBalance || 0)}</TD>
-        </TR>
-        {ledgerRows.map((r, idx) => (
-          <TR key={idx}>
-            <TD>{formatDate(r.date)}</TD>
-            <TD mono className="font-bold text-[#1E3A5F]">{r.refNo}</TD>
-            <TD>
-              <Badge variant={r.debit > 0 ? 'blue' : 'green'}>{r.type}</Badge>
-            </TD>
-            <TD className="text-xs text-gray-700">{r.note}</TD>
-            <TD mono right className="text-emerald-600 font-bold">{r.debit ? fmt(r.debit) : '-'}</TD>
-            <TD mono right className="text-red-500 font-bold">{r.credit ? fmt(r.credit) : '-'}</TD>
-            <TD mono right className="font-bold text-[#1E3A5F]">{fmt(r.balance)}</TD>
-          </TR>
-        ))}
-      </Table>
+            {selectedParty && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3] text-xs">
+                <div>
+                  <span className="text-gray-500">Party Type:</span>{' '}
+                  <Badge variant="blue">{selectedParty.type}</Badge>
+                </div>
+                <div>
+                  <span className="text-gray-500">Opening Balance:</span>{' '}
+                  <span className="font-bold">{fmt(openingBalance)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Current Balance:</span>{' '}
+                  <span
+                    className={`font-bold text-sm ${
+                      (selectedParty.balance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'
+                    }`}
+                  >
+                    {fmt(selectedParty.balance || 0)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <Table
+              headers={[
+                'Date',
+                'Detail',
+                'Bill No.',
+                'Quantity',
+                'Weight',
+                'Rate',
+                'Debit (Dr)',
+                'Credit (Cr)',
+                'Balance',
+              ]}
+              emptyText="No ledger transactions recorded for this party."
+            >
+              <TR highlight>
+                <TD>-</TD>
+                <TD className="font-medium text-gray-700">Opening Balance — Initial record</TD>
+                <TD mono>-</TD>
+                <TD mono right>-</TD>
+                <TD mono right>-</TD>
+                <TD mono right>-</TD>
+                <TD mono right>-</TD>
+                <TD mono right>-</TD>
+                <TD mono right className="font-bold text-[#1E3A5F]">
+                  {fmt(openingBalance)}
+                </TD>
+              </TR>
+              {ledgerRows.map((r, idx) => (
+                <TR key={idx}>
+                  <TD>{formatDate(r.date)}</TD>
+                  <TD className="text-xs text-gray-900 font-medium max-w-xs">{r.detail}</TD>
+                  <TD mono className="font-bold text-[#1E3A5F]">
+                    {r.billNo}
+                  </TD>
+                  <TD mono right>
+                    {r.quantity !== '-' && r.quantity !== undefined ? fmtNum(r.quantity) : '-'}
+                  </TD>
+                  <TD mono right>
+                    {r.weight !== '-' && r.weight !== undefined ? fmtNum(r.weight) : '-'}
+                  </TD>
+                  <TD mono right>
+                    {r.rate !== '-' && r.rate !== undefined
+                      ? typeof r.rate === 'number'
+                        ? fmtNum(r.rate)
+                        : r.rate
+                      : '-'}
+                  </TD>
+                  <TD mono right className="text-emerald-600 font-bold">
+                    {r.debit ? fmt(r.debit) : '-'}
+                  </TD>
+                  <TD mono right className="text-red-500 font-bold">
+                    {r.credit ? fmt(r.credit) : '-'}
+                  </TD>
+                  <TD mono right className="font-bold text-[#1E3A5F]">
+                    {fmt(r.balance)}
+                  </TD>
+                </TR>
+              ))}
+
+              {/* Total Summary Row for English Statement */}
+              {ledgerRows.length > 0 && (
+                <TR highlight className="font-bold bg-[#F5F4F0] border-t-2 border-[#1E3A5F]">
+                  <TD className="font-extrabold text-[#1E3A5F]">Total</TD>
+                  <TD className="font-bold">{ledgerRows.length} Transactions</TD>
+                  <TD mono>-</TD>
+                  <TD mono right>{totalQty > 0 ? fmtNum(totalQty) : '-'}</TD>
+                  <TD mono right>{totalWeight > 0 ? fmtNum(totalWeight) : '-'}</TD>
+                  <TD mono right>-</TD>
+                  <TD mono right className="text-emerald-700 font-extrabold">{fmt(totalDebit)}</TD>
+                  <TD mono right className="text-red-600 font-extrabold">{fmt(totalCredit)}</TD>
+                  <TD mono right className="font-extrabold text-[#1E3A5F]">{fmt(closingBalance)}</TD>
+                </TR>
+              )}
+            </Table>
+
+            {/* Closing Footer Block for English Statement */}
+            <PrintFooter
+              lang="en"
+              totalDebit={totalDebit}
+              totalCredit={totalCredit}
+              closingBalance={closingBalance}
+              printedBy="Shahid Yaseen"
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
+
+

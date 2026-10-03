@@ -41,7 +41,7 @@ export const saleService = {
       customerId: saleData.customerId,
       customerName: saleData.customerName,
       warehouseId: saleData.warehouseId,
-      warehouseName: saleData.warehouseName,
+      warehouseName: (saleData.warehouseName || '').replace(/wirehouse/gi, 'Warehouse'),
       items: saleData.items || [],
       total,
       received,
