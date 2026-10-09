@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { syncStockEntriesToDb } from '../utils/stockUtils.js';
 
 export const productionService = {
   async getAll() {
@@ -49,10 +50,13 @@ export const productionService = {
       });
     }
 
+    await syncStockEntriesToDb();
     return newPrd;
   },
 
   async delete(id) {
-    return await db.productions.delete(id);
+    const res = await db.productions.delete(id);
+    await syncStockEntriesToDb();
+    return res;
   },
 };

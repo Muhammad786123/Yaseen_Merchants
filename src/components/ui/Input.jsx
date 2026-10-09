@@ -18,8 +18,8 @@ export default function Input({
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium text-gray-700 mb-1">
-          {label} {required && <span className="text-red-500">*</span>}
+        <label htmlFor={inputId} className="block text-xs font-bold text-gray-900 mb-1">
+          {label} {required && <span className="text-red-600">*</span>}
         </label>
       )}
       <input
@@ -29,14 +29,14 @@ export default function Input({
         onChange={(e) => onChange && onChange(e.target.value)}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${
+        className={`w-full px-2.5 py-1.5 text-xs border rounded-none outline-none transition-colors ${
           error
-            ? 'border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-            : 'border-[#E0DBD3] focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F]'
-        } ${readOnly ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900'} ${className}`}
+            ? 'border-red-600 focus:border-red-700 bg-red-50/20'
+            : 'border-black focus:border-blue-700 bg-white'
+        } ${readOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed font-medium' : 'text-gray-900'} ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {error && <p className="text-xs text-red-600 font-semibold mt-0.5">{error}</p>}
     </div>
   );
 }

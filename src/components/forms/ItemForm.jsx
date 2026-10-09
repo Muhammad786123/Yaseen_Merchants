@@ -8,9 +8,6 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Raw Material');
-  const [quality, setQuality] = useState('');
-  const [unit, setUnit] = useState('KG');
-  const [defaultRate, setDefaultRate] = useState(0);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -18,13 +15,8 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
       setCode(initialData.code || '');
       setName(initialData.name || '');
       setCategory(initialData.category || 'Raw Material');
-      setQuality(initialData.quality || '');
-      setUnit(initialData.unit || 'KG');
-      setDefaultRate(initialData.defaultRate || 0);
-    } else if (qualities.length > 0 && !quality) {
-      setQuality(qualities[0].name);
     }
-  }, [initialData, qualities]);
+  }, [initialData]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -37,12 +29,13 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
     }
 
     onSubmit({
-      code: code || `RM-${Math.floor(100 + Math.random() * 900)}`,
-      name,
+      code: code.trim() || `RM-${Math.floor(100 + Math.random() * 900)}`,
+      name: name.trim(),
       category,
-      quality: quality || (qualities[0]?.name || 'Cotton A'),
-      unit,
-      defaultRate: Number(defaultRate),
+      unit: 'KG',
+      // Maintain backwards compatibility for legacy fields
+      quality: initialData?.quality || '',
+      defaultRate: initialData?.defaultRate ? Number(initialData.defaultRate) : 0,
     });
   };
 
@@ -50,7 +43,7 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
-          label="Item Code"
+          label="Item Code (Optional)"
           value={code}
           onChange={setCode}
           placeholder="e.g. RM-001"
@@ -65,7 +58,7 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
         <Select
           label="Category"
           value={category}
@@ -75,34 +68,6 @@ export default function ItemForm({ initialData = null, qualities = [], onSubmit,
             { value: 'Finished Product', label: 'Finished Product' },
           ]}
           required
-        />
-        <Select
-          label="Quality Grade"
-          value={quality}
-          onChange={setQuality}
-          options={qualities.map((q) => ({ value: q.name, label: q.name }))}
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label="Unit of Measure"
-          value={unit}
-          onChange={setUnit}
-          options={[
-            { value: 'KG', label: 'Kilogram (KG)' },
-            { value: 'Maund', label: 'Maund (40 KG)' },
-            { value: 'Bale', label: 'Bale' },
-            { value: 'Ton', label: 'Metric Ton' },
-          ]}
-        />
-        <Input
-          label="Default Rate (PKR)"
-          type="number"
-          value={defaultRate}
-          onChange={setDefaultRate}
-          placeholder="0"
         />
       </div>
 

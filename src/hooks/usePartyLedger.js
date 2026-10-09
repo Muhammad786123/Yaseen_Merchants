@@ -1,9 +1,12 @@
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/database.js';
 import { useParties } from './useParties.js';
 import { usePurchases } from './usePurchases.js';
 import { useSales } from './useSales.js';
 import { useFinances } from './useFinances.js';
 import { useCashBook } from './useCashBook.js';
 import { useIssues } from './useIssues.js';
+import { fmt } from '../utils/formatters.js';
 
 /**
  * Custom hook to compile and calculate 9-column Party Account Ledger transactions
@@ -18,6 +21,7 @@ export function usePartyLedger(selectedPartyId) {
   const { receipts, payments } = useFinances();
   const { cashBookEntries } = useCashBook();
   const { issues } = useIssues();
+  const journalEntries = useLiveQuery(() => (db.journalEntries ? db.journalEntries.toArray() : []), []) || [];
 
   const selectedParty = parties.find((p) => p.id === selectedPartyId);
 
@@ -52,7 +56,7 @@ export function usePartyLedger(selectedPartyId) {
             if (i.type === 'service') return i.serviceDescription || 'Service';
             const name = i.itemName || i.quality || 'Goods';
             const nugStr = i.nugs || i.bags ? `${i.nugs || i.bags} bags ` : '';
-            const rateStr = i.rate ? ` @ ₹${i.rate}` : '';
+            const rateStr = i.rate ? ` @ ${fmt(i.rate)}` : '';
             return `${nugStr}${name}${rateStr}`;
           })
           .join(', ');
@@ -104,7 +108,7 @@ export function usePartyLedger(selectedPartyId) {
             if (i.type === 'service') return i.serviceDescription || 'Service';
             const name = i.itemName || i.quality || 'Goods';
             const nugStr = i.nugs || i.bags ? `${i.nugs || i.bags} bags ` : '';
-            const rateStr = i.rate ? ` @ ₹${i.rate}` : '';
+            const rateStr = i.rate ? ` @ ${fmt(i.rate)}` : '';
             return `${nugStr}${name}${rateStr}`;
           })
           .join(', ');
@@ -230,6 +234,26 @@ export function usePartyLedger(selectedPartyId) {
         credit: 0,
       });
     }
+  });
+
+  // 7. Journal Entries (JV)
+  journalEntries.forEach((jv) => {
+    (jv.lines || []).forEach((line, idx) => {
+      if (line.accountType === 'party' && line.accountId === selectedPartyId) {
+        transactions.push({
+          id: `${jv.id}_${idx}`,
+          date: jv.date,
+          billNo: jv.no || 'JV',
+          type: 'Journal Voucher',
+          detail: line.detail ? `JV: ${line.detail}` : (jv.narration ? `JV: ${jv.narration}` : 'Journal Entry'),
+          quantity: '-',
+          weight: '-',
+          rate: '-',
+          debit: Number(line.debit || 0),
+          credit: Number(line.credit || 0),
+        });
+      }
+    });
   });
 
   // Sort chronologically by date

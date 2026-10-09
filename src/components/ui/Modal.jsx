@@ -24,39 +24,38 @@ export default function Modal({ title, children, isOpen = true, onClose, maxWidt
   return createPortal(
     <div
       className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.65)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget && onClose) {
           onClose();
         }
       }}
     >
-      {/* Dark Dimmed Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 transition-opacity no-print"
+        className="fixed inset-0 bg-black/60 transition-opacity no-print"
         aria-hidden="true"
         onClick={onClose}
       />
 
-      {/* Modal Dialog */}
+      {/* Modal Dialog with Classic Bordered Box Styling */}
       <div
-        className={`modal-dialog relative bg-white rounded-2xl shadow-2xl w-full ${maxWidth} max-h-[90vh] flex flex-col overflow-hidden transform transition-all z-10 my-auto`}
+        className={`modal-dialog relative bg-white rounded-none border-2 border-black shadow-2xl w-full ${maxWidth} max-h-[92vh] flex flex-col overflow-hidden z-10 my-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E0DBD3] bg-white sticky top-0 z-10 no-print">
-          <h2 className="text-base font-semibold text-[#1E3A5F]">{title}</h2>
+        <div className="flex items-center justify-between px-4 py-2 bg-[#EBE9ED] border-b-2 border-black sticky top-0 z-10 no-print">
+          <h2 className="text-xs font-black text-black uppercase tracking-wider font-sans">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+            className="p-1 border border-black bg-white hover:bg-red-100 text-black hover:text-red-800 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="modal-content p-6 overflow-y-auto flex-1">
+        <div className="modal-content p-4 sm:p-5 overflow-y-auto flex-1 font-sans">
           {children}
         </div>
       </div>

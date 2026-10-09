@@ -3,14 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import QuickActionCard from '../../components/dashboard/QuickActionCard.jsx';
-import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import PurchaseForm from '../../components/forms/PurchaseForm.jsx';
 import SaleForm from '../../components/forms/SaleForm.jsx';
-import ReceiptForm from '../../components/forms/ReceiptForm.jsx';
-import PaymentForm from '../../components/forms/PaymentForm.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { useItems } from '../../hooks/useItems.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
@@ -26,9 +23,9 @@ import {
   DollarSign,
   Package,
   ShoppingCart,
-  Receipt as ReceiptIcon,
-  CreditCard,
+  BookOpen,
   Plus,
+  ArrowRight,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -40,10 +37,10 @@ export default function Dashboard() {
   const { purchases, addPurchase } = usePurchases();
   const { sales, addSale } = useSales();
   const { stockEntries } = useStock();
-  const { receipts, payments, accounts, addReceipt, addPayment } = useFinances();
+  const { accounts } = useFinances();
   const { warehouses } = useWarehouses();
 
-  const [activeModal, setActiveModal] = useState(null); // 'purchase' | 'sale' | 'receipt' | 'payment'
+  const [activeModal, setActiveModal] = useState(null); // 'purchase' | 'sale'
 
   // Summary Metrics Calculations
   const totalStockQty = stockEntries.reduce((sum, s) => sum + Number(s.qty || 0), 0);
@@ -63,10 +60,10 @@ export default function Dashboard() {
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard Overview"
-        subtitle="Real-time textile trading & stock monitoring system"
+        subtitle="Shahid Yaseen Cotton Waste Merchant — Textile trading, stock & Roznamcha monitoring"
         actions={
           <div className="flex gap-2">
             <Button
@@ -90,13 +87,13 @@ export default function Dashboard() {
       />
 
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Total Stock Inventory"
           value={`${totalStockQty.toLocaleString('en-PK')} KG`}
           sub={`Value: ${fmt(totalStockVal)}`}
           icon={Package}
-          color="text-[#1E3A5F]"
+          color="text-black"
           onClick={() => navigate('/stock')}
         />
         <StatCard
@@ -104,7 +101,7 @@ export default function Dashboard() {
           value={fmt(totalReceivable)}
           sub="Pending from Customers"
           icon={TrendingUp}
-          color="text-emerald-600"
+          color="text-[#1a6b2e]"
           onClick={() => navigate('/receivable')}
         />
         <StatCard
@@ -112,7 +109,7 @@ export default function Dashboard() {
           value={fmt(totalPayable)}
           sub="Owed to Suppliers"
           icon={TrendingDown}
-          color="text-red-600"
+          color="text-red-700"
           onClick={() => navigate('/payable')}
         />
         <StatCard
@@ -120,20 +117,22 @@ export default function Dashboard() {
           value={fmt(totalCashBank)}
           sub={`${accounts.length} Active Accounts`}
           icon={DollarSign}
-          color="text-[#C97B2E]"
-          onClick={() => navigate('/cash-bank')}
+          color="text-blue-900"
+          onClick={() => navigate('/cash-book')}
         />
       </div>
 
       {/* Quick Transaction Actions */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
-          Quick Actions
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="border-b-2 border-black pb-1 mb-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-black">
+            Quick Actions
+          </h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <QuickActionCard
             title="Create Purchase"
-            description="Record raw material purchase"
+            description="Record raw material purchase invoice"
             icon={ShoppingCart}
             onClick={() => setActiveModal('purchase')}
           />
@@ -144,85 +143,149 @@ export default function Dashboard() {
             onClick={() => setActiveModal('sale')}
           />
           <QuickActionCard
-            title="Customer Receipt"
-            description="Receive payment from buyer"
-            icon={ReceiptIcon}
-            onClick={() => setActiveModal('receipt')}
+            title="New Cash Book Entry"
+            description="Roznamcha cash in / cash out (Credit/Debit)"
+            icon={DollarSign}
+            onClick={() => navigate('/cash-book')}
           />
           <QuickActionCard
-            title="Supplier Payment"
-            description="Pay supplier balance"
-            icon={CreditCard}
-            onClick={() => setActiveModal('payment')}
+            title="New Journal Entry"
+            description="Multi-account general journal voucher (JV)"
+            icon={BookOpen}
+            onClick={() => navigate('/journal')}
           />
         </div>
       </div>
 
-      {/* Recent Purchases & Sales */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Recent Purchases & Sales in classic PERBALACC tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent Purchases */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-[#1E3A5F]">Recent Purchases</h3>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/purchase')}>
-              View All
-            </Button>
+        <div className="border-2 border-black bg-white">
+          <div className="bg-[#DFDFDF] border-b-2 border-black px-3 py-2 flex items-center justify-between">
+            <h3 className="text-xs font-black text-black uppercase tracking-wider">Recent Purchases</h3>
+            <button
+              type="button"
+              onClick={() => navigate('/purchase')}
+              className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <span>View All</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-          <div className="divide-y divide-[#F0EDE8]">
-            {purchases.slice(0, 5).map((p) => (
-              <div
-                key={p.id}
-                className="py-2.5 flex items-center justify-between text-xs hover:bg-[#FAF9F7] px-2 rounded-lg cursor-pointer transition-colors"
-                onClick={() => navigate('/purchase')}
-              >
-                <div>
-                  <div className="font-semibold text-[#1E3A5F]">{p.no}</div>
-                  <div className="text-gray-500">{p.supplierName} • {formatDate(p.date)}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-gray-900">{fmt(p.total)}</div>
-                  {p.balance > 0 ? (
-                    <Badge variant="amber">Due: {fmt(p.balance)}</Badge>
-                  ) : (
-                    <Badge variant="green">Paid</Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-100 border-b border-black text-black font-bold">
+                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Bill #</th>
+                  <th className="border-r border-black px-2 py-1.5 text-left">Supplier</th>
+                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Date</th>
+                  <th className="border-r border-black px-2 py-1.5 text-right w-24">Total</th>
+                  <th className="px-2 py-1.5 text-center w-20">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.slice(0, 5).map((p) => (
+                  <tr
+                    key={p.id}
+                    onClick={() => navigate('/purchase')}
+                    className="border-b border-black hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-black">
+                      {p.no}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px]">
+                      {p.supplierName}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                      {formatDate(p.date)}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-right text-black whitespace-nowrap">
+                      {fmt(p.total)}
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      {p.balance > 0 ? (
+                        <Badge variant="amber">Due: {fmt(p.balance)}</Badge>
+                      ) : (
+                        <Badge variant="green">Paid</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {purchases.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-gray-500 font-medium">
+                      No purchase invoices recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </Card>
+        </div>
 
         {/* Recent Sales */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-[#1E3A5F]">Recent Sales</h3>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/sale')}>
-              View All
-            </Button>
+        <div className="border-2 border-black bg-white">
+          <div className="bg-[#DFDFDF] border-b-2 border-black px-3 py-2 flex items-center justify-between">
+            <h3 className="text-xs font-black text-black uppercase tracking-wider">Recent Sales</h3>
+            <button
+              type="button"
+              onClick={() => navigate('/sale')}
+              className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <span>View All</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-          <div className="divide-y divide-[#F0EDE8]">
-            {sales.slice(0, 5).map((s) => (
-              <div
-                key={s.id}
-                className="py-2.5 flex items-center justify-between text-xs hover:bg-[#FAF9F7] px-2 rounded-lg cursor-pointer transition-colors"
-                onClick={() => navigate('/sale')}
-              >
-                <div>
-                  <div className="font-semibold text-[#1E3A5F]">{s.no}</div>
-                  <div className="text-gray-500">{s.customerName} • {formatDate(s.date)}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-gray-900">{fmt(s.total)}</div>
-                  {s.balance > 0 ? (
-                    <Badge variant="blue">Due: {fmt(s.balance)}</Badge>
-                  ) : (
-                    <Badge variant="green">Cleared</Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-100 border-b border-black text-black font-bold">
+                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Bill #</th>
+                  <th className="border-r border-black px-2 py-1.5 text-left">Customer</th>
+                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Date</th>
+                  <th className="border-r border-black px-2 py-1.5 text-right w-24">Total</th>
+                  <th className="px-2 py-1.5 text-center w-20">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.slice(0, 5).map((s) => (
+                  <tr
+                    key={s.id}
+                    onClick={() => navigate('/sale')}
+                    className="border-b border-black hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-black">
+                      {s.no}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px]">
+                      {s.customerName}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                      {formatDate(s.date)}
+                    </td>
+                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-right text-black whitespace-nowrap">
+                      {fmt(s.total)}
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      {s.balance > 0 ? (
+                        <Badge variant="blue">Due: {fmt(s.balance)}</Badge>
+                      ) : (
+                        <Badge variant="green">Cleared</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {sales.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-gray-500 font-medium">
+                      No sales invoices recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </Card>
+        </div>
       </div>
 
       {/* Modals for Quick Actions */}
@@ -230,7 +293,7 @@ export default function Dashboard() {
         isOpen={activeModal === 'purchase'}
         onClose={() => setActiveModal(null)}
         title="Record New Purchase"
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         <PurchaseForm
           suppliers={suppliers}
@@ -249,7 +312,7 @@ export default function Dashboard() {
         isOpen={activeModal === 'sale'}
         onClose={() => setActiveModal(null)}
         title="Record New Sale"
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         <SaleForm
           customers={customers}
@@ -258,40 +321,6 @@ export default function Dashboard() {
           onSubmit={async (data) => {
             await addSale(data);
             showToast('Sale invoice created successfully!');
-            setActiveModal(null);
-          }}
-          onCancel={() => setActiveModal(null)}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={activeModal === 'receipt'}
-        onClose={() => setActiveModal(null)}
-        title="Record Customer Receipt"
-      >
-        <ReceiptForm
-          parties={customers}
-          accounts={accounts}
-          onSubmit={async (data) => {
-            await addReceipt(data);
-            showToast('Cash receipt recorded successfully!');
-            setActiveModal(null);
-          }}
-          onCancel={() => setActiveModal(null)}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={activeModal === 'payment'}
-        onClose={() => setActiveModal(null)}
-        title="Record Supplier Payment"
-      >
-        <PaymentForm
-          parties={suppliers}
-          accounts={accounts}
-          onSubmit={async (data) => {
-            await addPayment(data);
-            showToast('Supplier payment recorded successfully!');
             setActiveModal(null);
           }}
           onCancel={() => setActiveModal(null)}

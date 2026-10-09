@@ -1,21 +1,20 @@
 import React from 'react';
-import Card from '../ui/Card.jsx';
 
 export default function QuickActionCard({ title, description, icon: Icon, onClick }) {
   return (
-    <Card
+    <div
       onClick={onClick}
-      className="flex items-center gap-4 hover:border-[#C97B2E] transition-all group"
+      className="bg-white rounded-none border-2 border-black p-3.5 shadow-none flex items-center gap-3 cursor-pointer hover:bg-gray-100 transition-colors group"
     >
-      <div className="w-10 h-10 rounded-xl bg-[#1E3A5F]/5 text-[#1E3A5F] group-hover:bg-[#C97B2E] group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+      <div className="w-10 h-10 rounded-none border border-black bg-[#EBE9ED] text-black group-hover:bg-[#1a6b2e] group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <h4 className="text-sm font-semibold text-[#1E3A5F] group-hover:text-[#C97B2E] transition-colors">
+        <h4 className="text-xs font-bold text-black uppercase tracking-wide group-hover:text-[#1a6b2e] transition-colors">
           {title}
         </h4>
-        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+        <p className="text-[11px] text-gray-600 mt-0.5 font-medium">{description}</p>
       </div>
-    </Card>
+    </div>
   );
 }

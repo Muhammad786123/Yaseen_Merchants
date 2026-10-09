@@ -12,6 +12,8 @@ import { salePurchaseService } from '../../services/salePurchaseService.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
 import { useSales } from '../../hooks/useSales.js';
 import { useFinances } from '../../hooks/useFinances.js';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/database.js';
 import { fmt, formatDate } from '../../utils/formatters.js';
 import { TrendingUp, TrendingDown, Scale, MinusCircle, Printer } from 'lucide-react';
 
@@ -19,9 +21,10 @@ export default function SalePurchaseLedger() {
   const { purchases } = usePurchases();
   const { sales } = useSales();
   const { expenses } = useFinances();
+  const journalEntries = useLiveQuery(() => (db.journalEntries ? db.journalEntries.toArray() : []), []) || [];
 
   const [ledger, setLedger] = useState([]);
-  const [summary, setSummary] = useState({ totalSales: 0, totalPurchases: 0, totalExpenses: 0, netBalance: 0 });
+  const [summary, setSummary] = useState({ totalSales: 0, totalPurchases: 0, totalExpenses: 0, jvAdjustments: 0, netBalance: 0 });
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
@@ -35,7 +38,7 @@ export default function SalePurchaseLedger() {
       setSummary(sum);
     }
     load();
-  }, [purchases, sales, expenses]);
+  }, [purchases, sales, expenses, journalEntries.length]);
 
   const filtered = ledger.filter((item) => {
     const matchSearch =
@@ -48,7 +51,8 @@ export default function SalePurchaseLedger() {
       categoryFilter === 'ALL' ||
       (categoryFilter === 'PURCHASE' && item.category === 'Purchase') ||
       (categoryFilter === 'SALE' && item.category === 'Sale') ||
-      (categoryFilter === 'EXPENSE' && item.category !== 'Purchase' && item.category !== 'Sale');
+      (categoryFilter === 'EXPENSE' && item.category === 'Expense') ||
+      (categoryFilter === 'JOURNAL' && item.category === 'Journal');
 
     const matchFrom = !dateFrom || item.date >= dateFrom;
     const matchTo = !dateTo || item.date <= dateTo;
@@ -90,6 +94,7 @@ export default function SalePurchaseLedger() {
                 { value: 'PURCHASE', label: 'Purchases (Mal Kharid)' },
                 { value: 'SALE', label: 'Sales (Mal Farokht)' },
                 { value: 'EXPENSE', label: 'Operating Expenses' },
+                { value: 'JOURNAL', label: 'Journal Adjustments' },
               ]}
             />
           </div>
@@ -141,32 +146,39 @@ export default function SalePurchaseLedger() {
       {/* ── SCREEN VIEW ──────────────────────────────────────────────────── */}
       <div className="space-y-6 no-print">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
-            label="Total Purchases (Mal Kharid)"
+            label="Total Purchases"
             value={fmt(summary.totalPurchases)}
             sub="Goods Inward Cost"
             icon={TrendingDown}
             color="text-red-600"
           />
           <StatCard
-            label="Total Sales (Mal Farokht)"
+            label="Total Sales"
             value={fmt(summary.totalSales)}
             sub="Goods & Services Revenue"
             icon={TrendingUp}
             color="text-emerald-600"
           />
           <StatCard
-            label="Total Operating Expenses"
+            label="Operating Expenses"
             value={fmt(summary.totalExpenses)}
-            sub="Labour, Utilities, Rent, etc."
+            sub="Labour, Utilities, Rent"
             icon={MinusCircle}
             color="text-amber-600"
           />
           <StatCard
+            label="Journal Adjustments"
+            value={fmt(summary.jvAdjustments || 0)}
+            sub="JV Mall & Exp lines"
+            icon={Scale}
+            color={(summary.jvAdjustments || 0) >= 0 ? 'text-[#1E3A5F]' : 'text-red-600'}
+          />
+          <StatCard
             label="Mall A/C Net Position"
             value={fmt(summary.netBalance)}
-            sub="Sales − Purchases − Expenses"
+            sub="Sales − Purchases − Exp + JV"
             icon={Scale}
             color={summary.netBalance >= 0 ? 'text-[#1E3A5F]' : 'text-red-600'}
           />
@@ -189,6 +201,7 @@ export default function SalePurchaseLedger() {
             let badgeVariant = 'orange';
             if (r.category === 'Sale') badgeVariant = 'green';
             else if (r.category === 'Purchase') badgeVariant = 'orange';
+            else if (r.category === 'Journal') badgeVariant = 'blue';
             else badgeVariant = 'amber';
 
             return (

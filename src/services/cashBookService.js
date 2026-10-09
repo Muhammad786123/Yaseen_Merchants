@@ -5,7 +5,8 @@ export const cashBookService = {
     const entries = await db.cashBookEntries.toArray();
     entries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    let running = 250000; // Base cash account opening
+    const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
+    let running = Number(cashAcc?.openingBalance || 0);
     const calculated = entries.map((entry) => {
       const debit = Number(entry.debit || 0);
       const credit = Number(entry.credit || 0);

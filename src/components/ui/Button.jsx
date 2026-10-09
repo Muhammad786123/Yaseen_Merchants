@@ -11,27 +11,27 @@ export default function Button({
   icon: Icon = null,
 }) {
   const baseStyle =
-    'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
+    'inline-flex items-center justify-center gap-1.5 font-bold rounded-none border border-black transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-none';
 
   const sizeStyles = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-5 py-2.5 text-base',
+    sm: 'px-2.5 py-1 text-xs',
+    md: 'px-3.5 py-1.5 text-xs',
+    lg: 'px-4 py-2 text-sm',
   };
 
   const variantStyles = {
     primary:
-      'bg-[#1E3A5F] text-white border border-[#1E3A5F] hover:bg-[#162d4a] focus:ring-[#1E3A5F]',
+      'bg-[#1a6b2e] text-white hover:bg-[#145223] active:bg-[#0f3d1a]',
     secondary:
-      'bg-white text-[#1E3A5F] border border-[#E0DBD3] hover:bg-[#F5F4F0] focus:ring-[#E0DBD3]',
+      'bg-[#EBE9ED] text-black hover:bg-gray-200 active:bg-gray-300',
     success:
-      'bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500',
+      'bg-emerald-700 text-white hover:bg-emerald-800 active:bg-emerald-900',
     danger:
-      'bg-red-600 text-white border border-red-600 hover:bg-red-700 focus:ring-red-500',
+      'bg-red-700 text-white hover:bg-red-800 active:bg-red-900',
     outline:
-      'bg-transparent text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-gray-300',
+      'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
     ghost:
-      'bg-transparent text-gray-600 border border-transparent hover:bg-gray-100 focus:ring-gray-200',
+      'bg-transparent text-black border-transparent hover:bg-gray-100 active:bg-gray-200',
   };
 
   return (
@@ -41,7 +41,7 @@ export default function Button({
       disabled={disabled}
       className={`${baseStyle} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
     >
-      {Icon && <Icon className="w-4 h-4 shrink-0" />}
+      {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
       {children}
     </button>
   );

@@ -85,6 +85,14 @@ db.version(4).stores({
   autoBackups: 'id, timestamp, createdAt',
 });
 
+db.version(5).stores({
+  stockAdjustments: 'id, no, date, itemId, itemName, quality, warehouseId, type, createdAt',
+});
+
+db.version(6).stores({
+  journalEntries: 'id, no, date, refNo, createdAt',
+});
+
 /**
  * Clear all transactional, inventory, ledger, and party tables and reset database to clean state.
  * Preserves system configuration: Settings/Company Profile, Document Numbering, and Users.
@@ -99,6 +107,8 @@ export async function clearAllDatabaseData() {
     await db.receipts.clear();
     await db.payments.clear();
     await db.expenses.clear();
+    if (db.stockAdjustments) await db.stockAdjustments.clear();
+    if (db.journalEntries) await db.journalEntries.clear();
 
     // 2. Ledgers, Cash Book, Banking & Capital
     await db.cashBookEntries.clear();
@@ -116,43 +126,65 @@ export async function clearAllDatabaseData() {
     await db.accounts.clear();
     await db.accounts.bulkAdd(initialAccounts);
 
+    // 5. Clear auto backups if table exists
+    if (db.autoBackups) await db.autoBackups.clear();
+
     // Note: db.settings (Company Profile, Document Numbering) and db.users are explicitly
     // preserved as system configuration per specification.
   });
+
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('yaseen_last_manual_backup');
+      localStorage.removeItem('yaseen_last_auto_backup');
+    }
+  } catch {
+    // ignore
+  }
 }
 
 /**
- * Initialize and verify database setup. Automatically purges legacy dummy data if found.
+ * Initialize and verify database setup. Automatically purges all data to a clean state.
  */
 export async function initDatabase() {
   try {
-    // Check if legacy dummy data exists in IndexedDB (e.g., party 'p1' or purchase 'pur1')
-    const dummyParty = await db.parties.get('p1');
-    const dummyPurchase = await db.purchases.get('pur1');
+    const PURGE_KEY = 'yaseen_data_purge_v2026_10_05';
+    const isPurged = typeof window !== 'undefined' ? localStorage.getItem(PURGE_KEY) : null;
 
-    if (dummyParty || dummyPurchase) {
-      console.log('Detected legacy dummy data. Purging database to clean state...');
+    if (!isPurged) {
+      console.log('Purging database to clean baseline state as requested...');
       await clearAllDatabaseData();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PURGE_KEY, 'true');
+      }
       console.log('Database successfully reset to clean state!');
-    } else {
-      // Ensure basic accounts exist
-      const accountCount = await db.accounts.count();
-      if (accountCount === 0) {
-        await db.accounts.bulkAdd(initialAccounts);
-      }
-      // Ensure basic admin user exists
-      const userCount = await db.users.count();
-      if (userCount === 0) {
-        await db.users.bulkAdd(initialUsers);
-      }
-      // Ensure basic settings exist
-      const settingCount = await db.settings.count();
-      if (settingCount === 0) {
-        await db.settings.bulkAdd(initialSettings);
-      }
+    }
 
-      // Automatically correct any legacy "Wirehouse" typos at the database source
-      await migrateWarehousesTypo();
+    // Ensure basic accounts exist
+    const accountCount = await db.accounts.count();
+    if (accountCount === 0) {
+      await db.accounts.bulkAdd(initialAccounts);
+    }
+    // Ensure basic admin user exists
+    const userCount = await db.users.count();
+    if (userCount === 0) {
+      await db.users.bulkAdd(initialUsers);
+    }
+    // Ensure basic settings exist
+    const settingCount = await db.settings.count();
+    if (settingCount === 0) {
+      await db.settings.bulkAdd(initialSettings);
+    }
+
+    // Automatically correct any legacy "Wirehouse" typos at the database source
+    await migrateWarehousesTypo();
+
+    // Automatically recalculate and repair stockEntries from actual transaction history
+    try {
+      const { syncStockEntriesToDb } = await import('../utils/stockUtils.js');
+      await syncStockEntriesToDb();
+    } catch (e) {
+      console.error('Failed to sync stock entries on init:', e);
     }
   } catch (error) {
     console.error('Failed to initialize database:', error);

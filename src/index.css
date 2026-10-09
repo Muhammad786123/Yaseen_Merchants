@@ -103,6 +103,8 @@ body {
   #invoice-print-area *,
   #sale-invoice-print-area,
   #sale-invoice-print-area *,
+  #cashbook-print-area,
+  #cashbook-print-area *,
   [id$="-print-area"],
   [id$="-print-area"] *,
   .print-area,
@@ -473,6 +475,59 @@ body {
   .statement-date-line {
     text-align: left !important;
     direction: ltr !important;
+  }
+
+  /* 19. Traditional Roznamcha Cash Book Print Styling */
+  #cashbook-print-area {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #cashbook-print-area * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #cashbook-print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #cashbook-print-area th,
+  #cashbook-print-area td {
+    border: 1px solid #000000 !important;
+  }
+
+  #cashbook-print-area .cashbook-info-bar {
+    border: 2px solid #0000CC !important;
+    padding: 8px !important;
+    margin-bottom: 10px !important;
+    background-color: #FAF9F7 !important;
+  }
+
+  #cashbook-print-area .cashbook-grid-box {
+    border: 2px solid #0000CC !important;
+    padding: 6px !important;
+    background-color: #FAF9F7 !important;
+  }
+
+  #cashbook-print-area .cashbook-denom-box {
+    border: 2px solid #0000CC !important;
+    padding: 6px !important;
+    background-color: #FAF9F7 !important;
   }
 }
 

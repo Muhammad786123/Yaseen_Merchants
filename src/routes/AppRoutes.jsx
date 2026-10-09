@@ -12,8 +12,7 @@ import Purchase from '../pages/Purchase/Purchase.jsx';
 import Issue from '../pages/Issue/Issue.jsx';
 import Production from '../pages/Production/Production.jsx';
 import Sale from '../pages/Sale/Sale.jsx';
-import Receipt from '../pages/Receipt/Receipt.jsx';
-import Payment from '../pages/Payment/Payment.jsx';
+import Journal from '../pages/Journal/Journal.jsx';
 import Stock from '../pages/Stock/Stock.jsx';
 import StockLedger from '../pages/StockLedger/StockLedger.jsx';
 import PartyLedger from '../pages/PartyLedger/PartyLedger.jsx';
@@ -24,6 +23,8 @@ import Receivable from '../pages/Receivable/Receivable.jsx';
 import Payable from '../pages/Payable/Payable.jsx';
 import Expenses from '../pages/Expenses/Expenses.jsx';
 import Reports from '../pages/Reports/Reports.jsx';
+import WarehouseLedger from '../pages/WarehouseLedger/WarehouseLedger.jsx';
+import QualityLedger from '../pages/QualityLedger/QualityLedger.jsx';
 import Settings from '../pages/Settings/Settings.jsx';
 
 function ProtectedRoute({ children }) {
@@ -59,11 +60,15 @@ export default function AppRoutes() {
                 <Route path="/issue" element={<Issue />} />
                 <Route path="/production" element={<Production />} />
                 <Route path="/sale" element={<Sale />} />
-                <Route path="/receipt" element={<Receipt />} />
-                <Route path="/payment" element={<Payment />} />
+                <Route path="/receipt" element={<Navigate to="/cash-book" replace />} />
+                <Route path="/payment" element={<Navigate to="/cash-book" replace />} />
                 <Route path="/stock" element={<Stock />} />
                 <Route path="/stock-ledger" element={<StockLedger />} />
+                <Route path="/item-ledger" element={<StockLedger />} />
+                <Route path="/warehouse-ledger" element={<WarehouseLedger />} />
+                <Route path="/quality-ledger" element={<QualityLedger />} />
                 <Route path="/cash-book" element={<CashBook />} />
+                <Route path="/journal" element={<Journal />} />
                 <Route path="/party-ledger" element={<PartyLedger />} />
                 <Route path="/sale-purchase-ledger" element={<SalePurchaseLedger />} />
                 <Route path="/cash-bank" element={<CashBank />} />

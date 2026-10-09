@@ -9,7 +9,7 @@ export default function MainLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#F5F4F0] font-sans text-gray-900 antialiased">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block h-full shrink-0">
+      <div className="hidden lg:block h-full shrink-0 no-print">
         <Sidebar />
       </div>
 

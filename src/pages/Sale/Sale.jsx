@@ -50,7 +50,7 @@ export default function Sale() {
       />
 
       {/* Search Bar */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#E0DBD3]">
+      <div className="flex items-center justify-between bg-[#EBE9ED] p-2.5 border-2 border-black">
         <SearchInput
           value={search}
           onChange={setSearch}
@@ -76,47 +76,47 @@ export default function Sale() {
       >
         {filteredSales.map((s) => (
           <TR key={s.id}>
-            <TD mono className="font-bold text-[#1E3A5F]">
+            <TD mono className="font-bold text-black">
               {s.no}
             </TD>
             <TD>{formatDate(s.date)}</TD>
-            <TD className="font-medium text-gray-900">{s.customerName}</TD>
+            <TD className="font-bold text-black">{s.customerName}</TD>
             <TD>{s.warehouseName}</TD>
             <TD>
-              <div className="text-xs text-gray-600">
+              <div className="text-xs text-gray-700">
                 {s.items && s.items.length > 0
                   ? `${s.items.length} item(s): ${s.items.map((i) => i.itemName).join(', ')}`
                   : '-'}
               </div>
             </TD>
-            <TD mono right className="font-bold text-[#1E3A5F]">
+            <TD mono right className="font-bold text-black">
               {fmt(s.total)}
             </TD>
-            <TD mono right className="text-emerald-600">
+            <TD mono right className="text-[#1a6b2e] font-bold">
               {fmt(s.received)}
             </TD>
             <TD mono right>
               {s.balance > 0 ? (
-                <span className="font-bold text-emerald-600">{fmt(s.balance)}</span>
+                <span className="font-bold text-blue-900">{fmt(s.balance)}</span>
               ) : (
                 <Badge variant="green">Cleared</Badge>
               )}
             </TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => setViewingSale(s)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
                   title="View Details"
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(s.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
                   title="Delete Invoice"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

@@ -11,9 +11,11 @@ import PartyDetails from './PartyDetails.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt } from '../../utils/formatters.js';
-import { Plus, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Parties() {
+  const navigate = useNavigate();
   const { parties, addParty, updateParty, deleteParty } = useParties();
   const { showToast } = useApp();
 
@@ -52,7 +54,7 @@ export default function Parties() {
       />
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3]">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#EBE9ED] p-2.5 border-2 border-black">
         <SearchInput
           value={search}
           onChange={setSearch}
@@ -60,15 +62,15 @@ export default function Parties() {
           className="w-full sm:w-80"
         />
 
-        <div className="flex items-center gap-1 bg-[#F5F4F0] p-1 rounded-lg">
+        <div className="flex items-center gap-1 border border-black bg-white p-0.5">
           {['All', 'Supplier', 'Customer'].map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              className={`px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
                 filterType === t
-                  ? 'bg-white text-[#1E3A5F] shadow-xs'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-[#1a6b2e] text-white'
+                  : 'text-gray-800 hover:bg-gray-100'
               }`}
             >
               {t}
@@ -84,10 +86,10 @@ export default function Parties() {
       >
         {filteredParties.map((p) => (
           <TR key={p.id}>
-            <TD className="font-semibold text-[#1E3A5F]">
+            <TD className="font-bold text-black">
               <button
                 onClick={() => setViewingParty(p)}
-                className="hover:underline text-left cursor-pointer"
+                className="hover:underline text-left cursor-pointer font-bold"
               >
                 {p.name}
               </button>
@@ -107,42 +109,50 @@ export default function Parties() {
             </TD>
             <TD>{p.city || '-'}</TD>
             <TD mono>{p.phone || '-'}</TD>
-            <TD mono>{fmt(p.openingBalance || 0)}</TD>
+            <TD mono right>{fmt(p.openingBalance || 0)}</TD>
             <TD mono right>
               <span
-                className={`font-bold ${
+                className={`font-black ${
                   p.balance > 0
-                    ? 'text-red-600'
+                    ? 'text-red-700'
                     : p.balance < 0
-                    ? 'text-emerald-600'
-                    : 'text-gray-600'
+                    ? 'text-[#1a6b2e]'
+                    : 'text-gray-800'
                 }`}
               >
                 {fmt(p.balance)}
               </span>
             </TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => navigate(`/party-ledger?party=${p.id}`)}
+                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  title="View A/C Ledger (PERBALACC Statement)"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Ledger</span>
+                </button>
                 <button
                   onClick={() => setViewingParty(p)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
-                  title="View Ledger / Details"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  title="Quick View Statement"
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setEditingParty(p)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
                   title="Edit Party"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(p.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
                   title="Delete Party"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

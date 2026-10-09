@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CompanyLogo from '../common/CompanyLogo.jsx';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
@@ -6,97 +6,68 @@ import {
   LayoutGrid,
   Users,
   Tag,
-  Star,
   Home,
   ArrowDownCircle,
-  Share2,
-  Settings,
   ArrowUpCircle,
-  CheckCircle,
-  CreditCard,
-  Package,
-  BookOpen,
-  FileText,
+  Share2,
   DollarSign,
-  TrendingUp,
-  TrendingDown,
-  MinusCircle,
+  BookOpen,
+  Package,
   BarChart2,
-  Activity,
-  Hash,
-  User,
+  Settings as SettingsIcon,
+  MinusCircle,
   X,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
-const navGroups = [
-  {
-    label: null,
-    items: [{ path: '/dashboard', label: 'Dashboard', icon: LayoutGrid }],
-  },
-  {
-    label: 'Masters',
-    items: [
-      { path: '/parties', label: 'Parties', icon: Users },
-      { path: '/items', label: 'Items', icon: Tag },
-      { path: '/qualities', label: 'Qualities', icon: Star },
-      { path: '/warehouses', label: 'Warehouses', icon: Home },
-    ],
-  },
-  {
-    label: 'Transactions',
-    items: [
-      { path: '/purchase', label: 'Purchase', icon: ArrowDownCircle },
-      { path: '/issue', label: 'Issue', icon: Share2 },
-      { path: '/production', label: 'Production', icon: Settings },
-      { path: '/sale', label: 'Sale', icon: ArrowUpCircle },
-      { path: '/receipt', label: 'Receipt', icon: CheckCircle },
-      { path: '/payment', label: 'Payment', icon: CreditCard },
-    ],
-  },
-  {
-    label: 'Stock',
-    items: [
-      { path: '/stock', label: 'Stock', icon: Package },
-      { path: '/stock-ledger', label: 'Stock Ledger', icon: BookOpen },
-    ],
-  },
-  {
-    label: 'Accounts',
-    items: [
-      { path: '/cash-book', label: 'Cash Book', icon: DollarSign },
-      { path: '/party-ledger', label: 'Party Ledger', icon: FileText },
-      { path: '/sale-purchase-ledger', label: 'Sale Purchase A/C (Mall A/C)', icon: BarChart2 },
-      { path: '/cash-bank', label: 'Cash / Bank', icon: Home },
-      { path: '/receivable', label: 'Receivable', icon: TrendingUp },
-      { path: '/payable', label: 'Payable', icon: TrendingDown },
-      { path: '/expenses', label: 'Expenses', icon: MinusCircle },
-    ],
-  },
-  {
-    label: 'Reports',
-    items: [
-      { path: '/reports?tab=purchase', label: 'Purchase Report', icon: BarChart2 },
-      { path: '/reports?tab=sale', label: 'Sale Report', icon: BarChart2 },
-      { path: '/reports?tab=stock', label: 'Stock Report', icon: BarChart2 },
-      { path: '/reports?tab=production', label: 'Production Report', icon: BarChart2 },
-      { path: '/reports?tab=pl', label: 'Profit & Loss', icon: Activity },
-    ],
-  },
-  {
-    label: 'Settings',
-    items: [
-      { path: '/settings?tab=numbering', label: 'Numbering', icon: Hash },
-      { path: '/settings?tab=users', label: 'Users', icon: User },
-    ],
-  },
+export const navItems = [
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { path: '/parties', label: 'Parties', icon: Users },
+  { path: '/items', label: 'Items', icon: Tag },
+  { path: '/warehouses', label: 'Warehouses', icon: Home },
+  { path: '/purchase', label: 'Purchase', icon: ArrowDownCircle },
+  { path: '/sale', label: 'Sale', icon: ArrowUpCircle },
+  { path: '/issue', label: 'Issue', icon: Share2 },
+  { path: '/cash-book', label: 'Cash Book', icon: DollarSign },
+  { path: '/journal', label: 'Journal', icon: BookOpen },
+  { path: '/stock', label: 'Stock', icon: Package },
+  { path: '/reports', label: 'Reports', icon: BarChart2 },
+  { path: '/settings', label: 'Settings', icon: SettingsIcon },
+  // { path: '/expenses', label: 'Expenses', icon: MinusCircle },
 ];
 
-export default function Sidebar({ onClose }) {
+export default function Sidebar({
+  onClose,
+  collapsed: externalCollapsed,
+  onToggleCollapse,
+  isMobile = false,
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile } = useCompanyProfile();
   const legalName = profile?.legalName || 'Shahid Yaseen Cotton Waste Merchant';
+
+  const [internalCollapsed, setInternalCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+
+  const isCollapsed = !isMobile && (externalCollapsed !== undefined ? externalCollapsed : internalCollapsed);
+
+  const toggleCollapse = () => {
+    const next = !isCollapsed;
+    setInternalCollapsed(next);
+    try {
+      localStorage.setItem('sidebar_collapsed', String(next));
+    } catch {
+      // ignore
+    }
+    if (onToggleCollapse) onToggleCollapse(next);
+  };
 
   const handleNav = (path) => {
     navigate(path);
@@ -109,85 +80,140 @@ export default function Sidebar({ onClose }) {
     if (onClose) onClose();
   };
 
+  const isItemActive = (item) => {
+    const currentPath = location.pathname;
+    if (item.path === '/journal') {
+      return currentPath === '/journal' || currentPath === '/party-ledger';
+    }
+    if (item.path === '/stock') {
+      return currentPath === '/stock' || currentPath === '/stock-ledger';
+    }
+    if (item.path === '/cash-book') {
+      return (
+        currentPath === '/cash-book' ||
+        currentPath === '/cash-bank' ||
+        currentPath === '/receipt' ||
+        currentPath === '/payment'
+      );
+    }
+    if (item.path === '/reports') {
+      return currentPath === '/reports';
+    }
+    return currentPath === item.path;
+  };
+
   return (
-    <div className="w-60 h-full bg-[#1E3A5F] flex flex-col overflow-y-auto border-r border-[#1E3A5F] no-print">
+    <div
+      className={`h-full bg-[#1E3A5F] flex flex-col border-r border-[#1E3A5F] no-print transition-all duration-200 ${isCollapsed ? 'w-16' : 'w-60'
+        }`}
+    >
       {/* Brand Header */}
-      <div className="flex items-center justify-between px-3 py-3.5 border-b border-white/10 sticky top-0 bg-[#1E3A5F] z-10">
-        <div className="cursor-pointer" onClick={() => handleNav('/dashboard')} title={legalName}>
-          <CompanyLogo variant="onDark" size="sm" showTagline={true} />
+      <div
+        className={`flex items-center border-b border-white/10 sticky top-0 bg-[#1E3A5F] z-10 ${isCollapsed ? 'justify-center px-2 py-3.5' : 'justify-between px-3.5 py-3.5'
+          }`}
+      >
+        <div
+          className="cursor-pointer"
+          onClick={() => handleNav('/dashboard')}
+          title={legalName}
+        >
+          <CompanyLogo
+            variant="onDark"
+            size="sm"
+            showTagline={!isCollapsed}
+          />
         </div>
-        {onClose && (
+        {!isCollapsed && onClose && (
           <button
             onClick={onClose}
-            className="lg:hidden text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10"
+            className="lg:hidden text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         )}
       </div>
 
-      {/* Brand Accent Bar (Green -> Teal -> Blue gradient dots line) */}
+      {/* Brand Accent Bar (Green -> Teal -> Blue gradient line) */}
       <div className="h-0.5 w-full bg-gradient-to-r from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></div>
 
-      {/* Navigation items */}
-      <nav className="flex-1 px-3 py-4 space-y-4">
-        {navGroups.map((group, gi) => (
-          <div key={gi}>
-            {group.label && (
-              <div className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-white/40">
-                {group.label}
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const ItemIcon = item.icon;
-                const basePath = item.path.split('?')[0];
-                const active =
-                  location.pathname === basePath &&
-                  (!item.path.includes('?') ||
-                    location.search === '?' + item.path.split('?')[1]);
+      {/* Navigation items - Single flat list, no group headings */}
+      <nav className={`flex-1 overflow-y-auto py-3 space-y-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+        {navItems.map((item) => {
+          const ItemIcon = item.icon;
+          const active = isItemActive(item);
 
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => handleNav(item.path)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-all relative ${
-                      active
-                        ? 'bg-[#C97B2E] text-white shadow-xs font-semibold'
-                        : 'text-white/70 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-gradient-to-b from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></span>
-                    )}
-                    <ItemIcon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          return (
+            <button
+              key={item.path}
+              onClick={() => handleNav(item.path)}
+              title={isCollapsed ? item.label : undefined}
+              className={`w-full flex items-center rounded-lg text-sm font-medium transition-all relative cursor-pointer ${isCollapsed
+                  ? 'justify-center py-3 px-2'
+                  : 'gap-3 px-3.5 py-3 text-left'
+                } ${active
+                  ? 'bg-[#C97B2E] text-white shadow-xs font-semibold'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+                }`}
+            >
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r bg-gradient-to-b from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></span>
+              )}
+              <ItemIcon className="w-4.5 h-4.5 shrink-0" />
+              {!isCollapsed && <span className="truncate">{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
 
-      {/* Footer with Logout */}
-      <div className="px-3 py-3 border-t border-white/10 bg-[#1E3A5F] sticky bottom-0 space-y-2">
+      {/* Footer with Collapse toggle and Logout */}
+      <div
+        className={`border-t border-white/10 bg-[#1E3A5F] sticky bottom-0 space-y-2 ${isCollapsed ? 'px-2 py-3' : 'px-3 py-3'
+          }`}
+      >
+        {/* Collapse toggle (desktop only) */}
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`hidden lg:flex items-center rounded-lg text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer ${isCollapsed
+                ? 'w-full justify-center py-2.5'
+                : 'w-full gap-2.5 px-3 py-2.5'
+              }`}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4 shrink-0" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4 shrink-0" />
+                <span className="truncate">Collapse</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Logout button */}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-600 transition-all border border-red-500/20 cursor-pointer"
+          title={isCollapsed ? 'Logout' : undefined}
+          className={`w-full flex items-center rounded-lg text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-600 transition-all border border-red-500/20 cursor-pointer ${isCollapsed
+              ? 'justify-center py-2.5'
+              : 'justify-center gap-2 px-3 py-2'
+            }`}
         >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Logout</span>
+          <LogOut className="w-3.5 h-3.5 shrink-0" />
+          {!isCollapsed && <span>Logout</span>}
         </button>
 
-        <div className="text-center">
-          <div className="text-[10px] text-white/40 font-semibold truncate" title={legalName}>
-            {legalName}
+        {!isCollapsed && (
+          <div className="text-center pt-0.5">
+            <div className="text-[10px] text-white/40 font-semibold truncate" title={legalName}>
+              {legalName}
+            </div>
+            <div className="text-[9px] text-white/25 mt-0.5">SYCWM ERP v1.0</div>
           </div>
-          <div className="text-[9px] text-white/25 mt-0.5">SYCWM ERP v1.0</div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
-

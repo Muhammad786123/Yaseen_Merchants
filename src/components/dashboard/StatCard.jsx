@@ -1,23 +1,27 @@
 import React from 'react';
-import Card from '../ui/Card.jsx';
 
 export default function StatCard({ label, value, sub, icon: Icon, color = 'text-[#1E3A5F]', onClick }) {
   return (
-    <Card onClick={onClick} className="relative overflow-hidden">
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-none border-2 border-black p-3 shadow-none ${
+        onClick ? 'cursor-pointer hover:bg-gray-50 transition-colors' : ''
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
             {label}
           </div>
-          <div className={`text-xl font-bold ${color}`}>{value}</div>
-          {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+          <div className={`text-xl font-black font-mono tracking-tight ${color}`}>{value}</div>
+          {sub && <div className="text-[11px] text-gray-600 mt-1 font-medium">{sub}</div>}
         </div>
         {Icon && (
-          <div className="w-10 h-10 rounded-xl bg-[#F5F4F0] flex items-center justify-center text-[#1E3A5F] shrink-0">
+          <div className="w-9 h-9 rounded-none border border-black bg-[#EBE9ED] flex items-center justify-center text-black shrink-0">
             <Icon className="w-5 h-5" />
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

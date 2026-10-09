@@ -25,7 +25,7 @@ export default function TransactionItemsTable({
         currentLine.serviceDescription = currentLine.serviceDescription || 'Loading Service';
         currentLine.unitType = 'KG';
         currentLine.qty = 0;
-        currentLine.rate = 0;
+        currentLine.rate = '';
         currentLine.amount = currentLine.amount || 500;
       } else {
         currentLine.serviceDescription = '';
@@ -33,12 +33,12 @@ export default function TransactionItemsTable({
           const defaultItem = items[0];
           currentLine.itemId = defaultItem.id;
           currentLine.itemName = defaultItem.name;
-          currentLine.quality = defaultItem.quality || 'Cotton A';
+          currentLine.quality = defaultItem.quality || (qualities[0]?.name || 'Cotton A');
           currentLine.unitType = 'KG';
-          currentLine.nugFactor = defaultItem.nugFactor || 100;
+          currentLine.nugFactor = defaultItem.piecesToKg || defaultItem.nugFactor || 100;
           currentLine.qty = 100;
-          currentLine.rate = defaultItem.defaultRate || 0;
-          currentLine.amount = currentLine.qty * currentLine.rate;
+          currentLine.rate = ''; // Rate starts empty per Decision 7
+          currentLine.amount = 0;
         }
       }
     }
@@ -48,13 +48,14 @@ export default function TransactionItemsTable({
       if (selectedItem) {
         currentLine.itemName = selectedItem.name;
         currentLine.quality = selectedItem.quality || (qualities[0]?.name || 'Cotton A');
-        currentLine.nugFactor = selectedItem.nugFactor || 100;
-        currentLine.rate = selectedItem.defaultRate || 0;
+        currentLine.nugFactor = selectedItem.piecesToKg || selectedItem.nugFactor || 100;
+        // Rate starts empty per Decision 7
+        currentLine.rate = '';
 
         if (currentLine.unitType === 'Nug') {
           currentLine.qty = Number(currentLine.nugs || 1) * currentLine.nugFactor;
         }
-        currentLine.amount = Number(currentLine.qty || 0) * Number(currentLine.rate || 0);
+        currentLine.amount = 0;
       }
     }
 
@@ -66,20 +67,35 @@ export default function TransactionItemsTable({
       } else {
         currentLine.nugs = 0;
       }
-      currentLine.amount = Number(currentLine.qty || 0) * Number(currentLine.rate || 0);
+      currentLine.amount = Number(currentLine.qty || 0) * (parseFloat(currentLine.rate) || 0);
+    }
+
+    if (field === 'nugFactor') {
+      const factor = Number(value || 100);
+      currentLine.nugFactor = factor;
+      if (currentLine.unitType === 'Nug') {
+        currentLine.qty = Number(currentLine.nugs || 1) * factor;
+      }
+      currentLine.amount = Number(currentLine.qty || 0) * (parseFloat(currentLine.rate) || 0);
     }
 
     if (field === 'nugs') {
       const nugsVal = Number(value || 0);
       const factor = currentLine.nugFactor || 100;
       currentLine.qty = nugsVal * factor;
-      currentLine.amount = currentLine.qty * Number(currentLine.rate || 0);
+      currentLine.amount = currentLine.qty * (parseFloat(currentLine.rate) || 0);
     }
 
-    if (field === 'qty' || field === 'rate') {
-      const q = Number(currentLine.qty || 0);
-      const r = Number(currentLine.rate || 0);
-      currentLine.amount = q * r;
+    if (field === 'qty') {
+      const q = Number(value || 0);
+      currentLine.qty = q;
+      currentLine.amount = q * (parseFloat(currentLine.rate) || 0);
+    }
+
+    if (field === 'rate') {
+      currentLine.rate = value;
+      const r = parseFloat(value) || 0;
+      currentLine.amount = Number(currentLine.qty || 0) * r;
     }
 
     if (field === 'amount' && currentLine.type === 'service') {
@@ -99,10 +115,10 @@ export default function TransactionItemsTable({
       quality: defaultItem ? defaultItem.quality : (qualities[0]?.name || 'Cotton A'),
       unitType: 'KG',
       nugs: 0,
-      nugFactor: defaultItem ? (defaultItem.nugFactor || 100) : 100,
+      nugFactor: defaultItem ? (defaultItem.piecesToKg || defaultItem.nugFactor || 100) : 100,
       qty: 100,
-      rate: defaultItem ? (defaultItem.defaultRate || 0) : 0,
-      amount: defaultItem ? 100 * (defaultItem.defaultRate || 0) : 0,
+      rate: '', // Rate always starts blank per Decision 7
+      amount: 0,
       serviceDescription: '',
     };
     onChange([...lineItems, newRow]);
@@ -118,7 +134,7 @@ export default function TransactionItemsTable({
       nugs: 0,
       nugFactor: 0,
       qty: 0,
-      rate: 0,
+      rate: '',
       amount: 500,
       serviceDescription: 'Loading Service',
     };
@@ -137,10 +153,10 @@ export default function TransactionItemsTable({
     .reduce((sum, item) => sum + Number(item.qty || 0), 0);
 
   return (
-    <div className="border border-[#E0DBD3] rounded-xl p-4 bg-[#FAF9F7]">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] flex items-center gap-1.5">
-          <Tag className="w-4 h-4 text-[#C97B2E]" />
+    <div className="border-2 border-black p-3 bg-[#EBE9ED]">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-1 border-b border-black">
+        <h4 className="text-xs font-black uppercase tracking-wider text-black flex items-center gap-1.5">
+          <Tag className="w-4 h-4 text-black" />
           Transaction Line Items
         </h4>
         <div className="flex items-center gap-2">
@@ -155,25 +171,23 @@ export default function TransactionItemsTable({
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
+      {error && <p className="text-xs text-red-600 font-bold mb-2">{error}</p>}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {lineItems.map((line, idx) => {
           const isService = line.type === 'service';
           return (
             <div
               key={idx}
-              className={`p-3 rounded-lg border transition-all ${
-                isService
-                  ? 'bg-amber-50/50 border-amber-200'
-                  : 'bg-white border-[#E0DBD3]'
+              className={`p-2 border border-black bg-white transition-colors ${
+                isService ? 'bg-amber-50/50' : 'bg-white'
               }`}
             >
               {isService ? (
                 /* Service Row Layout */
                 <div className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-amber-100 text-amber-800">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-black text-xs font-bold bg-[#FFEB3B] text-black">
                       <Wrench className="w-3 h-3" /> Service
                     </span>
                   </div>
@@ -187,7 +201,7 @@ export default function TransactionItemsTable({
                   <div className="col-span-3">
                     <Input
                       type="number"
-                      placeholder="Amount (PKR)"
+                      placeholder="Amount (Rs.)"
                       value={line.amount}
                       onChange={(v) => handleLineChange(idx, 'amount', v)}
                     />
@@ -196,9 +210,10 @@ export default function TransactionItemsTable({
                     <button
                       type="button"
                       onClick={() => removeRow(idx)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                      disabled={lineItems.length <= 1}
+                      className="p-1 text-red-600 hover:text-red-900 disabled:opacity-30 cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 mx-auto" />
                     </button>
                   </div>
                 </div>
@@ -208,18 +223,18 @@ export default function TransactionItemsTable({
                   <div className="grid grid-cols-12 gap-2 items-center">
                     {/* Item Selector */}
                     <div className="col-span-12 sm:col-span-5">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Item Name</label>
+                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Item Name</label>
                       <Select
                         value={line.itemId}
                         onChange={(v) => handleLineChange(idx, 'itemId', v)}
-                        options={items.map((i) => ({ value: i.id, label: `${i.code} - ${i.name}` }))}
+                        options={items.map((i) => ({ value: i.id, label: `${i.code || i.id} - ${i.name}` }))}
                         placeholder="Select item..."
                       />
                     </div>
 
                     {/* Quality Grade */}
                     <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Quality Grade</label>
+                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Quality Grade</label>
                       <Select
                         value={line.quality}
                         onChange={(v) => handleLineChange(idx, 'quality', v)}
@@ -229,7 +244,7 @@ export default function TransactionItemsTable({
 
                     {/* Unit Selector (KG vs Nug) */}
                     <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Unit Type</label>
+                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Unit Type</label>
                       <Select
                         value={line.unitType || 'KG'}
                         onChange={(v) => handleLineChange(idx, 'unitType', v)}
@@ -244,40 +259,42 @@ export default function TransactionItemsTable({
                       <button
                         type="button"
                         onClick={() => removeRow(idx)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors mt-4"
+                        disabled={lineItems.length <= 1}
+                        className="p-1 text-red-600 hover:text-red-900 disabled:opacity-30 cursor-pointer mt-4"
                         title="Remove row"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4 mx-auto" />
                       </button>
                     </div>
                   </div>
 
                   {/* Quantity & Calculations Row */}
-                  <div className="grid grid-cols-12 gap-2 items-center pt-1 border-t border-gray-100">
+                  <div className="grid grid-cols-12 gap-2 items-center pt-1 border-t border-gray-200">
                     {line.unitType === 'Nug' ? (
                       <>
                         <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Nugs (Pieces)</label>
+                          <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Nugs (Pieces)</label>
                           <Input
                             type="number"
+                            min="1"
                             placeholder="Nugs"
                             value={line.nugs || ''}
                             onChange={(v) => handleLineChange(idx, 'nugs', v)}
                           />
                         </div>
                         <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">KG Equivalent</label>
+                          <label className="block text-[10px] font-bold text-gray-800 mb-0.5">KG Equivalent</label>
                           <Input
                             type="number"
                             value={line.qty}
                             readOnly
-                            className="bg-gray-100 font-bold text-[#1E3A5F]"
+                            className="bg-gray-100 font-mono font-bold text-black"
                           />
                         </div>
                       </>
                     ) : (
                       <div className="col-span-8 sm:col-span-6">
-                        <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Quantity (KG)</label>
+                        <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Quantity (KG)</label>
                         <Input
                           type="number"
                           placeholder="Qty in KG"
@@ -288,18 +305,21 @@ export default function TransactionItemsTable({
                     )}
 
                     <div className="col-span-4 sm:col-span-3">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Rate (PKR / KG)</label>
+                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">
+                        Rate (Rs. / KG) <span className="text-red-600">*</span>
+                      </label>
                       <Input
                         type="number"
-                        placeholder="Rate"
+                        placeholder="Enter Rate"
                         value={line.rate}
                         onChange={(v) => handleLineChange(idx, 'rate', v)}
+                        className="font-mono font-bold"
                       />
                     </div>
 
                     <div className="col-span-12 sm:col-span-3 text-right">
-                      <span className="block text-[10px] font-semibold text-gray-400">Line Amount</span>
-                      <span className="text-sm font-extrabold text-[#1E3A5F]">
+                      <span className="block text-[10px] font-bold text-gray-600">Line Amount</span>
+                      <span className="text-sm font-mono font-black text-black">
                         {fmt(line.amount)}
                       </span>
                     </div>
@@ -312,14 +332,14 @@ export default function TransactionItemsTable({
       </div>
 
       {/* Summary Footer */}
-      <div className="mt-4 pt-3 border-t border-[#E0DBD3] flex flex-wrap items-center justify-between text-xs font-semibold text-[#1E3A5F]">
+      <div className="mt-3 pt-2 border-t-2 border-black flex flex-wrap items-center justify-between text-xs font-bold text-black">
         <div>
           Total Physical Quantity:{' '}
-          <span className="text-sm font-bold text-gray-900">{totalKg.toLocaleString()} KG</span>
+          <span className="font-mono font-black text-sm">{totalKg.toLocaleString()} KG</span>
         </div>
         <div>
           Calculated Total Amount:{' '}
-          <span className="text-base font-extrabold text-[#1E3A5F]">{fmt(totalAmount)}</span>
+          <span className="font-mono font-black text-sm text-[#1a6b2e]">{fmt(totalAmount)}</span>
         </div>
       </div>
     </div>

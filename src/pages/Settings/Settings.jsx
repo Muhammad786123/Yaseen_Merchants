@@ -21,6 +21,7 @@ import {
   deleteAutoBackup,
   validateBackupData,
 } from '../../utils/backupService.js';
+import { rebuildBalancesFromVouchers } from '../../utils/balanceRebuildService.js';
 import {
   Plus,
   Save,
@@ -161,6 +162,24 @@ export default function Settings() {
       showToast('Database reset failed: ' + (err.message || 'Unknown error'), 'error');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const [isRebuildingBalances, setIsRebuildingBalances] = useState(false);
+
+  const handleRebuildBalances = async () => {
+    setIsRebuildingBalances(true);
+    try {
+      const stats = await rebuildBalancesFromVouchers();
+      await loadDbStatsAndBackups();
+      showToast(
+        `Balances successfully rebuilt! (${stats.partiesUpdated} parties updated, ${stats.cashEntriesCreated} cash entries created, ${stats.capitalEntriesCreated} capital entries created)`
+      );
+    } catch (err) {
+      console.error('Rebuild failed:', err);
+      showToast('Failed to rebuild balances: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setIsRebuildingBalances(false);
     }
   };
 
@@ -997,6 +1016,46 @@ export default function Settings() {
                 They protect against user errors while working, but will <em>not</em> survive if you clear your browser cookies/site data
                 or switch computers. Use <strong>Manual Backup (Export)</strong> above to download physical files to an external drive.
               </span>
+            </div>
+          </Card>
+
+          {/* ── JOURNAL POSTING & BALANCE REBUILD MAINTENANCE CARD ─────────── */}
+          <Card className="p-6 border-blue-200 bg-blue-50/20 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-blue-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-blue-100 text-[#1E3A5F] rounded-xl shrink-0 mt-0.5">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#1E3A5F]">
+                    Journal Voucher Posting &amp; Balance Rebuild
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Synchronize party, cash, bank, and capital ledger balances from all recorded vouchers.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="primary"
+                icon={RefreshCw}
+                disabled={isRebuildingBalances}
+                onClick={handleRebuildBalances}
+                className="bg-[#1E3A5F] hover:bg-[#152843] text-white shrink-0 font-bold cursor-pointer"
+              >
+                {isRebuildingBalances ? 'Rebuilding Balances...' : 'Rebuild Balances from Vouchers'}
+              </Button>
+            </div>
+
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-950 space-y-1.5">
+              <div className="font-bold flex items-center gap-1.5 text-blue-900">
+                <Info className="w-4 h-4 shrink-0" />
+                <span>Notice on Existing Data &amp; Journal Voucher Corrections:</span>
+              </div>
+              <p className="text-blue-900/90 leading-relaxed">
+                Journal Vouchers posted prior to this update used inverted party balance signs and bypassed direct Capital / Cash Book integration. If you have legacy test vouchers (like JV-0001), you can either click <strong>&quot;Rebuild Balances from Vouchers&quot;</strong> above to auto-correct all party signs and inject missing Cash Book/Capital lines, or use <strong>&quot;Clear Complete Data&quot;</strong> below to reset to a clean baseline and re-enter vouchers with 100% Trial Balance equilibrium.
+              </p>
             </div>
           </Card>
 

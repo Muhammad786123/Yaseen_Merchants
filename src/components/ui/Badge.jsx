@@ -2,18 +2,18 @@ import React from 'react';
 
 export default function Badge({ children, variant = 'blue', className = '' }) {
   const variants = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    orange: 'bg-orange-50 text-orange-700 border-orange-200',
-    red: 'bg-red-50 text-red-700 border-red-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    gray: 'bg-gray-100 text-gray-700 border-gray-200',
+    blue: 'bg-[#E3F2FD] text-[#0D47A1] border-black',
+    green: 'bg-[#E8F5E9] text-[#1B5E20] border-black',
+    orange: 'bg-[#FFF3E0] text-[#E65100] border-black',
+    red: 'bg-[#FFEBEE] text-[#B71C1C] border-black',
+    amber: 'bg-[#FFEB3B] text-black border-black font-extrabold',
+    purple: 'bg-[#F3E5F5] text-[#4A148C] border-black',
+    gray: 'bg-[#F5F5F5] text-black border-black',
   };
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${
+      className={`inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold border ${
         variants[variant] || variants.blue
       } ${className}`}
     >

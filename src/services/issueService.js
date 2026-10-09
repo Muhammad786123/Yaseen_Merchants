@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { syncStockEntriesToDb } from '../utils/stockUtils.js';
 
 export const issueService = {
   async getAll() {
@@ -46,6 +47,8 @@ export const issueService = {
           const newQty = Math.max(0, Number(stock.qty || 0) - issueQty);
           const newValue = newQty * currentAvgRate;
           await db.stockEntries.update(stock.id, { qty: newQty, value: newValue });
+          stock.qty = newQty;
+          stock.value = newValue;
         }
       }
     }
@@ -55,12 +58,12 @@ export const issueService = {
       no,
       date: issueData.date || new Date().toISOString().split('T')[0],
       fromWarehouse: issueData.fromWarehouse || 'Raw Material Store',
-      toArea: issueData.toArea || 'Production Area',
       items: processedItems,
       totalValue,
     };
 
     await db.issues.add(newIssue);
+    await syncStockEntriesToDb();
     return newIssue;
   },
 
@@ -90,7 +93,9 @@ export const issueService = {
       }
     }
 
-    return await db.issues.delete(id);
+    const res = await db.issues.delete(id);
+    await syncStockEntriesToDb();
+    return res;
   },
 };
 

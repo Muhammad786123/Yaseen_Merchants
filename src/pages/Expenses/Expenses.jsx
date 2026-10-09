@@ -40,15 +40,15 @@ export default function Expenses() {
         }
       />
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3]">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#EBE9ED] p-2.5 border-2 border-black">
         <SearchInput
           value={search}
           onChange={setSearch}
           placeholder="Search expenses by category or description..."
           className="w-full sm:w-80"
         />
-        <div className="text-xs font-bold text-[#1E3A5F]">
-          Total Operating Expenses: <span className="text-sm font-extrabold text-red-600">{fmt(totalExpense)}</span>
+        <div className="text-xs font-bold text-black">
+          Total Operating Expenses: <span className="font-mono font-black text-sm text-red-700">{fmt(totalExpense)}</span>
         </div>
       </div>
 
@@ -59,20 +59,20 @@ export default function Expenses() {
         {filtered.map((e) => (
           <TR key={e.id}>
             <TD>{formatDate(e.date)}</TD>
-            <TD className="font-semibold text-gray-900">{e.description}</TD>
+            <TD className="font-bold text-black">{e.description}</TD>
             <TD>
               <Badge variant="purple">{e.category}</Badge>
             </TD>
             <TD>{e.account}</TD>
-            <TD mono right className="font-bold text-red-600">{fmt(e.amount)}</TD>
+            <TD mono right className="font-bold text-red-700">{fmt(e.amount)}</TD>
             <TD>
               <div className="flex items-center justify-end">
                 <button
                   onClick={() => setDeletingId(e.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Expense"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

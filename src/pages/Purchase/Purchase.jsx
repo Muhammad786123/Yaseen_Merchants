@@ -50,7 +50,7 @@ export default function Purchase() {
       />
 
       {/* Search Bar */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#E0DBD3] no-print">
+      <div className="flex items-center justify-between bg-[#EBE9ED] p-2.5 border-2 border-black no-print">
         <SearchInput
           value={search}
           onChange={setSearch}
@@ -76,47 +76,47 @@ export default function Purchase() {
       >
         {filteredPurchases.map((p) => (
           <TR key={p.id}>
-            <TD mono className="font-bold text-[#1E3A5F]">
+            <TD mono className="font-bold text-black">
               {p.no}
             </TD>
             <TD>{formatDate(p.date)}</TD>
-            <TD className="font-medium text-gray-900">{p.supplierName}</TD>
+            <TD className="font-bold text-black">{p.supplierName}</TD>
             <TD>{p.warehouseName}</TD>
             <TD>
-              <div className="text-xs text-gray-600">
+              <div className="text-xs text-gray-700">
                 {p.items && p.items.length > 0
                   ? `${p.items.length} item(s): ${p.items.map((i) => i.itemName).join(', ')}`
                   : '-'}
               </div>
             </TD>
-            <TD mono right className="font-bold text-[#1E3A5F]">
+            <TD mono right className="font-bold text-black">
               {fmt(p.total)}
             </TD>
-            <TD mono right className="text-emerald-600">
+            <TD mono right className="text-[#1a6b2e] font-bold">
               {fmt(p.paid)}
             </TD>
             <TD mono right>
               {p.balance > 0 ? (
-                <span className="font-bold text-red-600">{fmt(p.balance)}</span>
+                <span className="font-bold text-red-700">{fmt(p.balance)}</span>
               ) : (
                 <Badge variant="green">Paid</Badge>
               )}
             </TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => setViewingPurchase(p)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
                   title="View Details"
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(p.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
                   title="Delete Invoice"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

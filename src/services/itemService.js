@@ -16,7 +16,7 @@ export const itemService = {
       code: itemData.code || `RM-${Math.floor(100 + Math.random() * 900)}`,
       name: itemData.name,
       category: itemData.category || 'Raw Material',
-      quality: itemData.quality || 'Cotton A',
+      quality: itemData.quality || '',
       unit: itemData.unit || 'KG',
       defaultRate: Number(itemData.defaultRate || 0),
     };

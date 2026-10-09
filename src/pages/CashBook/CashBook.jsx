@@ -1,579 +1,830 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
-import PrintHeader from '../../components/common/PrintHeader.jsx';
-import Card from '../../components/ui/Card.jsx';
-import Button from '../../components/ui/Button.jsx';
-import SearchInput from '../../components/ui/SearchInput.jsx';
-import DatePicker from '../../components/ui/DatePicker.jsx';
-import Input from '../../components/ui/Input.jsx';
-import Select from '../../components/ui/Select.jsx';
-import { Table, TR, TD } from '../../components/ui/Table.jsx';
-import Badge from '../../components/ui/Badge.jsx';
 import Modal from '../../components/ui/Modal.jsx';
-import StatCard from '../../components/dashboard/StatCard.jsx';
+import SearchInput from '../../components/ui/SearchInput.jsx';
+import { Table, TR, TD } from '../../components/ui/Table.jsx';
 import { useCashBook } from '../../hooks/useCashBook.js';
 import { useParties } from '../../hooks/useParties.js';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { db } from '../../db/database.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
 import {
-  Wallet,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Landmark,
-  UserCheck,
-  Plus,
-  Eye,
+  Save,
+  PlusCircle,
+  XCircle,
+  Search,
+  CheckCircle2,
+  Power,
   Printer,
 } from 'lucide-react';
 
-export default function CashBook() {
-  const {
-    cashBookEntries,
-    currentCashBalance,
-    depositToBank,
-    withdrawFromBank,
-    giveCashToParty,
-    receiveCashFromParty,
-  } = useCashBook();
+const DENOMINATIONS = [5000, 1000, 500, 100, 50, 20, 10, 5];
 
+const createEmptyRow = (idx) => ({
+  id: `row_${idx}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+  accountType: 'party', // 'party' | 'bank' | 'general'
+  accountNo: '',
+  accountId: '',
+  accountName: '',
+  detail: '',
+  credit: '',
+  debit: '',
+});
+
+export default function CashBook() {
+  const navigate = useNavigate();
+  const { cashBookEntries, currentCashBalance } = useCashBook();
   const { parties } = useParties();
   const { accounts } = useFinances();
   const { showToast } = useApp();
 
   const bankAccounts = accounts.filter((a) => !a.name.toLowerCase().includes('cash'));
 
-  // Filters state
-  const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  // --- MANUAL CASH BOOK ENTRY SCREEN STATE ---
+  const [cashBookNo, setCashBookNo] = useState(1);
+  const [entryDate, setEntryDate] = useState(getTodayStr());
+  const [topAccountNo, setTopAccountNo] = useState('');
+  const [topAccountId, setTopAccountId] = useState('');
+  const [topAccountName, setTopAccountName] = useState('');
+  const [activePartyBalance, setActivePartyBalance] = useState(0);
 
-  // Active action modal
-  const [activeModal, setActiveModal] = useState(null); // 'deposit' | 'withdraw' | 'give' | 'receive'
-  const [viewingEntry, setViewingEntry] = useState(null);
+  // 8 default rows matching the reference layout
+  const [rows, setRows] = useState(() => Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
 
-  // Form states
-  const [formDate, setFormDate] = useState(getTodayStr());
-  const [bankId, setBankId] = useState('');
-  const [partyId, setPartyId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+  // Cash Details denominations: count per denomination
+  const [denominations, setDenominations] = useState(() =>
+    DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
+  );
 
-  // Filtered Cash Book entries
-  const filteredEntries = cashBookEntries.filter((entry) => {
-    const matchSearch =
-      (entry.description && entry.description.toLowerCase().includes(search.toLowerCase())) ||
-      (entry.partyName && entry.partyName.toLowerCase().includes(search.toLowerCase())) ||
-      (entry.type && entry.type.toLowerCase().includes(search.toLowerCase())) ||
-      (entry.bankAccountName && entry.bankAccountName.toLowerCase().includes(search.toLowerCase()));
+  // Search modal state
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [voucherFilter, setVoucherFilter] = useState('');
 
-    const matchFrom = !dateFrom || entry.date >= dateFrom;
-    const matchTo = !dateTo || entry.date <= dateTo;
+  // Auto-generate next Cash Book Number starting fresh from 0001
+  useEffect(() => {
+    async function determineNextCbNo() {
+      try {
+        const all = await db.cashBookEntries.toArray();
+        const maxNo = all.reduce((max, e) => {
+          const num = parseInt(e.cashBookNo, 10);
+          return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        setCashBookNo(maxNo > 0 ? maxNo + 1 : 1);
+      } catch {
+        setCashBookNo(1);
+      }
+    }
+    determineNextCbNo();
+  }, [cashBookEntries.length]);
 
-    return matchSearch && matchFrom && matchTo;
-  });
+  // Selected party / account from top bar
+  const selectedTopParty = parties.find((p) => p.id === topAccountId || p.name === topAccountName);
+  const previousBalance = selectedTopParty ? Number(selectedTopParty.balance || 0) : 0;
 
-  const totalCashIn = filteredEntries.reduce((sum, e) => sum + Number(e.credit || 0), 0);
-  const totalCashOut = filteredEntries.reduce((sum, e) => sum + Number(e.debit || 0), 0);
+  // Format Date for DD/MM/YY and calculate Day of Week
+  const { formattedDateDDMMYY, dayOfWeek } = useMemo(() => {
+    try {
+      const d = new Date(entryDate);
+      if (isNaN(d.getTime())) return { formattedDateDDMMYY: '', dayOfWeek: '' };
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yy = String(d.getFullYear()).slice(-2);
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return {
+        formattedDateDDMMYY: `${dd}/${mm}/${yy}`,
+        dayOfWeek: days[d.getDay()],
+      };
+    } catch {
+      return { formattedDateDDMMYY: '', dayOfWeek: '' };
+    }
+  }, [entryDate]);
 
-  const resetForm = () => {
-    setFormDate(getTodayStr());
-    setBankId(bankAccounts[0]?.id || '');
-    setPartyId(parties[0]?.id || '');
-    setAmount('');
-    setDescription('');
-    setActiveModal(null);
+  // Row update handlers
+  const handleRowChange = (idx, field, value) => {
+    setRows((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+
+      if (field === 'accountId') {
+        // Determine if selection is party or bank
+        const party = parties.find((p) => p.id === value);
+        if (party) {
+          updated[idx].accountType = 'party';
+          updated[idx].accountNo = party.code || party.id;
+          updated[idx].accountName = party.name;
+          setActivePartyBalance(Number(party.balance || 0));
+        } else {
+          const bank = bankAccounts.find((b) => b.id === value);
+          if (bank) {
+            updated[idx].accountType = 'bank';
+            updated[idx].accountNo = bank.code || bank.id;
+            updated[idx].accountName = bank.name;
+            setActivePartyBalance(Number(bank.balance || 0));
+          } else {
+            const acc = accounts.find((a) => a.id === value);
+            if (acc) {
+              updated[idx].accountType = 'general';
+              updated[idx].accountNo = acc.code || acc.id;
+              updated[idx].accountName = acc.name;
+              setActivePartyBalance(Number(acc.balance || 0));
+            }
+          }
+        }
+      }
+      return updated;
+    });
   };
 
-  const handleBankDeposit = async (e) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
-    const selectedBank = bankAccounts.find((b) => b.id === bankId || b.name === bankId);
-    await depositToBank({
-      date: formDate,
-      bankAccountId: selectedBank ? selectedBank.id : bankId,
-      bankAccountName: selectedBank ? selectedBank.name : 'Bank Account',
-      amount: Number(amount),
-      description,
-    });
-    showToast(`Deposit of ${fmt(amount)} to Bank recorded!`);
-    resetForm();
+  // Top account change handler
+  const handleTopAccountSelect = (val) => {
+    const party = parties.find((p) => p.id === val);
+    if (party) {
+      setTopAccountId(party.id);
+      setTopAccountNo(party.code || party.id);
+      setTopAccountName(party.name);
+      setActivePartyBalance(Number(party.balance || 0));
+
+      setRows((prev) => {
+        const updated = [...prev];
+        if (!updated[0].accountName) {
+          updated[0].accountType = 'party';
+          updated[0].accountId = party.id;
+          updated[0].accountNo = party.code || party.id;
+          updated[0].accountName = party.name;
+        }
+        return updated;
+      });
+    } else {
+      const bank = bankAccounts.find((b) => b.id === val);
+      if (bank) {
+        setTopAccountId(bank.id);
+        setTopAccountNo(bank.code || bank.id);
+        setTopAccountName(bank.name);
+        setActivePartyBalance(Number(bank.balance || 0));
+
+        setRows((prev) => {
+          const updated = [...prev];
+          if (!updated[0].accountName) {
+            updated[0].accountType = 'bank';
+            updated[0].accountId = bank.id;
+            updated[0].accountNo = bank.code || bank.id;
+            updated[0].accountName = bank.name;
+          }
+          return updated;
+        });
+      }
+    }
   };
 
-  const handleBankWithdrawal = async (e) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
-    const selectedBank = bankAccounts.find((b) => b.id === bankId || b.name === bankId);
-    await withdrawFromBank({
-      date: formDate,
-      bankAccountId: selectedBank ? selectedBank.id : bankId,
-      bankAccountName: selectedBank ? selectedBank.name : 'Bank Account',
-      amount: Number(amount),
-      description,
+  // Grid live calculations
+  const totalCredit = rows.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
+  const totalDebit = rows.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
+  const netMovement = totalCredit - totalDebit;
+  const currentRunningBalance = Number(currentCashBalance || 0) + netMovement;
+
+  // Denominations live calculations
+  const denominationValues = useMemo(() => {
+    let countSum = 0;
+    let valSum = 0;
+    const detailList = DENOMINATIONS.map((d) => {
+      const count = parseInt(denominations[d], 10) || 0;
+      const val = count * d;
+      countSum += count;
+      valSum += val;
+      return { denom: d, count, val };
     });
-    showToast(`Withdrawal of ${fmt(amount)} from Bank recorded!`);
-    resetForm();
+    return { detailList, countSum, valSum };
+  }, [denominations]);
+
+  // Difference between Physical Cash details and Grid Net Cash
+  const cashDifference = denominationValues.valSum - totalCredit;
+
+  // Handle Save / Post
+  const handleSaveEntry = async () => {
+    const validRows = rows.filter(
+      (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
+    );
+
+    if (validRows.length === 0) {
+      alert('Please fill in at least one row with an Account Name and Credit/Debit amount.');
+      return;
+    }
+
+    try {
+      for (const row of validRows) {
+        const cred = Number(row.credit) || 0;
+        const deb = Number(row.debit) || 0;
+        const pId = row.accountId || (parties.find((p) => p.name === row.accountName)?.id) || null;
+        const bId = row.accountId || (bankAccounts.find((b) => b.name === row.accountName)?.id) || null;
+
+        const isBank = row.accountType === 'bank' || bankAccounts.some((b) => b.id === row.accountId || b.name === row.accountName);
+
+        // Post Cash Book entry
+        const entryId = 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+        await db.cashBookEntries.add({
+          id: entryId,
+          date: entryDate,
+          cashBookNo: String(cashBookNo),
+          partyId: isBank ? null : pId,
+          partyName: isBank ? null : row.accountName,
+          bankAccountId: isBank ? bId : null,
+          bankAccountName: isBank ? row.accountName : null,
+          debit: deb,
+          credit: cred,
+          description: row.detail || `Manual Cash Book No ${cashBookNo}`,
+          type: isBank ? (deb > 0 ? 'Deposit' : 'Withdrawal') : (cred > 0 ? 'CashReceived' : 'CashGiven'),
+          refNo: `CB-${String(cashBookNo).padStart(4, '0')}`,
+        });
+
+        if (isBank) {
+          // Cash Book: Credit = cash from bank (withdrawal), bank decreases
+          // Debit = cash to bank (deposit), bank increases
+          const bank = await db.accounts.get(bId) || await db.accounts.where({ name: row.accountName }).first();
+          if (bank) {
+            const currentBankBal = Number(bank.balance || 0);
+            const newBankBal = currentBankBal + deb - cred;
+            await db.accounts.update(bank.id, { balance: newBankBal });
+          }
+        } else if (pId) {
+          // Party: Cash given (debit) increases party balance, Cash received (credit) decreases party balance
+          const party = await db.parties.get(pId);
+          if (party) {
+            const currentBal = Number(party.balance || 0);
+            const newBal = currentBal + deb - cred;
+            await db.parties.update(pId, { balance: newBal });
+          }
+        }
+      }
+
+      // Update physical Cash account in accounts table
+      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
+      if (cashAcc) {
+        await db.accounts.update(cashAcc.id, {
+          balance: Number(cashAcc.balance || 0) + totalCredit - totalDebit,
+        });
+      }
+
+      showToast(`Cash Book #${cashBookNo} saved successfully! (${validRows.length} lines posted)`);
+      handleNewEntry();
+    } catch (err) {
+      console.error('Failed to save Cash Book:', err);
+      alert('Error saving Cash Book entry. Check console for details.');
+    }
   };
 
-  const handleGiveCash = async (e) => {
-    e.preventDefault();
-    if (!partyId || !amount || Number(amount) <= 0) return;
-    const selectedParty = parties.find((p) => p.id === partyId);
-    await giveCashToParty({
-      date: formDate,
-      partyId,
-      partyName: selectedParty ? selectedParty.name : 'Party',
-      amount: Number(amount),
-      description,
-    });
-    showToast(`Cash payment of ${fmt(amount)} to ${selectedParty?.name} recorded!`);
-    resetForm();
+  // Reset for New Entry
+  const handleNewEntry = () => {
+    setCashBookNo((prev) => prev + 1);
+    setEntryDate(getTodayStr());
+    setTopAccountNo('');
+    setTopAccountId('');
+    setTopAccountName('');
+    setActivePartyBalance(0);
+    setRows(Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
+    setDenominations(DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {}));
   };
 
-  const handleReceiveCash = async (e) => {
-    e.preventDefault();
-    if (!partyId || !amount || Number(amount) <= 0) return;
-    const selectedParty = parties.find((p) => p.id === partyId);
-    await receiveCashFromParty({
-      date: formDate,
-      partyId,
-      partyName: selectedParty ? selectedParty.name : 'Party',
-      amount: Number(amount),
-      description,
-    });
-    showToast(`Cash receipt of ${fmt(amount)} from ${selectedParty?.name} recorded!`);
-    resetForm();
+  // Clear current rows
+  const handleClearRows = () => {
+    if (window.confirm('Clear all entered rows on this Cash Book screen?')) {
+      setRows(Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
+      setDenominations(DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {}));
+    }
+  };
+
+  // Confirm / Reconcile verification
+  const handleConfirmVerify = () => {
+    const validRows = rows.filter(
+      (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
+    );
+    if (validRows.length === 0) {
+      alert('No entries to verify. Please enter transaction rows.');
+      return;
+    }
+    if (denominationValues.valSum > 0 && cashDifference !== 0) {
+      alert(
+        `Reconciliation Notice:\nPhysical Cash Count: ${fmt(denominationValues.valSum)}\nTotal Cash Received: ${fmt(totalCredit)}\nDifference: ${fmt(cashDifference)}\n\nPlease recount notes before saving.`
+      );
+    } else {
+      alert(
+        `✓ All ${validRows.length} entries verified!\nTotal Credit (Jamma): ${fmt(totalCredit)}\nTotal Debit (Benaam): ${fmt(totalDebit)}\nNet Movement: ${fmt(netMovement)}\nPhysical Cash Reconciliation: Matched.`
+      );
+    }
+  };
+
+  // Print Cash Book Voucher
+  const handlePrint = () => {
+    const printArea = document.getElementById('cashbook-print-area');
+    if (!printArea) {
+      alert('Error: Cash Book print area not found.');
+      return;
+    }
+    window.print();
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
-        title="Physical Cash Book Ledger"
-        subtitle="Central control for all physical cash movements, cash-to-bank transfers, and party settlements"
+        title="Cash Book"
+        subtitle="Traditional Roznamcha Cash In/Out journal, physical denomination count & party reconciliation"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={Printer}
-              onClick={() => window.print()}
+          <div className="flex gap-2 no-print">
+            <button
+              type="button"
+              onClick={() => setIsSearchModalOpen(true)}
+              className="bg-white hover:bg-gray-100 border border-black px-3 py-1.5 text-xs font-bold text-black flex items-center gap-1.5 cursor-pointer shadow-none no-print"
             >
-              Print Statement
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={ArrowUpRight}
-              onClick={() => {
-                setBankId(bankAccounts[0]?.id || '');
-                setActiveModal('deposit');
-              }}
+              <Search className="w-3.5 h-3.5 text-blue-700" />
+              <span>Find Cash Voucher</span>
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="bg-white hover:bg-gray-100 border border-black px-3 py-1.5 text-xs font-bold text-black flex items-center gap-1.5 cursor-pointer shadow-none no-print"
             >
-              Deposit to Bank
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={ArrowDownLeft}
-              onClick={() => {
-                setBankId(bankAccounts[0]?.id || '');
-                setActiveModal('withdraw');
-              }}
-            >
-              Withdraw from Bank
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={UserCheck}
-              onClick={() => {
-                setPartyId(parties[0]?.id || '');
-                setActiveModal('give');
-              }}
-            >
-              Give Cash to Party
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Plus}
-              onClick={() => {
-                setPartyId(parties[0]?.id || '');
-                setActiveModal('receive');
-              }}
-            >
-              Receive Cash from Party
-            </Button>
+              <Printer className="w-3.5 h-3.5 text-gray-700" />
+              <span>Print</span>
+            </button>
           </div>
         }
       />
 
-      {/* Controls & Date Filter */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3] no-print">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by party, bank or description..."
-          className="w-full sm:w-72"
-        />
+      {/* Classic Traditional Cash Book Container */}
+      <div
+        id="cashbook-print-area"
+        className="print-area bg-[#EBE9ED] print:bg-white p-4 sm:p-6 print:p-2 font-sans text-gray-900 border-2 border-black shadow-none"
+      >
+        {/* Title Box */}
+        <div className="text-center mb-3">
+          <div className="text-xs font-bold text-gray-700 uppercase tracking-widest">
+            Shahid Yaseen Cotton Waste Merchant
+          </div>
+          <div className="inline-block bg-white border-2 border-black px-12 py-1 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-black text-[#800000] tracking-wider uppercase font-serif">
+              CASH BOOK
+            </h1>
+          </div>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 font-medium">From:</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-1.5 border border-[#E0DBD3] rounded-lg outline-none focus:border-[#1E3A5F]"
-            />
+        {/* Top Info Bar (Bordered container) */}
+        <div className="cashbook-info-bar max-w-2xl mx-auto mb-4 border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-3 space-y-2">
+          {/* Row 1: Cash Book No & Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+            <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Cash Book No</label>
+            <div className="sm:col-span-3 print:col-span-3">
+              <input
+                type="text"
+                readOnly
+                value={String(cashBookNo).padStart(4, '0')}
+                className="w-full bg-white border border-black px-2 py-1 font-mono font-bold text-gray-900 outline-none text-center"
+              />
+            </div>
+
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Date(DD/MM/YY)</label>
+            <div className="sm:col-span-2 print:col-span-2">
+              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-xs font-mono font-bold text-center">
+                {formattedDateDDMMYY || entryDate}
+              </span>
+              <input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-xs outline-none"
+              />
+            </div>
+            <div className="sm:col-span-2 print:col-span-2">
+              <div
+                className="w-full bg-[#76FF03] border border-black font-bold font-mono text-[11px] text-black px-1 py-1 text-center truncate"
+                title={dayOfWeek}
+              >
+                {dayOfWeek || 'Today'}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 font-medium">To:</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-1.5 border border-[#E0DBD3] rounded-lg outline-none focus:border-[#1E3A5F]"
-            />
+
+          {/* Row 2: Account No & Account Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+            <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Account No</label>
+            <div className="sm:col-span-3 print:col-span-3">
+              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-xs font-mono font-bold text-center">
+                {topAccountNo || (selectedTopParty ? (selectedTopParty.code || selectedTopParty.id) : '-')}
+              </span>
+              <select
+                value={topAccountId}
+                onChange={(e) => handleTopAccountSelect(e.target.value)}
+                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-xs outline-none font-mono"
+              >
+                <option value="">-- Select Account --</option>
+                <optgroup label="Parties">
+                  {parties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code || p.id} - {p.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Bank Accounts">
+                  {bankAccounts.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.code || b.id} - {b.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Account Name</label>
+            <div className="sm:col-span-4 print:col-span-4">
+              <span className="hidden print:block w-full bg-white border border-black px-2 py-1 text-xs font-bold text-gray-900 truncate">
+                {topAccountName || '-'}
+              </span>
+              <input
+                type="text"
+                readOnly
+                value={topAccountName}
+                placeholder="Account name..."
+                className="print:hidden w-full bg-white border border-black px-2 py-1 text-xs font-bold text-gray-900 outline-none"
+              />
+            </div>
           </div>
-          {(dateFrom || dateTo) && (
+
+          {/* Row 3: Previous Balance */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+            <div className="sm:col-span-6 print:col-span-6"></div>
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Previous Balance</label>
+            <div className="sm:col-span-4 print:col-span-4">
+              <div className="w-full bg-[#76FF03] border border-black font-bold font-mono text-xs text-black px-2 py-1 text-right">
+                {previousBalance ? fmt(previousBalance) : '0.00'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Grid & Cash Details Panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 print:grid-cols-12 gap-3 items-start">
+          {/* Left Side: Multi-row Entry Grid */}
+          <div className="lg:col-span-8 print:col-span-8 cashbook-grid-box border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-2 flex flex-col justify-between shadow-none min-h-[460px] print:min-h-0">
+            <div>
+              <div className="overflow-x-auto print:overflow-visible">
+                <table className="w-full border-collapse border border-black text-xs bg-white">
+                  <thead>
+                    <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
+                      <th className="border border-black px-2 py-1.5 w-24">Acc/ No</th>
+                      <th className="border border-black px-2 py-1.5 w-44 text-left">Account Name</th>
+                      <th className="border border-black px-2 py-1.5 text-left">Detail</th>
+                      <th className="border border-black px-2 py-1.5 w-24 text-right">Credit/Jamma</th>
+                      <th className="border border-black px-2 py-1.5 w-24 text-right">Debit/Benaam</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, idx) => (
+                      <tr key={row.id} className="hover:bg-blue-50/40">
+                        {/* Acc/ No Selector */}
+                        <td className="border border-black p-0 text-center">
+                          <span className="hidden print:block px-1 py-1 text-[11px] font-mono">
+                            {row.accountNo || '-'}
+                          </span>
+                          <select
+                            value={row.accountId}
+                            onChange={(e) => handleRowChange(idx, 'accountId', e.target.value)}
+                            className="print:hidden w-full px-1 py-1 text-[11px] font-mono outline-none bg-transparent"
+                          >
+                            <option value="">-</option>
+                            <optgroup label="Parties">
+                              {parties.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.code || p.id} - {p.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Bank Accounts">
+                              {bankAccounts.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.code || b.id} - {b.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </td>
+
+                        {/* Account Name */}
+                        <td className="border border-black p-0">
+                          <span className="hidden print:block px-2 py-1 text-xs font-medium truncate">
+                            {row.accountName || ''}
+                          </span>
+                          <input
+                            type="text"
+                            value={row.accountName}
+                            onChange={(e) => handleRowChange(idx, 'accountName', e.target.value)}
+                            placeholder="Select or enter account..."
+                            className="print:hidden w-full px-2 py-1 text-xs outline-none bg-transparent font-medium"
+                          />
+                        </td>
+
+                        {/* Detail Narration */}
+                        <td className="border border-black p-0">
+                          <span className="hidden print:block px-2 py-1 text-xs text-gray-800 truncate">
+                            {row.detail || ''}
+                          </span>
+                          <input
+                            type="text"
+                            value={row.detail}
+                            onChange={(e) => handleRowChange(idx, 'detail', e.target.value)}
+                            placeholder="Manual description..."
+                            className="print:hidden w-full px-2 py-1 text-xs outline-none bg-transparent"
+                          />
+                        </td>
+
+                        {/* Credit / Jamma (Cash In) */}
+                        <td className="border border-black p-0">
+                          <span className="hidden print:block px-2 py-1 text-xs font-mono font-bold text-right text-emerald-800">
+                            {row.credit ? Number(row.credit).toLocaleString('en-PK') : '-'}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.credit}
+                            onChange={(e) => handleRowChange(idx, 'credit', e.target.value)}
+                            placeholder="0"
+                            className="print:hidden w-full px-2 py-1 text-xs font-mono font-bold text-right outline-none bg-transparent text-emerald-800"
+                          />
+                        </td>
+
+                        {/* Debit / Benaam (Cash Out) */}
+                        <td className="border border-black p-0">
+                          <span className="hidden print:block px-2 py-1 text-xs font-mono font-bold text-right text-red-800">
+                            {row.debit ? Number(row.debit).toLocaleString('en-PK') : '-'}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.debit}
+                            onChange={(e) => handleRowChange(idx, 'debit', e.target.value)}
+                            placeholder="0"
+                            className="print:hidden w-full px-2 py-1 text-xs font-mono font-bold text-right outline-none bg-transparent text-red-800"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Helper hint */}
+              <div className="mt-1 flex items-center justify-between text-[11px] text-gray-700 px-1 font-medium no-print">
+                <span>Credit/Jamma = Cash Received | Debit/Benaam = Cash Paid</span>
+                <button
+                  type="button"
+                  onClick={() => setRows((prev) => [...prev, createEmptyRow(prev.length)])}
+                  className="text-blue-900 font-bold hover:underline cursor-pointer"
+                >
+                  + Add Row
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Totals Bar */}
+            <div className="mt-4 pt-2 border-t border-black space-y-2">
+              <div className="flex items-center justify-end gap-2 text-xs">
+                <span className="font-bold text-gray-900">Total</span>
+                <div className="w-24 bg-white border border-black px-2 py-1 text-right font-mono font-bold text-emerald-800">
+                  {totalCredit ? totalCredit.toLocaleString('en-PK') : '0'}
+                </div>
+                <div className="w-24 bg-white border border-black px-2 py-1 text-right font-mono font-bold text-red-800">
+                  {totalDebit ? totalDebit.toLocaleString('en-PK') : '0'}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-red-700">Party Balance</span>
+                  <div className="bg-[#0000FF] border border-black px-4 py-1 text-white font-mono font-bold text-sm min-w-[120px] text-center">
+                    {activePartyBalance ? fmt(activePartyBalance) : (previousBalance ? fmt(previousBalance) : '0.00')}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-900">Current Cash Balance</span>
+                  <div className="bg-[#76FF03] border border-black px-4 py-1 text-black font-mono font-bold text-sm min-w-[130px] text-right">
+                    {fmt(currentRunningBalance)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Cash Details Denomination Breakdown */}
+          <div className="lg:col-span-4 print:col-span-4">
+            <h3 className="text-center font-bold text-sm text-[#800000] uppercase tracking-wider mb-1">
+              CASH DETAILS
+            </h3>
+
+            <div className="cashbook-denom-box border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-2">
+              <table className="w-full border-collapse border border-black text-xs bg-white">
+                <thead>
+                  <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
+                    <th className="border border-black px-2 py-1 w-16 text-left">Details</th>
+                    <th className="border border-black px-2 py-1 w-16">Count</th>
+                    <th className="border border-black px-2 py-1 text-right">Cash</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {denominationValues.detailList.map((item) => (
+                    <tr key={item.denom} className="hover:bg-gray-50">
+                      <td className="border border-black px-2 py-0.5 font-bold font-mono text-gray-900">
+                        {item.denom}
+                      </td>
+                      <td className="border border-black p-0 text-center">
+                        <span className="hidden print:block font-mono text-xs text-center py-0.5">
+                          {denominations[item.denom] || '-'}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={denominations[item.denom] || ''}
+                          onChange={(e) =>
+                            setDenominations((prev) => ({ ...prev, [item.denom]: e.target.value }))
+                          }
+                          placeholder="0"
+                          className="print:hidden w-full px-1.5 py-0.5 text-xs font-mono text-center outline-none bg-transparent"
+                        />
+                      </td>
+                      <td className="border border-black px-2 py-0.5 text-right font-mono font-bold text-gray-900">
+                        {item.val ? item.val.toLocaleString('en-PK') : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[#DFDFDF] font-bold">
+                    <td className="border border-black px-2 py-1 text-gray-900">Total</td>
+                    <td className="border border-black px-1 py-1 text-center font-mono">
+                      {denominationValues.countSum || 0}
+                    </td>
+                    <td className="border border-black px-2 py-1 text-right font-mono text-emerald-900">
+                      {denominationValues.valSum.toLocaleString('en-PK')}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Difference Box */}
+              <div className="mt-3 pt-2 border-t border-black flex items-center justify-between text-xs">
+                <span className="font-bold text-[#A52A2A]">Difference</span>
+                <div
+                  className={`bg-[#76FF03] border border-black px-3 py-1 font-mono font-bold text-xs min-w-[100px] text-right ${
+                    cashDifference !== 0 ? 'text-red-900' : 'text-black'
+                  }`}
+                >
+                  {cashDifference ? fmt(cashDifference) : '0.00'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Print-only Signatures & Audit Footer */}
+        <div className="hidden print:block mt-6 pt-3 border-t border-black">
+          <div className="flex items-center justify-between text-[9px] text-gray-600 mb-6">
+            <span>Printed on: <strong>{new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
+            <span>Cash Book Voucher #<strong>{String(cashBookNo).padStart(4, '0')}</strong></span>
+            <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
+          </div>
+          <div className="grid grid-cols-3 gap-6 text-center text-xs">
+            <div className="flex flex-col items-center">
+              <div className="w-40 border-b border-black mb-1 h-6" />
+              <span className="font-bold text-[10px] uppercase">Cashier / Prepared By</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-40 border-b border-black mb-1 h-6" />
+              <span className="font-bold text-[10px] uppercase">Checked / Verified By</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-40 border-b border-black mb-1 h-6" />
+              <span className="font-bold text-[10px] uppercase">Proprietor / Authorized</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Action Toolbar */}
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-6 no-print">
+          <div className="border-2 border-black bg-white p-1 flex items-center gap-2">
             <button
-              onClick={() => {
-                setDateFrom('');
-                setDateTo('');
-              }}
-              className="text-xs text-red-600 underline font-semibold hover:text-red-800"
+              type="button"
+              onClick={handleSaveEntry}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-all cursor-pointer"
+              title="Save / Post Cash Book Entry"
             >
-              Clear Filter
+              <Save className="w-5 h-5 text-emerald-700" />
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={handleNewEntry}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all cursor-pointer"
+              title="New Cash Book Entry"
+            >
+              <PlusCircle className="w-5 h-5 text-blue-700" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearRows}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-red-50 hover:bg-red-100 text-red-800 transition-all cursor-pointer"
+              title="Clear Current Rows"
+            >
+              <XCircle className="w-5 h-5 text-red-700" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSearchModalOpen(true)}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-sky-50 hover:bg-sky-100 text-sky-800 transition-all cursor-pointer"
+              title="Search Past Cash Book Vouchers"
+            >
+              <Search className="w-5 h-5 text-blue-700" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-purple-50 hover:bg-purple-100 text-purple-800 transition-all cursor-pointer"
+              title="Print Cash Book Voucher"
+            >
+              <Printer className="w-5 h-5 text-purple-700" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleConfirmVerify}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-teal-50 hover:bg-teal-100 text-teal-800 transition-all cursor-pointer"
+              title="Verify Reconciled Cash & Denominations"
+            >
+              <CheckCircle2 className="w-5 h-5 text-teal-700" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="w-10 h-10 flex items-center justify-center border border-black bg-gray-100 hover:bg-gray-200 text-gray-800 transition-all cursor-pointer"
+              title="Exit to Dashboard"
+            >
+              <Power className="w-5 h-5 text-gray-700" />
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="print-area space-y-6">
-        <PrintHeader
-          documentTitle="PHYSICAL CASH BOOK LEDGER STATEMENT"
-          subtitle="Central audit register for physical cash movements, cash-to-bank transfers, and party settlements"
-        />
-
-        {/* Top Stat Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard
-            label="Physical Cash in Hand"
-            value={fmt(currentCashBalance)}
-            sub="Current Cash Book Running Balance"
-            icon={Wallet}
-            color="text-[#1E3A5F]"
-          />
-          <StatCard
-            label="Filtered Total Cash In (Credit)"
-            value={fmt(totalCashIn)}
-            sub="Cash Received / Withdrawn"
-            icon={ArrowDownLeft}
-            color="text-emerald-600"
-          />
-          <StatCard
-            label="Filtered Total Cash Out (Debit)"
-            value={fmt(totalCashOut)}
-            sub="Cash Paid / Deposited"
-            icon={ArrowUpRight}
-            color="text-red-600"
-          />
-        </div>
-
-      {/* Cash Book Ledger Table */}
-      <Table
-        headers={[
-          'Date',
-          'Type / Reference',
-          'Description',
-          'Party (if any)',
-          'Bank A/C (if any)',
-          'Debit (Cash Out)',
-          'Credit (Cash In)',
-          'Running Cash Balance',
-          'Action',
-        ]}
-        emptyText="No cash book entries recorded for this period."
-      >
-        {filteredEntries.map((entry) => (
-          <TR
-            key={entry.id}
-            onClick={() => setViewingEntry(entry)}
-            highlight={entry.type === 'Deposit' || entry.type === 'Withdrawal'}
-          >
-            <TD>{formatDate(entry.date)}</TD>
-            <TD>
-              <Badge
-                variant={
-                  entry.type === 'Receipt' || entry.type === 'CashReceived' || entry.type === 'Withdrawal'
-                    ? 'green'
-                    : entry.type === 'Payment' || entry.type === 'CashGiven' || entry.type === 'Deposit'
-                    ? 'orange'
-                    : 'purple'
-                }
-              >
-                {entry.type}
-              </Badge>
-            </TD>
-            <TD className="font-medium text-gray-900 max-w-xs truncate">{entry.description}</TD>
-            <TD className="font-semibold text-[#1E3A5F]">{entry.partyName || '-'}</TD>
-            <TD className="text-gray-600">{entry.bankAccountName || '-'}</TD>
-            <TD mono right className="text-red-600 font-bold">
-              {entry.debit > 0 ? fmt(entry.debit) : '-'}
-            </TD>
-            <TD mono right className="text-emerald-600 font-bold">
-              {entry.credit > 0 ? fmt(entry.credit) : '-'}
-            </TD>
-            <TD mono right className="font-extrabold text-[#1E3A5F]">
-              {fmt(entry.balance)}
-            </TD>
-            <TD>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setViewingEntry(entry);
-                }}
-                className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
-                title="View Transaction Details"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-            </TD>
-          </TR>
-        ))}
-      </Table>
-      </div>
-
-      {/* Deposit Modal */}
-      <Modal
-        isOpen={activeModal === 'deposit'}
-        onClose={resetForm}
-        title="Deposit Physical Cash to Bank Account"
-      >
-        <form onSubmit={handleBankDeposit} className="space-y-4">
-          <DatePicker label="Deposit Date" value={formDate} onChange={setFormDate} required />
-          <Select
-            label="Target Bank Account"
-            value={bankId}
-            onChange={setBankId}
-            options={bankAccounts.map((b) => ({ value: b.id, label: `${b.name} (${fmt(b.balance)})` }))}
-            required
-          />
-          <Input
-            label="Deposit Amount (PKR)"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            placeholder="e.g. 50000"
-            required
-          />
-          <Input
-            label="Description / Slip Note"
-            value={description}
-            onChange={setDescription}
-            placeholder="e.g. Bank slip deposit #1042"
-          />
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E0DBD3]">
-            <Button variant="secondary" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Confirm Bank Deposit
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Withdrawal Modal */}
-      <Modal
-        isOpen={activeModal === 'withdraw'}
-        onClose={resetForm}
-        title="Withdraw Cash from Bank Account"
-      >
-        <form onSubmit={handleBankWithdrawal} className="space-y-4">
-          <DatePicker label="Withdrawal Date" value={formDate} onChange={setFormDate} required />
-          <Select
-            label="Source Bank Account"
-            value={bankId}
-            onChange={setBankId}
-            options={bankAccounts.map((b) => ({ value: b.id, label: `${b.name} (${fmt(b.balance)})` }))}
-            required
-          />
-          <Input
-            label="Withdrawal Amount (PKR)"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            placeholder="e.g. 25000"
-            required
-          />
-          <Input
-            label="Description / Cheque #"
-            value={description}
-            onChange={setDescription}
-            placeholder="e.g. Cheque withdrawal #99482"
-          />
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E0DBD3]">
-            <Button variant="secondary" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Confirm Bank Withdrawal
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Give Cash Modal */}
-      <Modal
-        isOpen={activeModal === 'give'}
-        onClose={resetForm}
-        title="Give Cash to Party (Payment / Advance)"
-      >
-        <form onSubmit={handleGiveCash} className="space-y-4">
-          <DatePicker label="Date" value={formDate} onChange={setFormDate} required />
-          <Select
-            label="Select Party / Business"
-            value={partyId}
-            onChange={setPartyId}
-            options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.type} - ${p.city})` }))}
-            required
-          />
-          <Input
-            label="Cash Amount (PKR)"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            placeholder="e.g. 15000"
-            required
-          />
-          <Input
-            label="Description"
-            value={description}
-            onChange={setDescription}
-            placeholder="e.g. Cash advance for cotton waste shipment"
-          />
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E0DBD3]">
-            <Button variant="secondary" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Record Cash Payment
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Receive Cash Modal */}
-      <Modal
-        isOpen={activeModal === 'receive'}
-        onClose={resetForm}
-        title="Receive Cash from Party (Receipt / Refund)"
-      >
-        <form onSubmit={handleReceiveCash} className="space-y-4">
-          <DatePicker label="Date" value={formDate} onChange={setFormDate} required />
-          <Select
-            label="Select Party / Business"
-            value={partyId}
-            onChange={setPartyId}
-            options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.type} - ${p.city})` }))}
-            required
-          />
-          <Input
-            label="Cash Amount (PKR)"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            placeholder="e.g. 20000"
-            required
-          />
-          <Input
-            label="Description"
-            value={description}
-            onChange={setDescription}
-            placeholder="e.g. Cash payment received against invoice"
-          />
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E0DBD3]">
-            <Button variant="secondary" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              Record Cash Receipt
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* View Entry Details Modal */}
-      <Modal
-        isOpen={!!viewingEntry}
-        onClose={() => setViewingEntry(null)}
-        title="Cash Book Transaction Details"
-      >
-        {viewingEntry && (
-          <div
-            id="cashbook-print-area"
-            className="print-area w-full bg-white text-black space-y-4"
-            style={{ margin: '0 auto', boxSizing: 'border-box' }}
-          >
-            <div className="flex justify-between items-center pb-2 border-b border-[#E0DBD3] no-print">
-              <h3 className="text-sm font-bold text-[#1E3A5F]">Transaction Details</h3>
-              <Button variant="primary" size="sm" icon={Printer} onClick={() => window.print()}>
-                Print Receipt
-              </Button>
-            </div>
-
-            <PrintHeader
-              documentTitle="CASH TRANSACTION RECEIPT"
-              documentNo={viewingEntry.id}
-              dateStr={formatDate(viewingEntry.date)}
+        {/* Search Past Cash Book Records Modal */}
+        <Modal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          title="Search Cash Book Records"
+          maxWidth="max-w-3xl"
+        >
+          <div className="space-y-4">
+            <SearchInput
+              value={voucherFilter}
+              onChange={setVoucherFilter}
+              placeholder="Search by Cash Book No, Party, or Description..."
             />
 
-            <div className="bg-[#FAF9F7] p-4 rounded-xl border border-[#D1D5DB] space-y-3 text-xs">
-              <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500 font-semibold">Transaction Type:</span>
-                <Badge variant="blue">{viewingEntry.type}</Badge>
-              </div>
-              {viewingEntry.partyName && (
-                <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                  <span className="text-gray-500">Party Account:</span>
-                  <span className="font-bold text-[#1E3A5F]">{viewingEntry.partyName}</span>
-                </div>
-              )}
-              {viewingEntry.bankAccountName && (
-                <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                  <span className="text-gray-500">Bank Account:</span>
-                  <span className="font-bold">{viewingEntry.bankAccountName}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500">Cash Out (Debit):</span>
-                <span className="font-bold text-red-600">{fmt(viewingEntry.debit)}</span>
-              </div>
-              <div className="flex justify-between border-b border-[#E0DBD3] pb-2">
-                <span className="text-gray-500">Cash In (Credit):</span>
-                <span className="font-bold text-emerald-600">{fmt(viewingEntry.credit)}</span>
-              </div>
-              <div className="flex justify-between pt-1">
-                <span className="text-gray-500 font-medium">Running Cash Balance:</span>
-                <span className="font-extrabold text-base text-[#1E3A5F]">
-                  {fmt(viewingEntry.balance)}
-                </span>
-              </div>
-            </div>
-            <div className="text-xs text-gray-600">
-              <span className="font-semibold text-gray-700">Description:</span>{' '}
-              {viewingEntry.description || 'No notes provided'}
-            </div>
-            <div className="flex justify-end pt-3 no-print">
-              <Button variant="secondary" onClick={() => setViewingEntry(null)}>
-                Close
-              </Button>
+            <div className="max-h-96 overflow-y-auto">
+              <Table
+                headers={['CB #', 'Date', 'Party / Account', 'Description', 'Debit (Out)', 'Credit (In)']}
+                emptyText="No matching cash book entries."
+              >
+                {cashBookEntries
+                  .filter(
+                    (e) =>
+                      !voucherFilter ||
+                      (e.cashBookNo && e.cashBookNo.includes(voucherFilter)) ||
+                      (e.partyName && e.partyName.toLowerCase().includes(voucherFilter.toLowerCase())) ||
+                      (e.bankAccountName && e.bankAccountName.toLowerCase().includes(voucherFilter.toLowerCase())) ||
+                      (e.description && e.description.toLowerCase().includes(voucherFilter.toLowerCase()))
+                  )
+                  .slice(0, 50)
+                  .map((e) => (
+                    <TR key={e.id}>
+                      <TD mono className="font-bold text-black">
+                        {e.cashBookNo ? `#${e.cashBookNo}` : e.refNo || '-'}
+                      </TD>
+                      <TD>{formatDate(e.date)}</TD>
+                      <TD className="font-semibold">{e.partyName || e.bankAccountName || '-'}</TD>
+                      <TD className="text-gray-700">{e.description || '-'}</TD>
+                      <TD mono right className="text-red-700 font-bold">
+                        {e.debit ? fmt(e.debit) : '-'}
+                      </TD>
+                      <TD mono right className="text-emerald-800 font-bold">
+                        {e.credit ? fmt(e.credit) : '-'}
+                      </TD>
+                    </TR>
+                  ))}
+              </Table>
             </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
+      </div>
     </div>
   );
 }

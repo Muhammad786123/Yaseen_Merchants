@@ -12,6 +12,7 @@ export const salePurchaseService = {
     const purchases = await db.purchases.toArray();
     const sales = await db.sales.toArray();
     const expenses = await db.expenses.toArray();
+    const journalEntries = db.journalEntries ? await db.journalEntries.toArray() : [];
 
     const entries = [];
 
@@ -75,11 +76,38 @@ export const salePurchaseService = {
         no: e.id ? e.id.toUpperCase().replace('EXP_', 'EXP-') : 'EXP',
         date: e.date,
         type: `Expense (${e.category || 'General'})`,
-        category: e.category || 'Expense',
+        category: 'Expense',
         partyName: e.category || 'Expense',
         description: e.description || e.category,
         debit: Number(e.amount || 0),
         credit: 0,
+      });
+    });
+
+    // 4. Journal Adjustments to Mall A/C & Expenses
+    journalEntries.forEach((jv) => {
+      (jv.lines || []).forEach((line, idx) => {
+        if (line.accountType === 'mall' || line.accountType === 'expense') {
+          const deb = Number(line.debit || 0);
+          const cred = Number(line.credit || 0);
+          if (deb > 0 || cred > 0) {
+            entries.push({
+              id: `${jv.id}_line_${idx}`,
+              rawId: jv.id,
+              no: jv.no || jv.refNo || 'JV',
+              date: jv.date,
+              type:
+                line.accountType === 'mall'
+                  ? 'Journal Adjustment (Mall A/C)'
+                  : `Journal Adjustment (Expense — ${line.accountId || line.accountName})`,
+              category: 'Journal',
+              partyName: line.accountName || (line.accountType === 'mall' ? 'Mall A/C' : 'Expense'),
+              description: line.detail || jv.narration || 'Journal Voucher Adjustment',
+              debit: deb,
+              credit: cred,
+            });
+          }
+        }
       });
     });
 
@@ -103,15 +131,19 @@ export const salePurchaseService = {
     const totalSales = ledger.filter((l) => l.category === 'Sale').reduce((sum, l) => sum + l.credit, 0);
     const totalPurchases = ledger.filter((l) => l.category === 'Purchase').reduce((sum, l) => sum + l.debit, 0);
     const totalExpenses = ledger
-      .filter((l) => l.category !== 'Sale' && l.category !== 'Purchase')
+      .filter((l) => l.category === 'Expense')
       .reduce((sum, l) => sum + l.debit, 0);
+    const jvAdjustments = ledger
+      .filter((l) => l.category === 'Journal')
+      .reduce((sum, l) => sum + l.credit - l.debit, 0);
 
-    const netBalance = totalSales - (totalPurchases + totalExpenses);
+    const netBalance = totalSales - (totalPurchases + totalExpenses) + jvAdjustments;
 
     return {
       totalSales,
       totalPurchases,
       totalExpenses,
+      jvAdjustments,
       netBalance,
     };
   },

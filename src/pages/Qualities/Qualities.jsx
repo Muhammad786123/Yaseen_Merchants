@@ -7,9 +7,11 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import QualityForm from '../../components/forms/QualityForm.jsx';
 import { useQualities } from '../../hooks/useQualities.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Qualities() {
+  const navigate = useNavigate();
   const { qualities, addQuality, updateQuality, deleteQuality } = useQualities();
   const { showToast } = useApp();
 
@@ -35,23 +37,39 @@ export default function Qualities() {
       >
         {qualities.map((q) => (
           <TR key={q.id}>
-            <TD className="font-bold text-[#1E3A5F]">{q.name}</TD>
-            <TD className="text-gray-600">{q.description || '-'}</TD>
+            <TD className="font-bold text-black">
+              <button
+                onClick={() => navigate(`/quality-ledger?quality=${q.id}`)}
+                className="hover:underline text-left cursor-pointer font-bold text-[#1E3A5F]"
+                title="Open Quality Movement Ledger"
+              >
+                {q.name}
+              </button>
+            </TD>
+            <TD className="text-gray-800">{q.description || '-'}</TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => navigate(`/quality-ledger?quality=${q.id}`)}
+                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  title="View Quality Movement Ledger (PERBALACC Statement)"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Ledger</span>
+                </button>
                 <button
                   onClick={() => setEditingQuality(q)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="Edit Quality"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(q.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Quality"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

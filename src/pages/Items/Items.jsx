@@ -11,9 +11,11 @@ import { useItems } from '../../hooks/useItems.js';
 import { useQualities } from '../../hooks/useQualities.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt } from '../../utils/formatters.js';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Items() {
+  const navigate = useNavigate();
   const { items, addItem, updateItem, deleteItem } = useItems();
   const { qualities } = useQualities();
   const { showToast } = useApp();
@@ -25,10 +27,11 @@ export default function Items() {
   const [deletingId, setDeletingId] = useState(null);
 
   const filteredItems = items.filter((item) => {
+    const qLower = search.toLowerCase();
     const matchesSearch =
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.code.toLowerCase().includes(search.toLowerCase()) ||
-      item.quality.toLowerCase().includes(search.toLowerCase());
+      (item.name || '').toLowerCase().includes(qLower) ||
+      (item.code || '').toLowerCase().includes(qLower) ||
+      (item.quality ? item.quality.toLowerCase().includes(qLower) : false);
 
     const matchesCat = filterCategory === 'All' || item.category === filterCategory;
 
@@ -41,30 +44,38 @@ export default function Items() {
         title="Items Catalog"
         subtitle="Raw cotton waste materials and finished recycled products"
         actions={
-          <Button variant="primary" icon={Plus} onClick={() => setIsAddModalOpen(true)}>
-            Add New Item
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => navigate('/qualities')}>
+              Quality Grades
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/stock-ledger')}>
+              Stock Ledger
+            </Button>
+            <Button variant="primary" icon={Plus} onClick={() => setIsAddModalOpen(true)}>
+              Add New Item
+            </Button>
+          </div>
         }
       />
 
       {/* Search & Category Filter */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E0DBD3]">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#EBE9ED] p-2.5 border-2 border-black">
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search by code, name or quality grade..."
+          placeholder="Search by code, name or category..."
           className="w-full sm:w-80"
         />
 
-        <div className="flex items-center gap-1 bg-[#F5F4F0] p-1 rounded-lg">
+        <div className="flex items-center gap-1 border border-black bg-white p-0.5">
           {['All', 'Raw Material', 'Finished Product'].map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterCategory(cat)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              className={`px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
                 filterCategory === cat
-                  ? 'bg-white text-[#1E3A5F] shadow-xs'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-[#1a6b2e] text-white'
+                  : 'text-gray-800 hover:bg-gray-100'
               }`}
             >
               {cat}
@@ -75,42 +86,55 @@ export default function Items() {
 
       {/* Items Table */}
       <Table
-        headers={['Item Code', 'Item Name', 'Category', 'Quality Grade', 'Unit', 'Default Rate', 'Actions']}
+        headers={['Item Code', 'Item Name', 'Category', 'Unit', 'Default Rate', 'Actions']}
         emptyText="No items found in catalog."
       >
         {filteredItems.map((item) => (
           <TR key={item.id}>
-            <TD mono className="font-semibold text-[#1E3A5F]">
+            <TD mono className="font-bold text-black">
               {item.code}
             </TD>
-            <TD className="font-medium text-gray-900">{item.name}</TD>
+            <TD className="font-bold text-black">
+              <button
+                onClick={() => navigate(`/stock-ledger?item=${item.id}`)}
+                className="hover:underline text-left cursor-pointer font-bold text-[#1E3A5F]"
+                title="Open Item Stock Ledger"
+              >
+                {item.name}
+              </button>
+            </TD>
             <TD>
               <Badge variant={item.category === 'Raw Material' ? 'orange' : 'green'}>
                 {item.category}
               </Badge>
             </TD>
-            <TD>
-              <Badge variant="gray">{item.quality}</Badge>
-            </TD>
-            <TD>{item.unit}</TD>
-            <TD mono right className="font-bold text-[#1E3A5F]">
-              {fmt(item.defaultRate)}
+            <TD>{item.unit || 'KG'}</TD>
+            <TD mono right className="font-bold text-black">
+              {item.defaultRate ? fmt(item.defaultRate) : <span className="text-gray-400 font-normal text-xs">—</span>}
             </TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => navigate(`/stock-ledger?item=${item.id}`)}
+                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  title="View Item Movement Ledger (PERBALACC Statement)"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Ledger</span>
+                </button>
                 <button
                   onClick={() => setEditingItem(item)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="Edit Item"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(item.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Item"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

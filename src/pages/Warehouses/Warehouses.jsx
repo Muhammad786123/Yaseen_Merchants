@@ -8,9 +8,11 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import WarehouseForm from '../../components/forms/WarehouseForm.jsx';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Warehouses() {
+  const navigate = useNavigate();
   const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouses();
   const { showToast } = useApp();
 
@@ -36,15 +38,23 @@ export default function Warehouses() {
       >
         {warehouses.map((w) => (
           <TR key={w.id}>
-            <TD className="font-bold text-[#1E3A5F]">{w.name}</TD>
+            <TD className="font-bold text-black">
+              <button
+                onClick={() => navigate(`/warehouse-ledger?warehouse=${w.id}`)}
+                className="hover:underline text-left cursor-pointer font-bold text-[#1E3A5F]"
+                title="Open Warehouse Stock Ledger"
+              >
+                {w.name}
+              </button>
+            </TD>
             <TD>
               <Badge
                 variant={
                   w.type === 'Raw Material'
                     ? 'orange'
-                    : w.type === 'Production'
-                    ? 'purple'
-                    : 'green'
+                    : w.type === 'Finished Goods'
+                    ? 'green'
+                    : 'blue'
                 }
               >
                 {w.type}
@@ -52,20 +62,28 @@ export default function Warehouses() {
             </TD>
             <TD>{w.location || '-'}</TD>
             <TD>
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  onClick={() => navigate(`/warehouse-ledger?warehouse=${w.id}`)}
+                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  title="View Warehouse Movement Ledger (PERBALACC Statement)"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Ledger</span>
+                </button>
                 <button
                   onClick={() => setEditingWarehouse(w)}
-                  className="p-1.5 hover:bg-gray-100 rounded text-gray-500 hover:text-[#1E3A5F]"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="Edit Warehouse"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setDeletingId(w.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Warehouse"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </TD>

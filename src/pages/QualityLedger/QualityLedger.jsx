@@ -4,133 +4,111 @@ import PageHeader from '../../components/common/PageHeader.jsx';
 import ClassicLedgerView from '../../components/common/ClassicLedgerView.jsx';
 import Select from '../../components/ui/Select.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { useItems } from '../../hooks/useItems.js';
+import { useQualities } from '../../hooks/useQualities.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
 import { useSales } from '../../hooks/useSales.js';
 import { useIssues } from '../../hooks/useIssues.js';
-import { useProductions } from '../../hooks/useProductions.js';
 import { useStockAdjustments } from '../../hooks/useStockAdjustments.js';
-import { Layers } from 'lucide-react';
+import { Award } from 'lucide-react';
 
-export default function StockLedger() {
+export default function QualityLedger() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const paramItemId = searchParams.get('item');
+  const paramQualityId = searchParams.get('quality');
 
-  const { items } = useItems();
+  const { qualities } = useQualities();
   const { purchases } = usePurchases();
   const { sales } = useSales();
   const { issues } = useIssues();
-  const { productions } = useProductions();
   const { stockAdjustments } = useStockAdjustments();
 
-  const [selectedItemId, setSelectedItemId] = useState(paramItemId || items[0]?.id || '');
+  const [selectedQualityId, setSelectedQualityId] = useState(
+    paramQualityId || qualities[0]?.id || ''
+  );
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
-    if (paramItemId) {
-      setSelectedItemId(paramItemId);
-    } else if (!selectedItemId && items.length > 0) {
-      setSelectedItemId(items[0].id);
+    if (paramQualityId) {
+      setSelectedQualityId(paramQualityId);
+    } else if (!selectedQualityId && qualities.length > 0) {
+      setSelectedQualityId(qualities[0].id);
     }
-  }, [items, paramItemId, selectedItemId]);
+  }, [qualities, paramQualityId, selectedQualityId]);
 
-  const selectedItem = items.find((i) => i.id === selectedItemId);
+  const selectedQuality = qualities.find((q) => q.id === selectedQualityId);
+  const qualityName = selectedQuality?.name || '';
 
-  // Compile all stock movements (Purchase in, Issue out, Sale out, Production in)
+  // Compile all movements of this specific quality grade across items & warehouses
   const movements = [];
 
   purchases.forEach((p) => {
-    p.items?.forEach((it) => {
-      if (
-        (it.itemId === selectedItemId || (selectedItem && it.itemName === selectedItem.name)) &&
-        it.type !== 'service'
-      ) {
+    (p.items || []).forEach((it) => {
+      if (it.quality === qualityName && it.type !== 'service') {
         movements.push({
           date: p.date,
           type: 'Purchase',
           refNo: p.no,
           party: p.supplierName,
+          itemName: it.itemName,
+          warehouse: p.warehouseName,
           quantity: it.nugs || it.bags || 0,
           weight: Number(it.weight || it.qty || 0),
           inQty: Number(it.qty || 0),
           outQty: 0,
           rate: Number(it.rate || 0),
-          warehouse: p.warehouseName,
-          detail: `خریداری از ${p.supplierName || 'سپلائر'}${it.quality ? ` [${it.quality}]` : ''} - گودام: ${p.warehouseName || ''}`,
+          detail: `${it.itemName || 'مال'} - خریداری از ${p.supplierName || 'سپلائر'} (${p.warehouseName || ''})`,
         });
       }
     });
   });
 
   sales.forEach((s) => {
-    s.items?.forEach((it) => {
-      if (
-        (it.itemId === selectedItemId || (selectedItem && it.itemName === selectedItem.name)) &&
-        it.type !== 'service'
-      ) {
+    (s.items || []).forEach((it) => {
+      if (it.quality === qualityName && it.type !== 'service') {
         movements.push({
           date: s.date,
           type: 'Sale',
           refNo: s.no,
           party: s.customerName,
+          itemName: it.itemName,
+          warehouse: s.warehouseName,
           quantity: it.nugs || it.bags || 0,
           weight: Number(it.weight || it.qty || 0),
           inQty: 0,
           outQty: Number(it.qty || 0),
           rate: Number(it.rate || 0),
-          warehouse: s.warehouseName,
-          detail: `فروخت برائے ${s.customerName || 'خریدار'}${it.quality ? ` [${it.quality}]` : ''} - گودام: ${s.warehouseName || ''}`,
+          detail: `${it.itemName || 'مال'} - فروخت برائے ${s.customerName || 'خریدار'} (${s.warehouseName || ''})`,
         });
       }
     });
   });
 
   issues.forEach((iss) => {
-    iss.items?.forEach((it) => {
-      if (it.itemId === selectedItemId || (selectedItem && it.itemName === selectedItem.name)) {
+    (iss.items || []).forEach((it) => {
+      if (it.quality === qualityName) {
         movements.push({
           date: iss.date,
           type: 'Issue',
           refNo: iss.no,
           party: 'پروڈکشن فلور',
+          itemName: it.itemName,
+          warehouse: iss.fromWarehouse,
           quantity: it.nugs || 0,
           weight: Number(it.weight || it.issueQty || it.qty || 0),
           inQty: 0,
           outQty: Number(it.issueQty || it.qty || 0),
           rate: Number(it.rate || 0),
-          warehouse: iss.fromWarehouse,
-          detail: `ایشو برائے پروڈکشن${it.quality ? ` [${it.quality}]` : ''} - گودام: ${iss.fromWarehouse || ''}`,
+          detail: `${it.itemName || 'مال'} - ایشو برائے پروڈکشن (${iss.fromWarehouse || ''})`,
         });
       }
     });
   });
 
-  productions.forEach((prd) => {
-    if (selectedItem && prd.product === selectedItem.name) {
-      movements.push({
-        date: prd.date,
-        type: 'Production',
-        refNo: prd.no,
-        party: 'پلانٹ پیداوار',
-        quantity: 0,
-        weight: Number(prd.outputQty || 0),
-        inQty: Number(prd.outputQty || 0),
-        outQty: 0,
-        rate: 0,
-        warehouse: 'Finished Goods Store',
-        detail: `پلانٹ آؤٹ پٹ پروڈکشن - Finished Goods Store`,
-      });
-    }
-  });
-
+  // Manual Stock Adjustments for this quality grade
   stockAdjustments.forEach((adj) => {
-    if (
-      adj.itemId === selectedItemId ||
-      (selectedItem && adj.itemName && adj.itemName.toLowerCase() === selectedItem.name.toLowerCase())
-    ) {
+    if (adj.quality === qualityName) {
       const isReduce = adj.type === 'REDUCE' || Number(adj.qty) < 0;
       const qty = Math.abs(Number(adj.qty || 0));
       const rate = Number(adj.rate || 0);
@@ -144,23 +122,23 @@ export default function StockLedger() {
           : 'ADJ (Stock Add)',
         refNo: adj.no,
         party: adj.reason || 'Stock Adjustment',
+        itemName: adj.itemName,
+        warehouse: adj.warehouseName,
         quantity: 0,
         weight: qty,
         inQty: isReduce ? 0 : qty,
         outQty: isReduce ? qty : 0,
         rate: rate,
-        warehouse: adj.warehouseName,
         detail: isReduce
-          ? `اسٹاک کمی — ${adj.reason || 'Stock Reduction'}${adj.quality ? ` [${adj.quality}]` : ''} (${adj.warehouseName || ''})`
-          : `اسٹاک اندراج / ابتدائی بیلنس — ${adj.reason || 'Opening Balance'}${adj.quality ? ` [${adj.quality}]` : ''} (${adj.warehouseName || ''})`,
+          ? `${adj.itemName || 'مال'} - اسٹاک کمی (${adj.reason || 'Reduction'}) - گودام: ${adj.warehouseName || ''}`
+          : `${adj.itemName || 'مال'} - اسٹاک اندراج (${adj.reason || 'Opening'}) - گودام: ${adj.warehouseName || ''}`,
       });
     }
   });
 
   movements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const openingStock = Number(selectedItem?.openingStock || 0);
-  let runningQty = openingStock;
+  let runningQty = 0;
   const ledgerRows = movements.map((m, idx) => {
     runningQty += m.inQty - m.outQty;
     return {
@@ -183,38 +161,34 @@ export default function StockLedger() {
     if (!row) return;
     const t = (row.rawType || '').toLowerCase();
     const bill = (row.billNo || '').toLowerCase();
-    if (bill.startsWith('adj') || t.includes('adj') || t.includes('opening')) {
-      navigate('/stock');
-    } else if (bill.startsWith('pur') || t.includes('purchase')) {
+    if (bill.startsWith('pur') || t.includes('purchase')) {
       navigate('/purchase');
     } else if (bill.startsWith('sal') || bill.startsWith('sv') || t.includes('sale')) {
       navigate('/sale');
     } else if (bill.startsWith('iss') || t.includes('issue')) {
       navigate('/issue');
-    } else if (bill.startsWith('prd') || t.includes('production')) {
-      navigate('/production');
     }
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Item / Raw Material A/C Ledger"
-        subtitle="Traditional bordered PERBALACC-style inventory ledger recording all purchases, issues, production, and sales"
+        title="Quality Grade A/C Ledger"
+        subtitle="Traditional bordered PERBALACC-style movement statement recording all purchases, issues, and sales of this quality grade across all warehouses"
         actions={
-          <Button variant="secondary" icon={Layers} onClick={() => navigate('/stock')}>
-            View Stock Status
+          <Button variant="secondary" icon={Award} onClick={() => navigate('/qualities')}>
+            Manage Qualities
           </Button>
         }
       />
 
       <ClassicLedgerView
-        accountType="Item"
-        acCode={selectedItem?.code || selectedItem?.id || 'ITM-01'}
-        accountName={selectedItem?.name || ''}
-        badgeText={selectedItem?.category === 'Finished Good' ? 'تیار مال' : 'خام مال'}
+        accountType="Quality"
+        acCode={selectedQuality?.id || 'Q-01'}
+        accountName={qualityName}
+        badgeText="کوالٹی"
         rows={ledgerRows}
-        openingBalance={openingStock}
+        openingBalance={0}
         dateFrom={dateFrom}
         setDateFrom={setDateFrom}
         dateTo={dateTo}
@@ -225,15 +199,15 @@ export default function StockLedger() {
         entitySelector={
           <div className="w-full sm:w-80">
             <Select
-              label="Select Catalog Item"
-              value={selectedItemId}
+              label="Select Quality Classification"
+              value={selectedQualityId}
               onChange={(val) => {
-                setSelectedItemId(val);
-                navigate(`/stock-ledger?item=${val}`, { replace: true });
+                setSelectedQualityId(val);
+                navigate(`/quality-ledger?quality=${val}`, { replace: true });
               }}
-              options={items.map((i) => ({
-                value: i.id,
-                label: `${i.code ? `${i.code} - ` : ''}${i.name}${i.quality ? ` [${i.quality}]` : ''}`,
+              options={qualities.map((q) => ({
+                value: q.id,
+                label: q.name,
               }))}
             />
           </div>

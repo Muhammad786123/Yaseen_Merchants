@@ -6,9 +6,13 @@ export function useCashBook() {
   const rawEntries = useLiveQuery(() => db.cashBookEntries.toArray(), []) || [];
   const bankTransfers = useLiveQuery(() => db.bankTransfers.toArray(), []) || [];
 
+  const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
+  const cashAcc = accounts.find((a) => a.name.toLowerCase() === 'cash');
+  const initialCash = Number(cashAcc?.openingBalance || 0);
+
   // Sort entries ascending by date to compute accurate running physical cash balance
   const sorted = [...rawEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
-  let running = 250000;
+  let running = initialCash;
 
   const entriesWithBalance = sorted.map((entry) => {
     const debit = Number(entry.debit || 0);
