@@ -73,8 +73,8 @@ export function usePartyLedger(selectedPartyId) {
         quantity: totalNugs > 0 ? totalNugs : '-',
         weight: totalKg > 0 ? totalKg : '-',
         rate,
-        debit: Number(p.total || 0),
-        credit: 0,
+        debit: 0,
+        credit: Number(p.total || 0),
       });
     }
   });
@@ -169,8 +169,8 @@ export function usePartyLedger(selectedPartyId) {
         quantity: '-',
         weight: '-',
         rate: '-',
-        debit: 0,
-        credit: Number(p.amount || 0),
+        debit: Number(p.amount || 0),
+        credit: 0,
       });
     }
   });
@@ -259,12 +259,22 @@ export function usePartyLedger(selectedPartyId) {
   // Sort chronologically by date
   transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Compute running balance
+  // Compute running balance: positive = Cr (we owe the party), negative = Dr (party owes us)
   let runningBalance = Number(selectedParty?.openingBalance || 0);
   const ledgerRows = transactions.map((t) => {
-    runningBalance += t.debit - t.credit;
+    runningBalance += Number(t.credit || 0) - Number(t.debit || 0);
     return { ...t, balance: runningBalance };
   });
+
+  // Dev-only check: final running balance must always equal party.balance
+  if (selectedParty && selectedParty.balance !== undefined) {
+    const diff = Math.abs(runningBalance - Number(selectedParty.balance || 0));
+    if (diff > 1) {
+      console.warn(
+        `[usePartyLedger] Running balance (${runningBalance}) differs from party.balance (${selectedParty.balance}) by Rs. ${diff.toFixed(2)} for party ${selectedParty.name} (${selectedParty.id})`
+      );
+    }
+  }
 
   return {
     selectedParty,

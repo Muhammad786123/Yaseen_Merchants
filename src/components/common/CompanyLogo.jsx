@@ -47,7 +47,7 @@ export default function CompanyLogo({
             {legalName}
           </span>
           <span
-            className={`text-[10px] font-medium tracking-wide truncate max-w-[170px] ${
+            className={`text-xs font-medium tracking-wide truncate max-w-[170px] ${
               isDark ? 'text-emerald-300/90' : 'text-gray-500'
             }`}
             title={tagline}

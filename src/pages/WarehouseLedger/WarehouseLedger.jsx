@@ -237,6 +237,9 @@ export default function WarehouseLedger() {
         accountType="Warehouse"
         acCode={selectedWarehouse?.id || 'WH-01'}
         accountName={selectedWarehouse?.name || ''}
+        urduName={selectedWarehouse?.urduName || selectedWarehouse?.nameUrdu || selectedWarehouse?.name}
+        englishName={selectedWarehouse?.name}
+        phone={selectedWarehouse?.phone || ''}
         badgeText="گودام"
         rows={ledgerRows}
         openingBalance={0}

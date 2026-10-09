@@ -7,7 +7,7 @@ export const expenseService = {
   },
 
   async add(expenseData) {
-    const id = expenseData.id || 'exp_' + Date.now();
+    const id = expenseData.id || 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const amount = Number(expenseData.amount || 0);
 
     const newExpense = {

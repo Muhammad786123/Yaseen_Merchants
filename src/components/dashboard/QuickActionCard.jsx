@@ -10,10 +10,10 @@ export default function QuickActionCard({ title, description, icon: Icon, onClic
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <h4 className="text-xs font-bold text-black uppercase tracking-wide group-hover:text-[#1a6b2e] transition-colors">
+        <h4 className="text-sm font-bold text-black uppercase tracking-wide group-hover:text-[#1a6b2e] transition-colors">
           {title}
         </h4>
-        <p className="text-[11px] text-gray-600 mt-0.5 font-medium">{description}</p>
+        <p className="text-xs text-gray-600 mt-0.5 font-medium">{description}</p>
       </div>
     </div>
   );

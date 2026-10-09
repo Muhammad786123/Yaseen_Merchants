@@ -145,8 +145,8 @@ export default function Receipt() {
 
             {/* Note / Particulars */}
             {viewingReceipt.description && (
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-300 text-xs text-gray-700 mb-2">
-                <span className="font-bold uppercase tracking-wider text-gray-500 text-[10px] block mb-1">Particulars / Note</span>
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-300 text-sm text-gray-700 mb-2">
+                <span className="font-bold uppercase tracking-wider text-gray-500 text-xs block mb-1">Particulars / Note</span>
                 <div className="font-medium">{viewingReceipt.description}</div>
               </div>
             )}

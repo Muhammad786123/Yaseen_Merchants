@@ -21,7 +21,9 @@ import { useItems } from '../../hooks/useItems.js';
 import { useQualities } from '../../hooks/useQualities.js';
 import PartyQualityAnalysis from './PartyQualityAnalysis.jsx';
 import { capitalService } from '../../services/capitalService.js';
+import { safePrint } from '../../utils/printUtils.js';
 import { fmt, fmtNum, formatDate, getTodayStr } from '../../utils/formatters.js';
+import { splitPartyBalances } from '../../utils/partyBalances.js';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -142,13 +144,13 @@ export default function Reports() {
   // Mall Trading Position with Closing Stock (Net Trading Surplus / Profit)
   const mallTradingBalance = mallNetPosition + stockValuation;
 
-  // Customer Receivables (party balance < 0, customer owes business)
-  const receivableParties = parties.filter((p) => Number(p.balance || 0) < 0);
-  const totalReceivables = receivableParties.reduce((sum, p) => sum + Math.abs(Number(p.balance || 0)), 0);
-
-  // Supplier Payables (party balance > 0, business owes supplier)
-  const payableParties = parties.filter((p) => Number(p.balance || 0) > 0);
-  const totalPayables = payableParties.reduce((sum, p) => sum + Number(p.balance || 0), 0);
+  // Party Receivables & Payables (single source of truth helper)
+  const {
+    receivableParties,
+    payableParties,
+    totalReceivable: totalReceivables,
+    totalPayable: totalPayables,
+  } = splitPartyBalances(parties);
 
   // Cash in Hand (from Cash account balance in accounts table)
   const cashAcc = accounts.find((a) => a.name.toLowerCase().includes('cash'));
@@ -160,29 +162,113 @@ export default function Reports() {
   const totalBankBalances = bankAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
   // Balance Sheet Totals
-  const grossProfit = totalSales + stockValuation - totalPurchases;
-  const netProfit = grossProfit - totalExpenses + jvMallCredit; // Equals mallTradingBalance
+  const grossProfit = mallNetPosition + stockValuation; // mallTradingBalance (expenses and JV Mall included)
+  const netProfit = grossProfit; // Net P/L = grossProfit - 0 (expenditure row is 0)
 
   const sumDebits =
     cashInHand +
     totalBankBalances +
     totalReceivables +
     stockValuation +
-    (mallTradingBalance < 0 ? Math.abs(mallTradingBalance) : 0);
+    (mallNetPosition < 0 ? Math.abs(mallNetPosition) : 0);
 
   const sumCredits =
     totalPayables +
     capitalBalance +
-    (mallTradingBalance >= 0 ? mallTradingBalance : 0);
+    (mallNetPosition >= 0 ? mallNetPosition : 0);
 
   const tbDifference = Math.abs(sumDebits - sumCredits);
   const isTbBalanced = tbDifference < 1;
 
   const totalAssets = cashInHand + totalBankBalances + totalReceivables + stockValuation;
-  const totalLiabilitiesEquity = totalPayables + capitalBalance + netProfit;
+  const totalLiabilitiesEquity = totalPayables + capitalBalance + grossProfit;
 
   const isEquationBalanced = Math.abs(totalAssets - totalLiabilitiesEquity) < 1;
   const equationDiff = Math.abs(totalAssets - totalLiabilitiesEquity);
+
+  // --- TRADITIONAL TRIAL BALANCE COMPUTED ROWS & EQUILIBRIUM ---
+  const tbParties = useMemo(() => {
+    return [...parties]
+      .filter((p) => Number(p.balance || 0) !== 0)
+      .sort((a, b) => {
+        const codeA = String(a.code || a.id || '');
+        const codeB = String(b.code || b.id || '');
+        return codeA.localeCompare(codeB, undefined, { numeric: true });
+      });
+  }, [parties]);
+
+  const tbPartiesDebit = useMemo(() => {
+    return tbParties
+      .filter((p) => Number(p.balance || 0) < 0)
+      .reduce((s, p) => s + Math.abs(Number(p.balance || 0)), 0);
+  }, [tbParties]);
+
+  const tbPartiesCredit = useMemo(() => {
+    return tbParties
+      .filter((p) => Number(p.balance || 0) > 0)
+      .reduce((s, p) => s + Number(p.balance || 0), 0);
+  }, [tbParties]);
+
+  // Cash row: code 99020
+  const tbCashDebit = cashInHand >= 0 ? cashInHand : 0;
+  const tbCashCredit = cashInHand < 0 ? Math.abs(cashInHand) : 0;
+
+  // Banks rows
+  const tbBanksDebit = bankAccounts.reduce((s, b) => {
+    const bal = Number(b.balance || 0);
+    return s + (bal >= 0 ? bal : 0);
+  }, 0);
+  const tbBanksCredit = bankAccounts.reduce((s, b) => {
+    const bal = Number(b.balance || 0);
+    return s + (bal < 0 ? Math.abs(bal) : 0);
+  }, 0);
+
+  // Capital row: code 99030 (only if capitalBalance !== 0)
+  const tbCapitalDebit = capitalBalance < 0 ? Math.abs(capitalBalance) : 0;
+  const tbCapitalCredit = capitalBalance >= 0 ? capitalBalance : 0;
+
+  // Mall A/C row: code 99010 (mallNetPosition = totalSales - totalPurchases - totalExpenses + jvMallCredit)
+  const tbMallDebit = mallNetPosition < 0 ? Math.abs(mallNetPosition) : 0;
+  const tbMallCredit = mallNetPosition >= 0 ? mallNetPosition : 0;
+
+  // Grand totals computed directly from the visible rows
+  const tbGrandTotalBenaam =
+    tbPartiesDebit +
+    tbCashDebit +
+    tbBanksDebit +
+    (capitalBalance !== 0 ? tbCapitalDebit : 0) +
+    tbMallDebit;
+
+  const tbGrandTotalJama =
+    tbPartiesCredit +
+    tbCashCredit +
+    tbBanksCredit +
+    (capitalBalance !== 0 ? tbCapitalCredit : 0) +
+    tbMallCredit;
+
+  const tbGrandDifference = Math.abs(tbGrandTotalBenaam - tbGrandTotalJama);
+  const isTbGrandBalanced = tbGrandDifference < 1;
+
+  // P&L & Balance Sheet totals
+  // Assets: Cash in Hand + Receivable + Expenditure (0) + Stock (Value) + Bank
+  const plAssetsTotal = cashInHand + totalReceivables + 0 + stockValuation + totalBankBalances;
+  // Liabilities: Capital + Payable + Gross Profit (mallNetPosition + stockValuation)
+  const plLiabilitiesTotal = capitalBalance + totalPayables + grossProfit;
+  const plNetPL = grossProfit - 0; // equals grossProfit
+  const plDifference = Math.abs(plAssetsTotal - plLiabilitiesTotal);
+  const isPlBalanced = plDifference < 1;
+
+  const trialBalanceDateStr = useMemo(() => {
+    const now = new Date();
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const mmm = months[now.getMonth()];
+    const dd = String(now.getDate()).padStart(2, '0');
+    let h = now.getHours();
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${mmm} ${dd} ${String(h).padStart(2, '0')}:${m} ${ampm}`;
+  }, []);
 
   const allJvsBalanced =
     journalEntries.length === 0 ||
@@ -415,7 +501,7 @@ export default function Reports() {
               variant="primary"
               size="sm"
               icon={Printer}
-              onClick={() => window.print()}
+              onClick={safePrint}
             >
               Print Statement
             </Button>
@@ -457,7 +543,7 @@ export default function Reports() {
               onChange={(e) => setDateFrom(e.target.value)}
               className="bg-white border border-black px-2 py-1 text-xs outline-none font-mono"
             />
-            <span className="font-bold text-gray-800 ml-2">To Date:</span>
+            <span className="font-bold text-gray-800 ms-2">To Date:</span>
             <input
               type="date"
               value={dateTo}
@@ -471,7 +557,7 @@ export default function Reports() {
                   setDateFrom('');
                   setDateTo('');
                 }}
-                className="text-[11px] text-red-700 font-bold hover:underline cursor-pointer ml-1"
+                className="text-sm text-red-700 font-bold hover:underline cursor-pointer ms-1"
               >
                 Clear Dates
               </button>
@@ -491,7 +577,7 @@ export default function Reports() {
       <div className="print-area space-y-4" id="report-print-container">
         {((activeTab === 'purchase' && purchaseViewMode === 'invoice') ||
           (activeTab === 'sale' && saleViewMode === 'invoice') ||
-          (activeTab !== 'purchase' && activeTab !== 'sale')) && (
+          (activeTab !== 'purchase' && activeTab !== 'sale' && activeTab !== 'tb' && activeTab !== 'pl')) && (
           <PrintHeader
             documentTitle={
               activeTab === 'purchase'
@@ -553,8 +639,8 @@ export default function Reports() {
 
             {purchaseViewMode === 'invoice' ? (
               <div className="border-2 border-black bg-white">
-                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
-                  <span className="font-bold uppercase tracking-wider text-black">
+                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+                  <span className="font-bold uppercase tracking-wider text-black text-base">
                     Purchase Invoices &amp; Inward Consignments
                   </span>
                   <span className="font-mono text-gray-600">
@@ -563,18 +649,18 @@ export default function Reports() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse border border-black">
+                  <table className="w-full text-base text-left border-collapse border border-black">
                     <thead className="bg-[#DFDFDF] border-b border-black">
                       <tr>
-                        <th className="border border-black px-2 py-1.5 w-24">Date</th>
-                        <th className="border border-black px-2 py-1.5 w-28">Invoice #</th>
-                        <th className="border border-black px-2 py-1.5">Supplier / Party</th>
-                        <th className="border border-black px-2 py-1.5">Warehouse</th>
-                        <th className="border border-black px-2 py-1.5">Items &amp; Quality</th>
-                        <th className="border border-black px-2 py-1.5 text-center w-24">Unit / Nugs</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-24">Rate (Rs)</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-28">Weight (KG)</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-32">Total (PKR)</th>
+                        <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
+                        <th className="border border-black px-3 py-2.5 w-32 text-base font-bold">Invoice #</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Supplier / Party</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Items &amp; Quality</th>
+                        <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Unit / Nugs</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-28 text-base font-bold">Rate (Rs)</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Weight (KG)</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Total (PKR)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -589,31 +675,31 @@ export default function Reports() {
                           const totalWeight = p.items?.reduce((sum, it) => sum + Number(it.qty || 0), 0) || 0;
                           return (
                             <tr key={p.id} className="hover:bg-blue-50/30">
-                              <td className="border border-black px-2 py-1 font-mono">{formatDate(p.date)}</td>
-                              <td className="border border-black px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                              <td className="border border-black px-3 py-2.5 font-mono">{formatDate(p.date)}</td>
+                              <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
                                 {p.no}
                               </td>
-                              <td className="border border-black px-2 py-1 font-semibold text-gray-900">
+                              <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
                                 {p.supplierName || '-'}
                               </td>
-                              <td className="border border-black px-2 py-1 text-gray-700">
+                              <td className="border border-black px-3 py-2.5 text-gray-700">
                                 {p.warehouseName || '-'}
                               </td>
-                              <td className="border border-black px-2 py-1">
+                              <td className="border border-black px-3 py-2.5">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
                                     <span className="font-bold text-gray-900">{it.itemName}</span>
                                     {it.quality && (
-                                      <span className="bg-gray-100 border border-black px-1 text-[10px] font-mono font-bold text-[#1E3A5F]">
+                                      <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-xs font-mono font-bold text-[#1E3A5F]">
                                         {it.quality}
                                       </span>
                                     )}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-center font-mono">
+                              <td className="border border-black px-3 py-2.5 text-center font-mono">
                                 {p.items?.map((it, idx) => (
-                                  <div key={idx} className="py-0.5 text-xs">
+                                  <div key={idx} className="py-0.5 text-base">
                                     {it.unitType === 'Nug' ? (
                                       <span className="font-bold text-[#A52A2A]">{it.nugs || 0} Nug</span>
                                     ) : (
@@ -622,17 +708,17 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono text-gray-800">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-800 tabular-nums">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5">
                                     {it.rate ? Number(it.rate).toLocaleString('en-PK') : '-'}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono font-bold text-gray-900">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
                                 {totalWeight.toLocaleString('en-PK')} kg
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono font-bold text-[#1E3A5F]">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
                                 {fmt(p.total)}
                               </td>
                             </tr>
@@ -643,16 +729,16 @@ export default function Reports() {
                     {filteredPurchases.length > 0 && (
                       <tfoot className="bg-[#DFDFDF] font-bold">
                         <tr>
-                          <td colSpan={7} className="border border-black px-3 py-1.5 text-right uppercase">
+                          <td colSpan={7} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                             Total Purchases Summary:
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
                             {filteredPurchases
                               .reduce((sum, p) => sum + (p.items?.reduce((w, it) => w + Number(it.qty || 0), 0) || 0), 0)
                               .toLocaleString('en-PK')}{' '}
                             kg
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono text-base text-[#1E3A5F]">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
                             {fmt(filteredPurchases.reduce((sum, p) => sum + Number(p.total || 0), 0))}
                           </td>
                         </tr>
@@ -717,8 +803,8 @@ export default function Reports() {
 
             {saleViewMode === 'invoice' ? (
               <div className="border-2 border-black bg-white">
-                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
-                  <span className="font-bold uppercase tracking-wider text-black">
+                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+                  <span className="font-bold uppercase tracking-wider text-black text-base">
                     Sale Invoices &amp; Outward Dispatches
                   </span>
                   <span className="font-mono text-gray-600">
@@ -727,18 +813,18 @@ export default function Reports() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse border border-black">
+                  <table className="w-full text-base text-left border-collapse border border-black">
                     <thead className="bg-[#DFDFDF] border-b border-black">
                       <tr>
-                        <th className="border border-black px-2 py-1.5 w-24">Date</th>
-                        <th className="border border-black px-2 py-1.5 w-28">Invoice #</th>
-                        <th className="border border-black px-2 py-1.5">Customer / Party</th>
-                        <th className="border border-black px-2 py-1.5">Warehouse</th>
-                        <th className="border border-black px-2 py-1.5">Products &amp; Quality</th>
-                        <th className="border border-black px-2 py-1.5 text-center w-24">Unit / Nugs</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-24">Rate (Rs)</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-28">Weight (KG)</th>
-                        <th className="border border-black px-2 py-1.5 text-right w-32">Total (PKR)</th>
+                        <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
+                        <th className="border border-black px-3 py-2.5 w-32 text-base font-bold">Invoice #</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Customer / Party</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
+                        <th className="border border-black px-3 py-2.5 text-base font-bold">Products &amp; Quality</th>
+                        <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Unit / Nugs</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-28 text-base font-bold">Rate (Rs)</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Weight (KG)</th>
+                        <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Total (PKR)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -753,31 +839,31 @@ export default function Reports() {
                           const totalWeight = s.items?.reduce((sum, it) => sum + Number(it.qty || 0), 0) || 0;
                           return (
                             <tr key={s.id} className="hover:bg-blue-50/30">
-                              <td className="border border-black px-2 py-1 font-mono">{formatDate(s.date)}</td>
-                              <td className="border border-black px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                              <td className="border border-black px-3 py-2.5 font-mono">{formatDate(s.date)}</td>
+                              <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
                                 {s.no}
                               </td>
-                              <td className="border border-black px-2 py-1 font-semibold text-gray-900">
+                              <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
                                 {s.customerName || '-'}
                               </td>
-                              <td className="border border-black px-2 py-1 text-gray-700">
+                              <td className="border border-black px-3 py-2.5 text-gray-700">
                                 {s.warehouseName || '-'}
                               </td>
-                              <td className="border border-black px-2 py-1">
+                              <td className="border border-black px-3 py-2.5">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
                                     <span className="font-bold text-gray-900">{it.itemName}</span>
                                     {it.quality && (
-                                      <span className="bg-gray-100 border border-black px-1 text-[10px] font-mono font-bold text-[#1E3A5F]">
+                                      <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-xs font-mono font-bold text-[#1E3A5F]">
                                         {it.quality}
                                       </span>
                                     )}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-center font-mono">
+                              <td className="border border-black px-3 py-2.5 text-center font-mono">
                                 {s.items?.map((it, idx) => (
-                                  <div key={idx} className="py-0.5 text-xs">
+                                  <div key={idx} className="py-0.5 text-base">
                                     {it.unitType === 'Nug' ? (
                                       <span className="font-bold text-[#A52A2A]">{it.nugs || 0} Nug</span>
                                     ) : (
@@ -786,17 +872,17 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono text-gray-800">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-800 tabular-nums">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5">
                                     {it.rate ? Number(it.rate).toLocaleString('en-PK') : '-'}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono font-bold text-gray-900">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
                                 {totalWeight.toLocaleString('en-PK')} kg
                               </td>
-                              <td className="border border-black px-2 py-1 text-right font-mono font-bold text-emerald-800">
+                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                                 {fmt(s.total)}
                               </td>
                             </tr>
@@ -807,16 +893,16 @@ export default function Reports() {
                     {filteredSales.length > 0 && (
                       <tfoot className="bg-[#DFDFDF] font-bold">
                         <tr>
-                          <td colSpan={7} className="border border-black px-3 py-1.5 text-right uppercase">
+                          <td colSpan={7} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                             Total Sales Revenue Summary:
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
                             {filteredSales
                               .reduce((sum, s) => sum + (s.items?.reduce((w, it) => w + Number(it.qty || 0), 0) || 0), 0)
                               .toLocaleString('en-PK')}{' '}
                             kg
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono text-base text-emerald-800">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-800 tabular-nums">
                             {fmt(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0))}
                           </td>
                         </tr>
@@ -850,26 +936,26 @@ export default function Reports() {
             {/* Top Inventory Status Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Distinct Stock Lines</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Distinct Stock Lines</span>
                 <span className="text-xl font-bold font-mono text-[#1E3A5F]">{stockEntries.length} items</span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Physical Quantity</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Physical Quantity</span>
                 <span className="text-xl font-bold font-mono text-gray-900">{totalStockQty.toLocaleString('en-PK')} kg</span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Live Inventory Valuation</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Live Inventory Valuation</span>
                 <span className="text-xl font-bold font-mono text-emerald-800">{fmt(stockValuation)}</span>
               </div>
             </div>
 
             <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold uppercase tracking-wider text-black">
+                  <span className="font-bold uppercase tracking-wider text-black text-base">
                     Live Stock Positions &amp; Moving Average Valuation
                   </span>
-                  <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 font-bold font-mono text-[10px]">
+                  <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 font-bold font-mono text-xs">
                     100% In Sync with Ledger
                   </span>
                 </div>
@@ -888,16 +974,16 @@ export default function Reports() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-black">
+                <table className="w-full text-base text-left border-collapse border border-black">
                   <thead className="bg-[#DFDFDF] border-b border-black">
                     <tr>
-                      <th className="border border-black px-2 py-1.5">Item Name</th>
-                      <th className="border border-black px-2 py-1.5 w-32">Quality Grade</th>
-                      <th className="border border-black px-2 py-1.5">Warehouse</th>
-                      <th className="border border-black px-2 py-1.5 w-32">Category</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Quantity (KG)</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Avg Rate (Rs)</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-36">Valuation (PKR)</th>
+                      <th className="border border-black px-3 py-2.5 text-base font-bold">Item Name</th>
+                      <th className="border border-black px-3 py-2.5 w-36 text-base font-bold">Quality Grade</th>
+                      <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
+                      <th className="border border-black px-3 py-2.5 w-36 text-base font-bold">Category</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Quantity (KG)</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Avg Rate (Rs)</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-40 text-base font-bold">Valuation (PKR)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -910,27 +996,27 @@ export default function Reports() {
                     ) : (
                       filteredStock.map((s, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="border border-black px-2 py-1.5 font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3 py-2.5 font-bold text-[#1E3A5F]">
                             {s.itemName}
                           </td>
-                          <td className="border border-black px-2 py-1.5">
-                            <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-[11px] font-mono font-bold text-gray-800">
+                          <td className="border border-black px-3 py-2.5">
+                            <span className="bg-gray-100 border border-black px-2 py-0.5 text-xs font-mono font-bold text-gray-800">
                               {s.quality || 'Cotton A'}
                             </span>
                           </td>
-                          <td className="border border-black px-2 py-1.5 font-medium text-gray-800">
+                          <td className="border border-black px-3 py-2.5 font-medium text-gray-800">
                             {s.warehouseName}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-gray-600">
+                          <td className="border border-black px-3 py-2.5 text-gray-600">
                             {s.category || 'Raw Material'}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-gray-900">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
                             {Number(s.qty || 0).toLocaleString('en-PK')} kg
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono text-gray-700">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-700 tabular-nums">
                             Rs.{Number(s.avgRate || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-emerald-800">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                             {fmt(s.value)}
                           </td>
                         </tr>
@@ -940,14 +1026,14 @@ export default function Reports() {
                   {filteredStock.length > 0 && (
                     <tfoot className="bg-[#DFDFDF] font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3 py-1.5 text-right uppercase">
+                        <td colSpan={4} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                           Total Warehouse Inventory Valuation:
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
                           {totalStockQty.toLocaleString('en-PK')} kg
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-gray-500">-</td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-base text-emerald-900">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-gray-500">-</td>
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-900 tabular-nums">
                           {fmt(stockValuation)}
                         </td>
                       </tr>
@@ -967,19 +1053,19 @@ export default function Reports() {
             {/* Top Cash Position Indicators */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Cash Received (In)</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Cash Received (In)</span>
                 <span className="text-xl font-bold font-mono text-emerald-800">
                   {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.credit || 0), 0))}
                 </span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Cash Paid (Out)</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Cash Paid (Out)</span>
                 <span className="text-xl font-bold font-mono text-red-800">
                   {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.debit || 0), 0))}
                 </span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Net Filtered Cash Flow</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Net Filtered Cash Flow</span>
                 <span className="text-xl font-bold font-mono text-[#1E3A5F]">
                   {fmt(
                     filteredCashBook.reduce((sum, e) => sum + Number(e.credit || 0) - Number(e.debit || 0), 0)
@@ -987,14 +1073,14 @@ export default function Reports() {
                 </span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Current Cash in Hand</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Current Cash in Hand</span>
                 <span className="text-xl font-bold font-mono text-[#1E3A5F]">{fmt(cashInHand)}</span>
               </div>
             </div>
 
             <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
-                <span className="font-bold uppercase tracking-wider text-black">
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+                <span className="font-bold uppercase tracking-wider text-black text-base">
                   Cash Book Register &amp; Physical Roznamcha Transactions
                 </span>
                 <span className="font-mono text-gray-600">
@@ -1003,17 +1089,17 @@ export default function Reports() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-black">
+                <table className="w-full text-base text-left border-collapse border border-black">
                   <thead className="bg-[#DFDFDF] border-b border-black">
                     <tr>
-                      <th className="border border-black px-2 py-1.5 w-24">Date</th>
-                      <th className="border border-black px-2 py-1.5 w-24">CB #</th>
-                      <th className="border border-black px-2 py-1.5">Account / Party / Bank</th>
-                      <th className="border border-black px-2 py-1.5">Narration / Details</th>
-                      <th className="border border-black px-2 py-1.5 text-center w-28">Type</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Credit/Jamma (In)</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Debit/Benaam (Out)</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-32">Balance (PKR)</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">CB #</th>
+                      <th className="border border-black px-3 py-2.5 text-base font-bold">Account / Party / Bank</th>
+                      <th className="border border-black px-3 py-2.5 text-base font-bold">Narration / Details</th>
+                      <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Type</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Credit/Jamma (In)</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Debit/Benaam (Out)</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Balance (PKR)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1026,28 +1112,28 @@ export default function Reports() {
                     ) : (
                       filteredCashBook.map((cb) => (
                         <tr key={cb.id} className="hover:bg-blue-50/30">
-                          <td className="border border-black px-2 py-1 font-mono">{formatDate(cb.date)}</td>
-                          <td className="border border-black px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3 py-2.5 font-mono">{formatDate(cb.date)}</td>
+                          <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
                             {cb.cashBookNo ? `#${cb.cashBookNo}` : cb.refNo || '-'}
                           </td>
-                          <td className="border border-black px-2 py-1 font-semibold text-gray-900">
+                          <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
                             {cb.partyName || cb.bankAccountName || 'Physical Cash'}
                           </td>
-                          <td className="border border-black px-2 py-1 text-gray-700">
+                          <td className="border border-black px-3 py-2.5 text-gray-700">
                             {cb.description || '-'}
                           </td>
-                          <td className="border border-black px-2 py-1 text-center">
-                            <span className="border border-black px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100">
+                          <td className="border border-black px-3 py-2.5 text-center">
+                            <span className="border border-black px-2 py-0.5 text-xs font-mono font-bold bg-gray-100">
                               {cb.type || (Number(cb.credit) > 0 ? 'Cash In' : 'Cash Out')}
                             </span>
                           </td>
-                          <td className="border border-black px-2 py-1 text-right font-mono font-bold text-emerald-800">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                             {cb.credit ? fmt(cb.credit) : '-'}
                           </td>
-                          <td className="border border-black px-2 py-1 text-right font-mono font-bold text-red-800">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-red-800 tabular-nums">
                             {cb.debit ? fmt(cb.debit) : '-'}
                           </td>
-                          <td className="border border-black px-2 py-1 text-right font-mono font-bold text-gray-900">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
                             {fmt(cb.runningBalance)}
                           </td>
                         </tr>
@@ -1057,16 +1143,16 @@ export default function Reports() {
                   {filteredCashBook.length > 0 && (
                     <tfoot className="bg-[#DFDFDF] font-bold">
                       <tr>
-                        <td colSpan={5} className="border border-black px-3 py-1.5 text-right uppercase">
+                        <td colSpan={5} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                           Total Cash Movement Summary:
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-emerald-900">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-900 tabular-nums">
                           {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.credit || 0), 0))}
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-red-900">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-red-900 tabular-nums">
                           {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.debit || 0), 0))}
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-base text-[#1E3A5F]">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
                           {fmt(cashInHand)}
                         </td>
                       </tr>
@@ -1085,17 +1171,17 @@ export default function Reports() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Journal Vouchers</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Journal Vouchers</span>
                 <span className="text-xl font-bold font-mono text-[#1E3A5F]">{filteredJournals.length} Vouchers</span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Debited Volume</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Debited Volume</span>
                 <span className="text-xl font-bold font-mono text-gray-900">
                   {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalDebit || 0), 0))}
                 </span>
               </div>
               <div className="border-2 border-black bg-white p-3">
-                <span className="text-[11px] font-bold uppercase text-gray-600 block">Total Credited Volume</span>
+                <span className="text-sm font-bold uppercase text-gray-600 block">Total Credited Volume</span>
                 <span className="text-xl font-bold font-mono text-gray-900">
                   {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalCredit || 0), 0))}
                 </span>
@@ -1103,8 +1189,8 @@ export default function Reports() {
             </div>
 
             <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
-                <span className="font-bold uppercase tracking-wider text-black">
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+                <span className="font-bold uppercase tracking-wider text-black text-base">
                   Journal Voucher Audit Register (Double-Entry Adjustments)
                 </span>
                 <span className="font-mono text-gray-600">
@@ -1113,16 +1199,16 @@ export default function Reports() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-black">
+                <table className="w-full text-base text-left border-collapse border border-black">
                   <thead className="bg-[#DFDFDF] border-b border-black">
                     <tr>
-                      <th className="border border-black px-2 py-1.5 w-24">Date</th>
-                      <th className="border border-black px-2 py-1.5 w-24">JV #</th>
-                      <th className="border border-black px-2 py-1.5 w-48">Description / Narration</th>
-                      <th className="border border-black px-2 py-1.5">Accounts Debited &amp; Credited Breakdown</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Debit (PKR)</th>
-                      <th className="border border-black px-2 py-1.5 text-right w-28">Credit (PKR)</th>
-                      <th className="border border-black px-2 py-1.5 text-center w-20">Status</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">JV #</th>
+                      <th className="border border-black px-3 py-2.5 w-56 text-base font-bold">Description / Narration</th>
+                      <th className="border border-black px-3 py-2.5 text-base font-bold">Accounts Debited &amp; Credited Breakdown</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Debit (PKR)</th>
+                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Credit (PKR)</th>
+                      <th className="border border-black px-3 py-2.5 text-center w-24 text-base font-bold">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1135,31 +1221,31 @@ export default function Reports() {
                     ) : (
                       filteredJournals.map((jv) => (
                         <tr key={jv.id} className="hover:bg-blue-50/20 align-top">
-                          <td className="border border-black px-2 py-1.5 font-mono">{formatDate(jv.date)}</td>
-                          <td className="border border-black px-2 py-1.5 font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3 py-2.5 font-mono">{formatDate(jv.date)}</td>
+                          <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
                             {jv.no || jv.refNo}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-gray-700 font-medium">
+                          <td className="border border-black px-3 py-2.5 text-gray-700 font-medium">
                             {jv.description || '-'}
                           </td>
                           <td className="border border-black p-0">
-                            <table className="w-full text-[11px] border-collapse">
+                            <table className="w-full text-sm border-collapse">
                               <tbody>
                                 {jv.lines?.map((line, lIdx) => (
                                   <tr key={lIdx} className="border-b border-gray-200 last:border-b-0">
-                                    <td className="px-2 py-1 font-bold text-gray-900 w-44">
+                                    <td className="px-2.5 py-1.5 font-bold text-gray-900 w-48">
                                       {line.accountName || '-'}
-                                      <span className="text-[10px] text-gray-500 ml-1 font-mono font-normal">
+                                      <span className="text-xs text-gray-500 ms-1 font-mono font-normal">
                                         ({line.accountType})
                                       </span>
                                     </td>
-                                    <td className="px-2 py-1 text-gray-600 italic">
+                                    <td className="px-2.5 py-1.5 text-gray-600 italic">
                                       {line.detail || '-'}
                                     </td>
-                                    <td className="px-2 py-1 text-right font-mono font-bold text-[#1E3A5F] w-24">
+                                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-[#1E3A5F] w-28 tabular-nums">
                                       {line.debit ? fmt(line.debit) : '-'}
                                     </td>
-                                    <td className="px-2 py-1 text-right font-mono font-bold text-emerald-800 w-24">
+                                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-emerald-800 w-28 tabular-nums">
                                       {line.credit ? fmt(line.credit) : '-'}
                                     </td>
                                   </tr>
@@ -1167,14 +1253,14 @@ export default function Reports() {
                               </tbody>
                             </table>
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
                             {fmt(jv.totalDebit)}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-emerald-800">
+                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                             {fmt(jv.totalCredit)}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-center">
-                            <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-1.5 py-0.5 text-[10px] font-bold">
+                          <td className="border border-black px-3 py-2.5 text-center">
+                            <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 text-xs font-bold">
                               Balanced
                             </span>
                           </td>
@@ -1185,16 +1271,16 @@ export default function Reports() {
                   {filteredJournals.length > 0 && (
                     <tfoot className="bg-[#DFDFDF] font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3 py-1.5 text-right uppercase">
+                        <td colSpan={4} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                           Total Journal Turnover:
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-[#1E3A5F]">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
                           {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalDebit || 0), 0))}
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-right font-mono text-emerald-800">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-800 tabular-nums">
                           {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalCredit || 0), 0))}
                         </td>
-                        <td className="border border-black px-1 py-1.5 text-center text-xs">✓</td>
+                        <td className="border border-black px-2 py-2.5 text-center text-sm font-bold">✓</td>
                       </tr>
                     </tfoot>
                   )}
@@ -1313,250 +1399,388 @@ export default function Reports() {
         {/* ─────────────────────────────────────────────────────────────
             TAB 7: TRIAL BALANCE STATEMENT
         ───────────────────────────────────────────────────────────── */}
+        {/* ─────────────────────────────────────────────────────────────
+            TAB 7: TRIAL BALANCE STATEMENT (Traditional Paper Format)
+        ───────────────────────────────────────────────────────────── */}
         {activeTab === 'tb' && (
-          <div className="border-2 border-black bg-white">
-            <div className="p-3.5 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center gap-3">
+          <div className="space-y-4">
+            {/* Screen Action Toolbar */}
+            <div className="no-print pb-3 border-b border-gray-300 flex flex-wrap justify-between items-center gap-3">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-black">
-                  TRIAL BALANCE STATEMENT (STATEMENT OF ACCOUNT)
-                </h3>
-                <p className="text-[11px] text-gray-600 mt-0.5">
-                  Internal accounting equilibrium check derived directly from live ledger account balances
-                </p>
-              </div>
-              <div>
-                {isTbBalanced ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
+                {isTbGrandBalanced ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
                     <CheckCircle2 className="w-4 h-4 text-[#1B5E20]" />
-                    <span>✓ Trial Balance 100% Balanced</span>
+                    <span>✓ Trial Balance 100% Balanced (Total: Rs. {fmt(tbGrandTotalBenaam)})</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-red-100 text-red-900 border-2 border-black">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-red-100 text-red-900 border-2 border-black">
                     <AlertTriangle className="w-4 h-4 text-red-700" />
-                    <span>⚠ Unbalanced Difference: {fmt(tbDifference)}</span>
+                    <span>⚠ Out of Balance Difference: Rs. {fmt(tbGrandDifference)}</span>
                   </span>
                 )}
               </div>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Printer}
+                onClick={safePrint}
+              >
+                Print Trial Balance
+              </Button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse border border-black">
-                <thead className="bg-[#DFDFDF] border-b border-black">
-                  <tr>
-                    <th className="border border-black px-3 py-2">Account Name / Category</th>
-                    <th className="border border-black px-3 py-2 w-48">Classification</th>
-                    <th className="border border-black px-3 py-2 text-right w-44">Debit Balance (PKR)</th>
-                    <th className="border border-black px-3 py-2 text-right w-44">Credit Balance (PKR)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* 1. Cash in Hand */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="border border-black px-3 py-2 font-bold text-gray-900">
-                      Cash in Hand (Physical Cash Book)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-900">
-                        Liquid Cash Asset
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-[#1E3A5F]">
-                      {fmt(cashInHand)}
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                  </tr>
+            {/* Red Difference Banner (Visible on Screen & Print if Unbalanced) */}
+            {!isTbGrandBalanced && (
+              <div className="p-3 bg-red-100 border-2 border-red-700 text-red-900 font-bold text-center text-lg">
+                Difference Rs. {fmt(tbGrandDifference)}
+              </div>
+            )}
 
-                  {/* 2. Bank Accounts */}
-                  {bankAccounts.map((b) => (
-                    <tr key={b.id} className="hover:bg-gray-50">
-                      <td className="border border-black px-3 py-2 font-semibold text-gray-900">
-                        {b.name} (Bank Account)
-                      </td>
-                      <td className="border border-black px-3 py-2">
-                        <span className="border border-black bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-900">
-                          Commercial Bank Asset
-                        </span>
-                      </td>
-                      <td className="border border-black px-3 py-2 text-right font-mono font-bold text-[#1E3A5F]">
-                        {fmt(b.balance)}
-                      </td>
-                      <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                    </tr>
-                  ))}
+            {/* Printable Traditional Paper Layout */}
+            <div id="trial-balance-print-area" className="bg-white border-2 border-black p-4 print:border-none print:p-0">
+              {/* Document Header */}
+              <div className="relative mb-2">
+                <div className="text-right text-xs font-mono font-bold text-gray-800 pr-1">
+                  {trialBalanceDateStr}
+                </div>
+                <h1 className="text-2xl font-black text-[#008000] text-center uppercase tracking-wider -mt-2">
+                  TRIAL BALANCE
+                </h1>
+              </div>
 
-                  {/* 3. Accounts Receivable (Customers) */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="border border-black px-3 py-2 font-semibold text-gray-900">
-                      Accounts Receivable (Customers Debit Balances)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-                        Asset Receivable
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-[#1E3A5F]">
-                      {fmt(totalReceivables)}
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                  </tr>
+              {/* RTL 5-Column Table */}
+              {(() => {
+                let srCounter = 1;
+                return (
+                  <table className="w-full border-collapse border border-black text-black text-base" dir="rtl">
+                    <thead>
+                      <tr className="bg-white border-b-2 border-black">
+                        <th className="border border-black px-2 py-1 text-center font-bold text-[22px] print:text-[14pt] w-[80px] font-urdu">
+                          نمبر شمار
+                        </th>
+                        <th className="border border-black px-2 py-1 text-center font-bold text-[22px] print:text-[14pt] w-[95px] font-urdu">
+                          کوڈ
+                        </th>
+                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] font-urdu">
+                          نام پارٹی
+                        </th>
+                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] w-[140px] font-urdu" dir="ltr">
+                          بنام
+                        </th>
+                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] w-[140px] font-urdu" dir="ltr">
+                          جمع
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* 1. پارٹیز (Parties) */}
+                      <tr className="bg-white">
+                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                          پارٹیز
+                        </td>
+                      </tr>
+                      {tbParties.map((p) => {
+                        const bal = Number(p.balance || 0);
+                        const deb = bal < 0 ? Math.abs(bal) : 0;
+                        const cred = bal > 0 ? bal : 0;
+                        const sr = srCounter++;
+                        const hasUrdu = Boolean(p.urduName || p.nameUrdu);
+                        const displayName = p.urduName || p.nameUrdu || p.name;
+                        return (
+                          <tr key={p.id} className="hover:bg-gray-50 min-h-[40px] overflow-visible">
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              {sr}
+                            </td>
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              {p.code || p.id}
+                            </td>
+                            <td className={`border border-black px-3 py-1 text-start ${hasUrdu ? 'font-urdu font-bold text-[20px] print:text-[13pt]' : 'font-semibold text-base'}`}>
+                              {displayName}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {deb > 0 ? fmt(deb) : ''}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {cred > 0 ? fmt(cred) : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbPartiesDebit > 0 ? fmt(tbPartiesDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbPartiesCredit > 0 ? fmt(tbPartiesCredit) : ''}
+                        </td>
+                      </tr>
 
-                  {/* 4. Stock Inventory Valuation */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="border border-black px-3 py-2 font-semibold text-gray-900">
-                      Stock Inventory Valuation (Live Trading Stock)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-                        Trading Stock Asset
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-[#1E3A5F]">
-                      {fmt(stockValuation)}
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                  </tr>
+                      {/* 2. کیش (Cash) */}
+                      <tr className="bg-white">
+                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                          کیش
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
+                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          {srCounter++}
+                        </td>
+                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          99020
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                          کیش بک
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                          {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                          {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
+                        </td>
+                      </tr>
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
+                        </td>
+                      </tr>
 
-                  {/* 5. Accounts Payable (Suppliers) */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="border border-black px-3 py-2 font-semibold text-gray-900">
-                      Accounts Payable (Suppliers Credit Balances)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-900">
-                        Liability Payable
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-red-700">
-                      {fmt(totalPayables)}
-                    </td>
-                  </tr>
+                      {/* 3. بینک (Banks) */}
+                      <tr className="bg-white">
+                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                          بینک
+                        </td>
+                      </tr>
+                      {bankAccounts.map((b) => {
+                        const bal = Number(b.balance || 0);
+                        const deb = bal >= 0 ? bal : 0;
+                        const cred = bal < 0 ? Math.abs(bal) : 0;
+                        const displayName = b.urduName || b.nameUrdu || b.name;
+                        const hasUrdu = Boolean(b.urduName || b.nameUrdu);
+                        return (
+                          <tr key={b.id} className="hover:bg-gray-50 min-h-[40px] overflow-visible">
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              {srCounter++}
+                            </td>
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              {b.code || b.id || '99021'}
+                            </td>
+                            <td className={`border border-black px-3 py-1 text-start ${hasUrdu ? 'font-urdu font-bold text-[20px] print:text-[13pt]' : 'font-semibold text-base'}`}>
+                              {displayName}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {deb > 0 ? fmt(deb) : ''}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {cred > 0 ? fmt(cred) : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbBanksDebit > 0 ? fmt(tbBanksDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbBanksCredit > 0 ? fmt(tbBanksCredit) : ''}
+                        </td>
+                      </tr>
 
-                  {/* 6. Owner Capital Investment */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="border border-black px-3 py-2 font-semibold text-gray-900">
-                      Investment A/C (Owner's Capital Equity)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-900">
-                        Capital Equity
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-gray-400">-</td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-emerald-800">
-                      {fmt(capitalBalance)}
-                    </td>
-                  </tr>
+                      {/* 4. کیپٹل (Capital) - only if capitalBalance !== 0 */}
+                      {capitalBalance !== 0 && (
+                        <>
+                          <tr className="bg-white">
+                            <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                              کیپٹل
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              {srCounter++}
+                            </td>
+                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                              99030
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                              راس المال / Capital
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                              {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
+                            </td>
+                          </tr>
+                          <tr className="bg-[#DFDFDF] font-bold">
+                            <td className="border border-black"></td>
+                            <td className="border border-black"></td>
+                            <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                              ٹوٹل
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                              {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
+                            </td>
+                            <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                              {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
+                            </td>
+                          </tr>
+                        </>
+                      )}
 
-                  {/* 7. Sale Purchase A/C (Mall A/C Net Trading Position) - Balancing Entry */}
-                  <tr className="hover:bg-gray-50 bg-[#FAF9F7]">
-                    <td className="border border-black px-3 py-2 font-black text-[#1E3A5F]">
-                      Sale Purchase A/C (Mall A/C Net Trading Position)
-                    </td>
-                    <td className="border border-black px-3 py-2">
-                      <span className="border border-black bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-900">
-                        Trading Control A/C
-                      </span>
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-[#1E3A5F]">
-                      {mallTradingBalance < 0 ? fmt(Math.abs(mallTradingBalance)) : '-'}
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono font-bold text-emerald-800">
-                      {mallTradingBalance >= 0 ? fmt(mallTradingBalance) : '-'}
-                    </td>
-                  </tr>
-                </tbody>
+                      {/* 5. سیلز اینڈ پرچیز (Sale & Purchase / Mall A/C) */}
+                      <tr className="bg-white">
+                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                          سیلز اینڈ پرچیز
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
+                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          {srCounter++}
+                        </td>
+                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          99010
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                          مال کھاتہ 1 ...... Mall A/C
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                          {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                          {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
+                        </td>
+                      </tr>
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                          {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
+                        </td>
+                      </tr>
 
-                {/* Column Totals Footer */}
-                <tfoot className="bg-[#DFDFDF] font-bold text-sm">
-                  <tr>
-                    <td colSpan={2} className="border border-black px-3 py-2 text-right uppercase text-black">
-                      Trial Balance Column Equilibrium:
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-[#1E3A5F]">
-                      {fmt(sumDebits)}
-                    </td>
-                    <td className="border border-black px-3 py-2 text-right font-mono text-emerald-800">
-                      {fmt(sumCredits)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                      {/* Grand Total Row */}
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-[24px] print:text-[16pt] font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-red-700" dir="ltr">
+                          {fmt(tbGrandTotalBenaam)}
+                        </td>
+                        <td className="border border-black px-3 py-1 text-start num-total text-red-700" dir="ltr">
+                          {fmt(tbGrandTotalJama)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                );
+              })()}
+
+              <div className="text-center font-mono text-sm text-gray-700 py-3">
+                Page 1 of 1
+              </div>
             </div>
+
+            {/* Reconciliation Panels (Screen Only) */}
+            <div className="no-print space-y-4 border-2 border-black bg-white mt-6">
 
             {/* ── RECONCILIATION SECTION 1: ACCOUNT-BY-ACCOUNT DETAILED RECONCILIATION ── */}
-            <div className="p-3 border-t-2 border-black bg-[#FAF9F7]">
+            <div className="p-3.5 border-t-2 border-black bg-[#FAF9F7]">
               <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-black">
+                  <h4 className="text-xl font-bold uppercase tracking-wider text-black">
                     ACCOUNT RECONCILIATION AUDIT (ONE ROW PER ACTIVE ACCOUNT)
                   </h4>
-                  <p className="text-[10px] text-gray-600">
+                  <p className="text-sm text-gray-600">
                     Granular account-level breakdown showing Debit, Credit, and Net positions
                   </p>
                 </div>
-                <span className="text-[10px] font-mono font-bold bg-white border border-black px-2 py-0.5">
+                <span className="text-sm font-mono font-bold bg-white border border-black px-2.5 py-1">
                   {isTbBalanced ? '✓ Zero Net Discrepancy' : `⚠ Variance: ${fmt(tbDifference)}`}
                 </span>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-black bg-white">
+                <table className="w-full text-base text-left border-collapse border border-black bg-white">
                   <thead className="bg-[#DFDFDF] border-b border-black">
                     <tr>
-                      <th className="border border-black px-2 py-1.5 w-10 text-center">#</th>
-                      <th className="border border-black px-3 py-1.5">Account / Ledger Head</th>
-                      <th className="border border-black px-3 py-1.5 w-44">Classification</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-36">Debit (Rs.)</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-36">Credit (Rs.)</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-36">Net Balance (Rs.)</th>
-                      <th className="border border-black px-2 py-1.5 text-center w-24">Reconciled</th>
+                      <th className="border border-black px-2.5 py-2.5 w-12 text-center text-base font-bold">#</th>
+                      <th className="border border-black px-3.5 py-2.5 text-base font-bold">Account / Ledger Head</th>
+                      <th className="border border-black px-3.5 py-2.5 w-48 text-base font-bold">Classification</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Debit (Rs.)</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Credit (Rs.)</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Net Balance (Rs.)</th>
+                      <th className="border border-black px-2.5 py-2.5 text-center w-28 text-base font-bold">Reconciled</th>
                     </tr>
                   </thead>
                   <tbody>
                     {accountReconRows.map((acc) => (
                       <tr key={acc.idx} className="hover:bg-gray-50 border-b border-gray-200">
-                        <td className="border border-black px-2 py-1 text-center font-mono text-gray-500">
+                        <td className="border border-black px-2.5 py-2.5 text-center font-mono text-gray-500">
                           {acc.idx}
                         </td>
-                        <td className="border border-black px-3 py-1 font-bold text-gray-900">
+                        <td className="border border-black px-3.5 py-2.5 font-bold text-gray-900">
                           {acc.name}
                         </td>
-                        <td className="border border-black px-3 py-1 text-gray-600">
-                          <span className="border border-black px-1.5 py-0.5 text-[10px] font-bold bg-gray-50">
+                        <td className="border border-black px-3.5 py-2.5 text-gray-600">
+                          <span className="border border-black px-2 py-0.5 text-xs font-bold bg-gray-50">
                             {acc.type}
                           </span>
                         </td>
-                        <td className="border border-black px-3 py-1 text-right font-mono font-bold text-[#1E3A5F]">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
                           {acc.debit > 0 ? fmt(acc.debit) : '-'}
                         </td>
-                        <td className="border border-black px-3 py-1 text-right font-mono font-bold text-emerald-800">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                           {acc.credit > 0 ? fmt(acc.credit) : '-'}
                         </td>
-                        <td className="border border-black px-3 py-1 text-right font-mono font-bold text-gray-900">
-                          {fmt(acc.net)} <span className="text-[10px] text-gray-500">({acc.netType})</span>
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
+                          {fmt(acc.net)} <span className="text-xs text-gray-500">({acc.netType})</span>
                         </td>
-                        <td className="border border-black px-2 py-1 text-center">
-                          <span className="text-[#1B5E20] font-bold text-[11px]">✓ Reconciled</span>
+                        <td className="border border-black px-2.5 py-2.5 text-center">
+                          <span className="text-[#1B5E20] font-bold text-xs">✓ Reconciled</span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-[#DFDFDF] font-bold text-xs">
+                  <tfoot className="bg-[#DFDFDF] font-bold">
                     <tr>
-                      <td colSpan={3} className="border border-black px-3 py-1.5 text-right uppercase">
+                      <td colSpan={3} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                         Reconciliation Column Totals:
                       </td>
-                      <td className="border border-black px-3 py-1.5 text-right font-mono text-[#1E3A5F]">
+                      <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[#1E3A5F] text-[17px] font-bold tabular-nums">
                         {fmt(sumDebits)}
                       </td>
-                      <td className="border border-black px-3 py-1.5 text-right font-mono text-emerald-800">
+                      <td className="border border-black px-3.5 py-2.5 text-right font-mono text-emerald-800 text-[17px] font-bold tabular-nums">
                         {fmt(sumCredits)}
                       </td>
-                      <td className="border border-black px-3 py-1.5 text-right font-mono text-black">
+                      <td className="border border-black px-3.5 py-2.5 text-right font-mono text-black text-[17px] font-bold tabular-nums">
                         {isTbBalanced ? '0.00 (Balanced)' : fmt(tbDifference)}
                       </td>
-                      <td className="border border-black px-2 py-1.5 text-center text-[11px]">
+                      <td className="border border-black px-2.5 py-2.5 text-center text-xs">
                         {isTbBalanced ? (
                           <span className="text-[#1B5E20] font-black">✓ OK</span>
                         ) : (
@@ -1570,41 +1794,41 @@ export default function Reports() {
             </div>
 
             {/* ── RECONCILIATION SECTION 2: PER-VOUCHER INTEGRITY CHECK (Σ Debit vs Σ Credit) ── */}
-            <div className="p-3 border-t-2 border-black bg-[#FAF9F7]">
+            <div className="p-3.5 border-t-2 border-black bg-[#FAF9F7]">
               <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-black">
+                  <h4 className="text-xl font-bold uppercase tracking-wider text-black">
                     PER-VOUCHER INTEGRITY CHECK (Σ DEBIT VS Σ CREDIT FOR EVERY JOURNAL VOUCHER)
                   </h4>
-                  <p className="text-[10px] text-gray-600">
+                  <p className="text-sm text-gray-600">
                     Individual double-entry balance check confirming Σ Debit = Σ Credit for every posted voucher
                   </p>
                 </div>
                 {allJvsBalanced ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 text-sm font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
+                    <CheckCircle2 className="w-4 h-4" />
                     <span>All {journalEntries.length} JVs In Complete Balance</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold bg-red-100 text-red-900 border-2 border-black">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 text-sm font-bold bg-red-100 text-red-900 border-2 border-black">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
                     <span>Unbalanced Vouchers Detected!</span>
                   </span>
                 )}
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-black bg-white">
+                <table className="w-full text-base text-left border-collapse border border-black bg-white">
                   <thead className="bg-[#DFDFDF] border-b border-black">
                     <tr>
-                      <th className="border border-black px-2.5 py-1.5 w-24">Voucher #</th>
-                      <th className="border border-black px-2.5 py-1.5 w-24">Date</th>
-                      <th className="border border-black px-3 py-1.5">Narration / Particulars</th>
-                      <th className="border border-black px-2 py-1.5 text-center w-16">Lines</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-36">Σ Debit (PKR)</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-36">Σ Credit (PKR)</th>
-                      <th className="border border-black px-3 py-1.5 text-right w-28">Variance</th>
-                      <th className="border border-black px-2 py-1.5 text-center w-28">Status</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Voucher #</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
+                      <th className="border border-black px-3.5 py-2.5 text-base font-bold">Narration / Particulars</th>
+                      <th className="border border-black px-3 py-2.5 text-center w-20 text-base font-bold">Lines</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Σ Debit (PKR)</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Σ Credit (PKR)</th>
+                      <th className="border border-black px-3.5 py-2.5 text-right w-32 text-base font-bold">Variance</th>
+                      <th className="border border-black px-3 py-2.5 text-center w-32 text-base font-bold">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1630,36 +1854,36 @@ export default function Reports() {
                             key={jv.id}
                             className={isJvBal ? 'hover:bg-gray-50 border-b border-gray-200' : 'bg-red-50 hover:bg-red-100 border-b border-red-300'}
                           >
-                            <td className="border border-black px-2.5 py-1 font-mono font-bold text-[#1E3A5F]">
+                            <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
                               {jv.no || jv.refNo}
                             </td>
-                            <td className="border border-black px-2.5 py-1 font-mono">{formatDate(jv.date)}</td>
-                            <td className="border border-black px-3 py-1 text-gray-800">
+                            <td className="border border-black px-3 py-2.5 font-mono">{formatDate(jv.date)}</td>
+                            <td className="border border-black px-3.5 py-2.5 text-gray-800">
                               {jv.narration || jv.description || '-'}
                             </td>
-                            <td className="border border-black px-2 py-1 text-center font-mono">
+                            <td className="border border-black px-3 py-2.5 text-center font-mono">
                               {(jv.lines || []).length}
                             </td>
-                            <td className="border border-black px-3 py-1 text-right font-mono font-bold text-[#1E3A5F]">
+                            <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
                               {fmt(jvDeb)}
                             </td>
-                            <td className="border border-black px-3 py-1 text-right font-mono font-bold text-emerald-800">
+                            <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
                               {fmt(jvCred)}
                             </td>
                             <td
-                              className={`border border-black px-3 py-1 text-right font-mono font-bold ${
+                              className={`border border-black px-3.5 py-2.5 text-right font-mono font-bold tabular-nums ${
                                 isJvBal ? 'text-gray-400' : 'text-red-700'
                               }`}
                             >
                               {isJvBal ? '-' : fmt(varAmt)}
                             </td>
-                            <td className="border border-black px-2 py-1 text-center">
+                            <td className="border border-black px-3 py-2.5 text-center">
                               {isJvBal ? (
-                                <span className="border border-black bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 text-[10px] font-bold">
+                                <span className="border border-black bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 text-xs font-bold">
                                   ✓ Balanced
                                 </span>
                               ) : (
-                                <span className="border border-red-700 bg-red-100 text-red-900 px-2 py-0.5 text-[10px] font-bold">
+                                <span className="border border-red-700 bg-red-100 text-red-900 px-2 py-0.5 text-xs font-bold">
                                   ⚠ Out of Balance
                                 </span>
                               )}
@@ -1670,12 +1894,12 @@ export default function Reports() {
                     )}
                   </tbody>
                   {journalEntries.length > 0 && (
-                    <tfoot className="bg-[#DFDFDF] font-bold text-xs">
+                    <tfoot className="bg-[#DFDFDF] font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3 py-1.5 text-right uppercase">
+                        <td colSpan={4} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
                           Total All Journal Vouchers Volume:
                         </td>
-                        <td className="border border-black px-3 py-1.5 text-right font-mono text-[#1E3A5F]">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[#1E3A5F] text-[17px] font-bold tabular-nums">
                           {fmt(
                             journalEntries.reduce(
                               (s, jv) =>
@@ -1684,7 +1908,7 @@ export default function Reports() {
                             )
                           )}
                         </td>
-                        <td className="border border-black px-3 py-1.5 text-right font-mono text-emerald-800">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-emerald-800 text-[17px] font-bold tabular-nums">
                           {fmt(
                             journalEntries.reduce(
                               (s, jv) =>
@@ -1693,8 +1917,8 @@ export default function Reports() {
                             )
                           )}
                         </td>
-                        <td className="border border-black px-3 py-1.5 text-right font-mono text-gray-500">-</td>
-                        <td className="border border-black px-2 py-1.5 text-center text-xs">
+                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-gray-500">-</td>
+                        <td className="border border-black px-3 py-2.5 text-center text-sm font-bold">
                           {allJvsBalanced ? '✓ OK' : '⚠ Action Req'}
                         </td>
                       </tr>
@@ -1704,130 +1928,244 @@ export default function Reports() {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* ─────────────────────────────────────────────────────────────
             TAB 8: PROFIT & LOSS AND BALANCE SHEET
         ───────────────────────────────────────────────────────────── */}
         {activeTab === 'pl' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            {/* Part 1: Profit & Loss Statement */}
-            <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7]">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-black">
-                  Profit &amp; Loss Trading Statement (Mal Khata)
-                </h3>
-              </div>
-
-              <div className="p-4 space-y-2 text-xs">
-                <div className="flex justify-between py-1.5 border-b border-gray-200">
-                  <span className="font-bold text-emerald-800">Total Sales Revenue (Mal Farokht)</span>
-                  <span className="font-mono font-bold text-emerald-800">{fmt(totalSales)}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-gray-200">
-                  <span className="font-bold text-[#1E3A5F]">Add: Closing Stock Inventory Valuation</span>
-                  <span className="font-mono font-bold text-[#1E3A5F]">{fmt(stockValuation)}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-gray-200">
-                  <span className="font-semibold text-red-700">Less: Goods Purchases (Mal Kharid)</span>
-                  <span className="font-mono font-bold text-red-700">({fmt(totalPurchases)})</span>
-                </div>
-                <div className="flex justify-between py-2 border-b-2 border-black font-bold text-sm bg-gray-50 px-2">
-                  <span>Gross Trading Surplus</span>
-                  <span className={`font-mono ${grossProfit >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>
-                    {fmt(grossProfit)}
+          <div className="space-y-4">
+            {/* Screen Action Toolbar */}
+            <div className="no-print pb-3 border-b border-gray-300 flex flex-wrap justify-between items-center gap-3">
+              <div>
+                {isPlBalanced ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
+                    <CheckCircle2 className="w-4 h-4 text-[#1B5E20]" />
+                    <span>✓ Balanced (Assets = Liabilities: Rs. {fmt(plAssetsTotal)})</span>
                   </span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-gray-200">
-                  <span className="font-semibold text-red-700">Less: Operating Expenses</span>
-                  <span className="font-mono font-bold text-red-700">({fmt(totalExpenses)})</span>
-                </div>
-                {jvMallCredit !== 0 && (
-                  <div className="flex justify-between py-1.5 border-b border-gray-200 bg-purple-50/50 px-1">
-                    <span className="font-semibold text-purple-900">
-                      Journal Adjustments (Mall A/C &amp; Expenses)
-                    </span>
-                    <span className={`font-mono font-bold ${jvMallCredit >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>
-                      {jvMallCredit >= 0 ? `+${fmt(jvMallCredit)}` : `(${fmt(Math.abs(jvMallCredit))})`}
-                    </span>
-                  </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-red-100 text-red-900 border-2 border-black">
+                    <AlertTriangle className="w-4 h-4 text-red-700" />
+                    <span>⚠ Out of Balance Difference: Rs. {fmt(plDifference)}</span>
+                  </span>
                 )}
-                <div
-                  className={`flex justify-between p-3 border-2 border-black font-bold text-sm ${
-                    netProfit >= 0 ? 'bg-[#E8F5E9] text-[#1B5E20]' : 'bg-red-50 text-red-900'
-                  }`}
-                >
-                  <span className="uppercase">Net Business Profit / (Loss)</span>
-                  <span className="font-mono text-base">{fmt(netProfit)}</span>
-                </div>
               </div>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Printer}
+                onClick={safePrint}
+              >
+                Print Statement
+              </Button>
             </div>
 
-            {/* Part 2: Balance Sheet */}
-            <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex justify-between items-center">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-black">
-                  Balance Sheet Statement (Chitha)
-                </h3>
-                <span
-                  className={`border border-black px-2 py-0.5 text-[10px] font-bold ${
-                    isEquationBalanced ? 'bg-[#E8F5E9] text-[#1B5E20]' : 'bg-red-100 text-red-900'
-                  }`}
-                >
-                  {isEquationBalanced ? '✓ Equation Balanced' : `⚠ Diff: ${fmt(equationDiff)}`}
-                </span>
+            {/* Red Difference Banner if Out of Balance */}
+            {!isPlBalanced && (
+              <div className="p-3 bg-red-100 border-2 border-red-700 text-red-900 font-bold text-center text-lg">
+                Difference Rs. {fmt(plDifference)}
+              </div>
+            )}
+
+            {/* Printable Traditional Two-Block Sheet (Assets vs Liabilities) */}
+            <div
+              id="pl-statement-print-area"
+              className="bg-white border-2 border-black p-8 max-w-2xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0 print:max-w-none text-black"
+            >
+              {/* BLOCK 1: Assets (Debit / Benaam) */}
+              <div className="mb-6">
+                <h2 className="text-[#d946ef] font-bold text-center mb-6 tracking-wide">
+                  <span className="font-urdu block text-[32px] leading-relaxed text-[#d946ef]">اثاثہ جات</span>
+                  <span className="text-[16px] uppercase text-[#d946ef]">Assets (Debit / Benaam)</span>
+                </h2>
+                <div className="space-y-3.5">
+                  {/* 1. Cash in Hand */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        روکڑ
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Cash in Hand
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(cashInHand)}
+                    </span>
+                  </div>
+
+                  {/* 2. Receivable */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        وصولیاں
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Receivable
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(totalReceivables)}
+                    </span>
+                  </div>
+
+                  {/* 3. Expenditure */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        اخراجات
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Expenditure
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      0
+                    </span>
+                  </div>
+
+                  {/* Spacer between Expenditure and Stock */}
+                  <div className="h-4"></div>
+
+                  {/* 4. Stock (Value) */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        سٹاک
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Stock (Value)
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(stockValuation)}
+                    </span>
+                  </div>
+
+                  {/* 5. Bank */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        بینک
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Bank
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(totalBankBalances)}
+                    </span>
+                  </div>
+
+                  {/* Total (Debit/Benaam) */}
+                  <div className="flex items-baseline justify-between pt-4">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[24px] font-bold text-blue-700">
+                        ٹوٹل
+                      </span>
+                      <span className="text-[17px] font-bold text-blue-700">
+                        Total (Debit/Benaam)
+                      </span>
+                    </div>
+                    <span className="text-start num-total text-[24px] print:text-[15pt] text-blue-700 w-44 border-t-2 border-black pt-1" dir="ltr">
+                      {fmt(plAssetsTotal)}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="p-4 space-y-4 text-xs">
-                {/* Assets */}
-                <div className="border border-black p-2 bg-[#FAF9F7] space-y-1.5">
-                  <span className="font-bold uppercase tracking-wider text-[#1E3A5F] block border-b border-gray-300 pb-1">
-                    Assets
+              {/* BLOCK 2: Liabilities (Credit / Jama) */}
+              <div className="mb-6 pt-4">
+                <h2 className="text-[#d946ef] font-bold text-center mb-6 tracking-wide">
+                  <span className="font-urdu block text-[32px] leading-relaxed text-[#d946ef]">واجبات و ذمہ داریاں</span>
+                  <span className="text-[16px] uppercase text-[#d946ef]">Liabilities (Credit / Jama)</span>
+                </h2>
+                <div className="space-y-3.5">
+                  {/* 1. Capital */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        راس
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Capital
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(capitalBalance)}
+                    </span>
+                  </div>
+
+                  {/* 2. Payable */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        ادائیگیاں
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Payable
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {fmt(totalPayables)}
+                    </span>
+                  </div>
+
+                  {/* 3. Gross Profit */}
+                  <div className="flex items-baseline justify-between">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[22px] font-bold text-black">
+                        نفع
+                      </span>
+                      <span className="text-[15px] font-bold text-gray-700">
+                        Gross Profit
+                      </span>
+                    </div>
+                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                      {grossProfit < 0 ? `(${fmt(Math.abs(grossProfit))})` : fmt(grossProfit)}
+                    </span>
+                  </div>
+
+                  {/* Total (Credit/Jamma) */}
+                  <div className="flex items-baseline justify-between pt-4">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-urdu text-[24px] font-bold text-blue-700">
+                        ٹوٹل
+                      </span>
+                      <span className="text-[17px] font-bold text-blue-700">
+                        Total (Credit/Jamma)
+                      </span>
+                    </div>
+                    <span className="text-start num-total text-[24px] print:text-[15pt] text-blue-700 w-44 border-t-2 border-black pt-1" dir="ltr">
+                      {fmt(plLiabilitiesTotal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* BOTTOM: NET P/L & EQUILIBRIUM */}
+              <div className="pt-8 text-center space-y-4">
+                <div className="inline-flex items-center justify-center">
+                  <span className="text-red-600 font-bold text-2xl me-4 uppercase tracking-wider">
+                    NET P/L
                   </span>
-                  <div className="flex justify-between">
-                    <span>Cash in Hand</span>
-                    <span className="font-mono font-semibold">{fmt(cashInHand)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Commercial Bank Accounts</span>
-                    <span className="font-mono font-semibold">{fmt(totalBankBalances)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Accounts Receivable (Customers)</span>
-                    <span className="font-mono font-semibold">{fmt(totalReceivables)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Stock Inventory Valuation</span>
-                    <span className="font-mono font-semibold">{fmt(stockValuation)}</span>
-                  </div>
-                  <div className="flex justify-between pt-1.5 border-t border-black font-bold text-sm text-[#1E3A5F]">
-                    <span>Total Assets</span>
-                    <span className="font-mono">{fmt(totalAssets)}</span>
+                  <div className="bg-[#FFFF00] border-2 border-black px-6 py-1.5 num-total text-2xl text-black inline-block shadow-sm">
+                    {plNetPL < 0 ? `(${fmt(Math.abs(plNetPL))})` : fmt(plNetPL)}
                   </div>
                 </div>
 
-                {/* Liabilities & Capital */}
-                <div className="border border-black p-2 bg-[#FAF9F7] space-y-1.5">
-                  <span className="font-bold uppercase tracking-wider text-red-800 block border-b border-gray-300 pb-1">
-                    Liabilities &amp; Owner Capital
-                  </span>
-                  <div className="flex justify-between">
-                    <span>Accounts Payable (Suppliers)</span>
-                    <span className="font-mono font-semibold">{fmt(totalPayables)}</span>
+                {isPlBalanced ? (
+                  <div className="text-green-700 font-bold text-base flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-5 h-5 text-green-700" />
+                    <span>Balanced (Assets = Liabilities)</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Owner Capital Investment</span>
-                    <span className="font-mono font-semibold">{fmt(capitalBalance)}</span>
+                ) : (
+                  <div className="text-red-700 font-bold text-base flex items-center justify-center gap-1.5">
+                    <AlertTriangle className="w-5 h-5 text-red-700" />
+                    <span>Difference Rs. {fmt(plDifference)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Net Business Profit (Current Period)</span>
-                    <span className="font-mono font-bold text-emerald-800">{fmt(netProfit)}</span>
-                  </div>
-                  <div className="flex justify-between pt-1.5 border-t border-black font-bold text-sm text-[#1E3A5F]">
-                    <span>Total Liabilities &amp; Capital</span>
-                    <span className="font-mono">{fmt(totalLiabilitiesEquity)}</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

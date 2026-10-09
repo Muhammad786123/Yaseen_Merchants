@@ -186,6 +186,8 @@ export default function QualityLedger() {
         accountType="Quality"
         acCode={selectedQuality?.id || 'Q-01'}
         accountName={qualityName}
+        urduName={selectedQuality?.urduName || selectedQuality?.nameUrdu || qualityName}
+        englishName={qualityName}
         badgeText="کوالٹی"
         rows={ledgerRows}
         openingBalance={0}

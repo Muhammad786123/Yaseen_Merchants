@@ -55,7 +55,7 @@ export default function Modal({ title, children, isOpen = true, onClose, maxWidt
         </div>
 
         {/* Content */}
-        <div className="modal-content p-4 sm:p-5 overflow-y-auto flex-1 font-sans">
+        <div className="modal-content p-4 sm:p-5 overflow-y-auto flex-1 font-sans text-start">
           {children}
         </div>
       </div>

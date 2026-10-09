@@ -43,13 +43,23 @@ function fmtDateTime() {
 }
 
 function fmtAmt(n) {
-  if (!n || isNaN(n) || n === 0) return '0.00';
-  return Number(Math.abs(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!n || isNaN(n) || Number(n) === 0) return '0';
+  const num = Number(Math.abs(n));
+  const hasDecimals = num % 1 !== 0;
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 function fmtNum(n) {
   if (!n || isNaN(n) || Number(n) === 0) return '';
-  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  const num = Number(n);
+  const hasDecimals = num % 1 !== 0;
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function MallAcStatement({
@@ -58,6 +68,9 @@ export default function MallAcStatement({
   dateFrom = '',
   dateTo = '',
   acCode = 'MALL-AC',
+  accountName = 'Mall Account (Sales & Purchase)',
+  urduName = 'مال کھاتہ (سیلز اینڈ پرچیز)',
+  phone = '',
   printedBy = '',
   className = '',
 }) {
@@ -89,10 +102,9 @@ export default function MallAcStatement({
 
   /* ── Shared cell style ────────────────────────────────────────────────── */
   const cell = (extra = {}) => ({
-    border: BORDER,
-    padding: '2px 4px',
-    fontSize: '8.5px',
-    lineHeight: 1.3,
+    border: '1px solid #000',
+    padding: '6px 10px',
+    lineHeight: 1.4,
     verticalAlign: 'middle',
     overflow: 'visible',
     wordBreak: 'break-word',
@@ -109,74 +121,29 @@ export default function MallAcStatement({
         width: '100%',
         margin: '0',
         padding: '0',
-        fontFamily: "'JetBrains Mono', 'Courier New', monospace",
         color: '#000',
-        direction: 'ltr',
+        direction: 'rtl',
       }}
     >
-      {/* ── Page Header ───────────────────────────────────────────────────── */}
+      {/* ── Top Header Row ─────────────────────────────────────────────────── */}
       <table
+        dir="rtl"
         style={{
           width: '100%',
           borderCollapse: 'collapse',
           border: 'none',
           marginBottom: '6px',
+          direction: 'rtl',
         }}
       >
         <tbody>
           <tr>
-            {/* Top-left: timestamp & printed by */}
+            {/* Top-right in RTL: account type badge */}
             <td
               style={{
-                width: '28%',
+                width: '30%',
                 verticalAlign: 'top',
-                textAlign: 'left',
-                border: 'none',
-                padding: '0',
-                fontSize: '8.5px',
-                color: '#333',
-                lineHeight: 1.3,
-              }}
-            >
-              <div>{fmtDateTime()}</div>
-              <div style={{ color: '#666', fontSize: '8px' }}>User: {effectivePrintedBy}</div>
-            </td>
-
-            {/* Center: Title & Period */}
-            <td
-              style={{
-                width: '44%',
-                verticalAlign: 'top',
-                textAlign: 'center',
-                border: 'none',
-                padding: '0',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 900,
-                  color: '#1a6b2e',
-                  letterSpacing: '0.05em',
-                  lineHeight: 1.2,
-                }}
-              >
-                STATEMENT OF ACCOUNT
-              </div>
-              <div style={{ fontSize: '9px', color: '#222', marginTop: '1px', fontWeight: 600 }}>
-                A/C Code: <span style={{ fontWeight: 800 }}>{acCode}</span>
-              </div>
-              <div style={{ fontSize: '8.5px', color: '#444', marginTop: '1px' }}>
-                A/C Ledger for the period <strong>{periodLabel}</strong>
-              </div>
-            </td>
-
-            {/* Top-right: account type badge */}
-            <td
-              style={{
-                width: '28%',
-                verticalAlign: 'top',
-                textAlign: 'right',
+                textAlign: 'start',
                 border: 'none',
                 padding: '0',
               }}
@@ -186,77 +153,157 @@ export default function MallAcStatement({
                   display: 'inline-block',
                   backgroundColor: '#1a6b2e',
                   color: '#fff',
-                  fontSize: '9px',
+                  fontSize: '14pt',
                   fontWeight: 700,
-                  padding: '3px 10px',
+                  padding: '4px 12px',
                   borderRadius: '3px',
-                  fontFamily: "'Noto Nastaliq Urdu', serif",
                 }}
+                className="font-urdu"
               >
-                مال اے/سی
+                مال کھاتہ لیجر
               </span>
+            </td>
+
+            {/* Center: Title & Period */}
+            <td
+              style={{
+                width: '40%',
+                verticalAlign: 'top',
+                textAlign: 'center',
+                border: 'none',
+                padding: '0',
+              }}
+            >
+              <div
+                className="font-urdu font-bold text-[24px] print:text-[18pt] text-[#1a6b2e] leading-relaxed"
+              >
+                اسٹیٹمنٹ آف اکاؤنٹ
+              </div>
+              <div
+                className="text-[14px] print:text-[10pt] font-bold text-gray-700 tracking-wider"
+              >
+                STATEMENT OF ACCOUNT
+              </div>
+              <div style={{ fontSize: '10pt', color: '#444', marginTop: '2px' }}>
+                A/C Ledger for the period <strong>{periodLabel}</strong>
+              </div>
+            </td>
+
+            {/* Top-left in RTL: timestamp & printed by */}
+            <td
+              style={{
+                width: '30%',
+                verticalAlign: 'top',
+                textAlign: 'left',
+                border: 'none',
+                padding: '0',
+                fontSize: '10pt',
+                color: '#333',
+                lineHeight: 1.3,
+                direction: 'ltr',
+              }}
+            >
+              <div>{fmtDateTime()}</div>
+              <div style={{ color: '#666', fontSize: '10pt' }}>User: {effectivePrintedBy}</div>
             </td>
           </tr>
         </tbody>
       </table>
 
+      {/* ── Centered Bordered Party / Account Name Box ── */}
+      <div
+        style={{
+          border: '2px solid #000',
+          padding: '10px 16px',
+          textAlign: 'center',
+          backgroundColor: '#fff',
+          margin: '8px 0 12px 0',
+        }}
+      >
+        <div
+          className="font-urdu font-bold text-[40px] print:text-[24pt] text-black leading-tight"
+          dir="rtl"
+        >
+          {urduName || 'مال کھاتہ (سیلز اینڈ پرچیز)'}
+        </div>
+        {(accountName || 'Mall Account (Sales & Purchase)') && (
+          <div
+            className="font-bold text-[22px] print:text-[14pt] text-black mt-1"
+            dir="ltr"
+          >
+            {accountName || 'Mall Account (Sales & Purchase)'}
+          </div>
+        )}
+        <div
+          className="text-[18px] print:text-[12pt] font-semibold text-gray-800 mt-1 flex items-center justify-center gap-6"
+          dir="rtl"
+        >
+          <span>کوڈ: <strong className="num text-[18px] print:text-[12pt]">{acCode}</strong></span>
+          {phone && (
+            <span>فون: <strong className="num text-[18px] print:text-[12pt]">{phone}</strong></span>
+          )}
+        </div>
+      </div>
+
       {/* ── Opening Balance line ──────────────────────────────────────────── */}
       <div
         style={{
-          fontSize: '9px',
-          marginBottom: '5px',
+          fontSize: '18px',
+          marginBottom: '8px',
           fontWeight: 700,
           textAlign: 'right',
           direction: 'rtl',
         }}
       >
-        سابقہ بقایا (Opening Balance):{' '}
-        <span style={{ fontFamily: 'monospace', direction: 'ltr', display: 'inline-block' }}>
+        <span className="font-urdu font-bold text-[22px] print:text-[14pt]">سابقہ بیلنس (Opening Balance): </span>
+        <span className="num font-bold text-[22px] print:text-[14pt]">
           {openingBalance !== 0
-            ? `${Math.abs(openingBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${openingBalance >= 0 ? '(Cr)' : '(Dr)'}`
-            : '0.00'}
+            ? `${fmtAmt(Math.abs(openingBalance))} ${openingBalance >= 0 ? '(Cr)' : '(Dr)'}`
+            : '0'}
         </span>
       </div>
 
       {/* ── Main Ledger Table (PERBALACC Bordered Grid) ───────────────────── */}
       <table
-        className="mallac-grid-table"
+        className="mallac-grid-table classic-ledger-table"
+        dir="rtl"
         style={{
           width: '100%',
           borderCollapse: 'collapse',
           direction: 'rtl',
           tableLayout: 'fixed',
           marginBottom: '8px',
+          border: '1px solid #000',
         }}
       >
         {/* Proportional column distribution summing to exactly 100%:
-            RTL order: بقایا | جمع | بنام | ریٹ | وزن | تعداد | بل | تفصیل | تاریخ
+            RTL order: تاریخ | تفصیل | واؤچر نمبر | نگ | کلو | ریٹ | پارٹی | رقم | بیلنس | حالت
         */}
         <colgroup>
-          <col style={{ width: '3%' }} />    {/* marker: جمع / نام (3%) */}
-          <col style={{ width: '13%' }} />   {/* بقایا: Balance (13%) */}
-          <col style={{ width: '13%' }} />   {/* جمع / رقم: Total/Amount (13%) */}
-          <col style={{ width: '16%' }} />   {/* بنام: Party Name (16%) */}
+          <col style={{ width: '10%' }} />   {/* تاریخ: Date (10%) */}
+          <col style={{ width: '22%' }} />   {/* تفصیل: Detail (22%) */}
+          <col style={{ width: '9%' }} />    {/* واؤچر نمبر: Bill No. (9%) */}
+          <col style={{ width: '6%' }} />    {/* نگ: Qty (6%) */}
+          <col style={{ width: '8%' }} />    {/* کلو: Weight (8%) */}
           <col style={{ width: '7%' }} />    {/* ریٹ: Rate (7%) */}
-          <col style={{ width: '7%' }} />    {/* وزن: Weight (7%) */}
-          <col style={{ width: '7%' }} />    {/* تعداد: Qty (7%) */}
-          <col style={{ width: '11%' }} />   {/* بل: Bill No. (11%) */}
-          <col style={{ width: '14%' }} />   {/* تفصیل: Detail (14%) */}
-          <col style={{ width: '9%' }} />    {/* تاریخ: Date (9%) */}
+          <col style={{ width: '14%' }} />   {/* پارٹی: Party Name (14%) */}
+          <col style={{ width: '11%' }} />   {/* رقم: Amount (11%) */}
+          <col style={{ width: '11%' }} />   {/* بیلنس: Balance (11%) */}
+          <col style={{ width: '2%' }} />    {/* حالت: جمع / نام (2%) */}
         </colgroup>
 
         <thead>
           <tr style={{ backgroundColor: HEADER_BG }}>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, fontSize: '8px', whiteSpace: 'nowrap' })}></th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>بقایا</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>جمع</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>بنام</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>ریٹ</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>وزن</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>تعداد</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>بل</th>
-            <th style={cell({ textAlign: 'right', fontWeight: 900 })}>تفصیل</th>
-            <th style={cell({ textAlign: 'center', fontWeight: 900, whiteSpace: 'nowrap' })}>تاریخ</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'center' })}>تاریخ</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'start' })}>تفصیل</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'center' })}>واؤچر نمبر</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'center' })}>نگ</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'center' })}>کلو</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'center' })}>ریٹ</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'start' })}>پارٹی</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'start' })}>رقم</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={cell({ textAlign: 'start' })}>بیلنس</th>
+            <th className="font-urdu font-bold text-[18px] print:text-[12pt]" style={cell({ textAlign: 'center' })}></th>
           </tr>
         </thead>
 
@@ -268,14 +315,14 @@ export default function MallAcStatement({
 
             // marker: جمع for credit (sale), نام for debit (purchase/expense)
             const marker = isSale ? 'جمع' : 'نام';
-            const markerColor = isSale ? '#1a6b2e' : '#c0392b';
+            const markerColor = isSale ? '#000000' : '#c0392b';
 
             // Amount shown: credit for sale, debit for purchase/expense
             const amount = isSale ? row.credit : row.debit;
 
             // Balance with Cr/Dr indicator
             const balSign = row.runningBal >= 0 ? 'Cr' : 'Dr';
-            const balDisplay = `${Math.abs(row.runningBal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${balSign}`;
+            const balDisplay = `${fmtAmt(row.runningBal || 0)} ${balSign}`;
 
             // Qty/Weight/Rate — only for stock rows
             const qty = isStockRow ? fmtNum(row.quantity) : '';
@@ -284,92 +331,96 @@ export default function MallAcStatement({
 
             // Description: combine partyName + detail compactly
             const detail = row.description || '';
-
             const rowBg = idx % 2 === 0 ? '#fff' : '#f9fafb';
 
             return (
-              <tr key={row.id || idx} style={{ backgroundColor: rowBg, pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                {/* Marker column */}
-                <td
-                  style={cell({
-                    textAlign: 'center',
-                    color: markerColor,
-                    fontWeight: 700,
-                    fontSize: '8px',
-                    fontFamily: "'Noto Nastaliq Urdu', serif",
-                    whiteSpace: 'nowrap',
-                  })}
-                >
-                  {marker}
+              <tr key={row.id || idx} style={{ backgroundColor: rowBg, pageBreakInside: 'avoid', breakInside: 'avoid', minHeight: '40px' }}>
+                {/* 1. تاریخ — Date */}
+                <td className="num text-center" style={cell({ whiteSpace: 'nowrap', direction: 'ltr' })}>
+                  {fmtDate(row.date)}
                 </td>
-                {/* بقایا — Balance */}
+
+                {/* 2. تفصیل — Detail */}
                 <td
+                  className="font-urdu text-[20px] print:text-[13pt] leading-relaxed"
                   style={cell({
-                    textAlign: 'left',
-                    fontWeight: 700,
-                    fontSize: '8.5px',
-                    color: row.runningBal >= 0 ? '#1a6b2e' : '#c0392b',
-                    whiteSpace: 'nowrap',
-                  })}
-                >
-                  {balDisplay}
-                </td>
-                {/* جمع — Amount */}
-                <td
-                  style={cell({
-                    textAlign: 'left',
-                    fontWeight: 600,
-                    fontSize: '8.5px',
-                    whiteSpace: 'nowrap',
-                  })}
-                >
-                  {fmtAmt(amount)}
-                </td>
-                {/* بنام — Party Name */}
-                <td
-                  style={cell({
-                    textAlign: 'right',
-                    fontFamily: "'Noto Nastaliq Urdu', 'Outfit', sans-serif",
-                    fontSize: '8.5px',
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                  })}
-                >
-                  {row.partyName || '—'}
-                </td>
-                {/* ریٹ — Rate */}
-                <td style={cell({ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '8.5px' })}>{rate}</td>
-                {/* وزن — Weight */}
-                <td style={cell({ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '8.5px' })}>{weight}</td>
-                {/* تعداد — Quantity */}
-                <td style={cell({ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '8.5px' })}>{qty}</td>
-                {/* بل — Bill/Voucher No */}
-                <td
-                  style={cell({
-                    textAlign: 'center',
-                    fontWeight: 700,
-                    color: '#1E3A5F',
-                    whiteSpace: 'nowrap',
-                    fontSize: '8.5px',
-                  })}
-                >
-                  {row.no || '—'}
-                </td>
-                {/* تفصیل — Detail */}
-                <td
-                  style={cell({
-                    textAlign: 'right',
-                    color: '#333',
-                    fontFamily: "'Noto Nastaliq Urdu', 'Outfit', sans-serif",
-                    fontSize: '8px',
+                    textAlign: 'start',
+                    color: '#000',
                     whiteSpace: 'normal',
                     wordBreak: 'break-word',
                   })}
                 >
                   {detail}
                 </td>
-                {/* تاریخ — Date */}
-                <td style={cell({ textAlign: 'center', whiteSpace: 'nowrap', fontSize: '8.5px' })}>{fmtDate(row.date)}</td>
+
+                {/* 3. واؤچر نمبر — Bill/Voucher No */}
+                <td
+                  className="num text-center"
+                  style={cell({
+                    direction: 'ltr',
+                  })}
+                >
+                  {row.no || '—'}
+                </td>
+
+                {/* 4. نگ — Quantity */}
+                <td className="num text-start" style={cell({ direction: 'ltr' })}>
+                  {qty}
+                </td>
+
+                {/* 5. کلو — Weight */}
+                <td className="num text-start" style={cell({ direction: 'ltr' })}>
+                  {weight}
+                </td>
+
+                {/* 6. ریٹ — Rate */}
+                <td className="num text-start" style={cell({ direction: 'ltr' })}>
+                  {rate}
+                </td>
+
+                {/* 7. پارٹی — Party Name */}
+                <td
+                  className="font-urdu text-[20px] print:text-[13pt]"
+                  style={cell({
+                    textAlign: 'start',
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                  })}
+                >
+                  {row.partyName || '—'}
+                </td>
+
+                {/* 8. رقم — Amount */}
+                <td
+                  className="num text-start"
+                  style={cell({
+                    direction: 'ltr',
+                  })}
+                >
+                  {fmtAmt(amount)}
+                </td>
+
+                {/* 9. بیلنس — Balance */}
+                <td
+                  className="num-total text-start"
+                  style={cell({
+                    color: row.runningBal >= 0 ? '#000000' : '#c0392b',
+                    direction: 'ltr',
+                  })}
+                >
+                  {balDisplay}
+                </td>
+
+                {/* 10. Marker column */}
+                <td
+                  className="font-urdu font-bold text-[18px] print:text-[12pt] text-center"
+                  style={cell({
+                    color: markerColor,
+                    whiteSpace: 'nowrap',
+                  })}
+                >
+                  {marker}
+                </td>
               </tr>
             );
           })}
@@ -378,19 +429,21 @@ export default function MallAcStatement({
         {/* ── Totals footer ─────────────────────────────────────────────── */}
         <tfoot>
           <tr style={{ backgroundColor: HEADER_BG, fontWeight: 900 }}>
-            <td style={cell({ textAlign: 'center', fontSize: '8px', fontFamily: "'Noto Nastaliq Urdu', serif" })}>کل</td>
-            <td style={cell({ textAlign: 'left', fontSize: '8.5px' })}>
-              {(() => {
-                const sign = closingBalance >= 0 ? 'Cr' : 'Dr';
-                return `${Math.abs(closingBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${sign}`;
-              })()}
+            <td colSpan={7} style={cell({ textAlign: 'start' })}>
+              <span className="font-urdu font-bold text-[22px] print:text-[14pt]">
+                کل اندراجات: {processedRows.length} (Total Summary)
+              </span>
             </td>
-            <td style={cell({ textAlign: 'left' })}>
+            <td className="num-total text-start" style={cell({ direction: 'ltr' })}>
               {fmtAmt(processedRows.reduce((s, r) => s + (r.credit || 0) + (r.debit || 0), 0))}
             </td>
-            <td colSpan={7} style={cell({ textAlign: 'center', fontSize: '8.5px' })}>
-              کل اندراجات: {processedRows.length} (Total Transactions: {processedRows.length})
+            <td className="num-total text-start" style={cell({ direction: 'ltr' })}>
+              {(() => {
+                const sign = closingBalance >= 0 ? 'Cr' : 'Dr';
+                return `${fmtAmt(closingBalance)} ${sign}`;
+              })()}
             </td>
+            <td className="font-urdu font-bold text-[18px] print:text-[12pt] text-center" style={cell()}>کل</td>
           </tr>
         </tfoot>
       </table>
@@ -424,16 +477,16 @@ export default function MallAcStatement({
             style={{
               backgroundColor: '#e8f5e9',
               borderBottom: BORDER,
-              padding: '3px 8px',
+              padding: '4px 8px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
             }}
           >
-            <span style={{ fontSize: '9px', fontWeight: 800, color: '#1a6b2e' }}>
+            <span style={{ fontSize: '11pt', fontWeight: 800, color: '#1a6b2e' }}>
               خلاصہ حساب — مال سیل/پرچیز (MALL-AC STATEMENT SUMMARY)
             </span>
-            <span style={{ fontSize: '8px', color: '#555' }}>
+            <span style={{ fontSize: '10pt', color: '#555' }}>
               مدت: {periodLabel}
             </span>
           </div>
@@ -460,10 +513,10 @@ export default function MallAcStatement({
                     verticalAlign: 'middle',
                   }}
                 >
-                  <div style={{ fontSize: '8px', color: '#555', fontWeight: 600 }}>
+                  <div className="font-urdu font-bold text-[18px] print:text-[12pt] text-gray-700">
                     کل فروخت / کریڈٹ (Total Sales / Cr)
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#1a6b2e', marginTop: '2px' }}>
+                  <div className="num-total text-[24px] print:text-[15pt]" style={{ color: '#1a6b2e', marginTop: '2px' }}>
                     Rs. {fmtAmt(totalCredit)}
                   </div>
                 </td>
@@ -479,10 +532,10 @@ export default function MallAcStatement({
                     verticalAlign: 'middle',
                   }}
                 >
-                  <div style={{ fontSize: '8px', color: '#555', fontWeight: 600 }}>
+                  <div className="font-urdu font-bold text-[18px] print:text-[12pt] text-gray-700">
                     کل خریداری و خرچہ (Purchases & Exp / Dr)
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#c0392b', marginTop: '2px' }}>
+                  <div className="num-total text-[24px] print:text-[15pt]" style={{ color: '#c0392b', marginTop: '2px' }}>
                     Rs. {fmtAmt(totalDebit)}
                   </div>
                 </td>
@@ -498,13 +551,12 @@ export default function MallAcStatement({
                     verticalAlign: 'middle',
                   }}
                 >
-                  <div style={{ fontSize: '8px', color: '#555', fontWeight: 600 }}>
+                  <div className="font-urdu font-bold text-[18px] print:text-[12pt] text-gray-700">
                     خالص فرق (Net Movement)
                   </div>
                   <div
+                    className="num-total text-[24px] print:text-[15pt]"
                     style={{
-                      fontSize: '11px',
-                      fontWeight: 800,
                       color: netMovement >= 0 ? '#1a6b2e' : '#c0392b',
                       marginTop: '2px',
                     }}
@@ -524,13 +576,12 @@ export default function MallAcStatement({
                     backgroundColor: '#f1f8e9',
                   }}
                 >
-                  <div style={{ fontSize: '8px', color: '#333', fontWeight: 700 }}>
-                    آخری بقایا (Closing Balance)
+                  <div className="font-urdu font-bold text-[18px] print:text-[12pt] text-gray-900">
+                    کل بیلنس (Closing Balance)
                   </div>
                   <div
+                    className="num-total text-[24px] print:text-[15pt]"
                     style={{
-                      fontSize: '11.5px',
-                      fontWeight: 900,
                       color: closingBalance >= 0 ? '#1a6b2e' : '#c0392b',
                       marginTop: '2px',
                     }}
@@ -546,17 +597,17 @@ export default function MallAcStatement({
         {/* 2. Metadata Audit Line */}
         <div
           style={{
-            fontSize: '8px',
+            fontSize: '10pt',
             color: '#666',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '2px 4px',
+            padding: '4px 6px',
             marginBottom: '20px',
             borderBottom: '1px dashed #ccc',
           }}
         >
-          <span>Printed on: {fmtDateTime()} | Printed by: {printedBy}</span>
+          <span>Printed on: {fmtDateTime()} | Printed by: {effectivePrintedBy}</span>
           <span>System: Yaseen Merchants Offline Accounting</span>
           <span>Computer Generated Document</span>
         </div>
@@ -586,14 +637,14 @@ export default function MallAcStatement({
                   style={{
                     borderTop: '1px solid #333',
                     paddingTop: '4px',
-                    fontSize: '9px',
+                    fontSize: '11pt',
                     fontWeight: 700,
                     color: '#222',
                   }}
                 >
                   تیار کنندہ / Prepared By
                 </div>
-                <div style={{ fontSize: '7.5px', color: '#666' }}>(Accountant / Data Operator)</div>
+                <div style={{ fontSize: '10pt', color: '#666', marginTop: '2px' }}>(Accountant / Data Operator)</div>
               </td>
 
               {/* Spacer */}
@@ -613,14 +664,14 @@ export default function MallAcStatement({
                   style={{
                     borderTop: '1px solid #333',
                     paddingTop: '4px',
-                    fontSize: '9px',
+                    fontSize: '11pt',
                     fontWeight: 700,
                     color: '#222',
                   }}
                 >
                   تصدیق کنندہ / Authorized Signature
                 </div>
-                <div style={{ fontSize: '7.5px', color: '#666' }}>(Proprietor / {legalName})</div>
+                <div style={{ fontSize: '10pt', color: '#666', marginTop: '2px' }}>(Proprietor / {legalName})</div>
               </td>
             </tr>
           </tbody>

@@ -178,15 +178,15 @@ export default function IssueForm({
       {/* Repeatable Line Items */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold text-[#1E3A5F] uppercase tracking-wider">
+          <h4 className="text-sm font-bold text-[#1E3A5F] uppercase tracking-wider">
             Issue Line Items ({lines.length})
           </h4>
-          <span className="text-[11px] text-gray-500 font-medium">
+          <span className="text-xs text-gray-500 font-medium">
             Add multiple qualities or items under this single Issue Slip
           </span>
         </div>
 
-        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto pe-1">
           {computedLines.map((line, idx) => (
             <div
               key={line.id || idx}

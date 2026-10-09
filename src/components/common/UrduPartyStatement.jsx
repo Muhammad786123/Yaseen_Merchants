@@ -38,13 +38,13 @@ export default function UrduPartyStatement({
 
   /* ── Plain numeric formatters (Monochrome black text) ─────────────────────*/
   const formatRs = (num) => {
-    if (num === null || num === undefined || isNaN(num)) return '0.00 Rs';
-    return (
-      Math.abs(num).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + ' Rs'
-    );
+    if (num === null || num === undefined || isNaN(num) || Number(num) === 0) return '0 Rs';
+    const n = Number(Math.abs(num));
+    const hasDecimals = n % 1 !== 0;
+    return `${n.toLocaleString('en-US', {
+      minimumFractionDigits: hasDecimals ? 2 : 0,
+      maximumFractionDigits: 2,
+    })} Rs`;
   };
 
   const fmtDate = (d) => {
@@ -72,16 +72,22 @@ export default function UrduPartyStatement({
     totalDebit += dr;
     totalCredit += cr;
 
-    let transType = 'In Payment';
+    let transType = 'وصولی (In Payment)';
     const t = (r.type || '').toLowerCase();
     if (dr > 0 && cr === 0) {
-      transType = 'Out Payment';
+      transType = 'ادائیگی (Out Payment)';
     } else if (cr > 0 && dr === 0) {
-      transType = 'In Payment';
-    } else if (t.includes('purchase') || t.includes('cash given') || t.includes('material issue')) {
-      transType = 'Out Payment';
-    } else if (t.includes('sale') || t.includes('receipt') || t.includes('cash received')) {
-      transType = 'In Payment';
+      transType = 'وصولی (In Payment)';
+    } else if (t.includes('purchase')) {
+      transType = 'خریداری (Purchase)';
+    } else if (t.includes('sale')) {
+      transType = 'فروخت (Sale)';
+    } else if (t.includes('cash given') || t.includes('material issue') || t.includes('payment')) {
+      transType = 'ادائیگی (Payment)';
+    } else if (t.includes('cash received') || t.includes('receipt')) {
+      transType = 'وصولی (Receipt)';
+    } else if (t.includes('journal')) {
+      transType = 'جرنل (Journal)';
     }
 
     let note = r.detail || '';
@@ -96,31 +102,31 @@ export default function UrduPartyStatement({
       .trim();
 
     const bal = Number(r.balance || 0);
-    const status = bal > 0 ? '(کریڈٹ)' : bal < 0 ? '(ڈیبٹ)' : '';
+    const status = bal > 0 ? 'Cr' : bal < 0 ? 'Dr' : '';
 
     return { ...r, transType, note, dr, cr, bal, status };
   });
 
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].bal : openingBalance;
-  const finalStatus = finalBalance > 0 ? '(کریڈٹ)' : finalBalance < 0 ? '(ڈیبٹ)' : '';
+  const finalStatus = finalBalance > 0 ? 'Cr' : finalBalance < 0 ? 'Dr' : '';
 
   /* ── Column widths in exact Reference LTR order:
    *   Type → Bill No. → Status → Debit → Credit → Balance
    * ────────────────────────────────────────────────────────────────────────*/
   const colWidths = {
-    type: '18%',     // Type (In Payment / Out Payment)
+    type: '18%',     // Type
     billNo: '14%',   // Bill / Voucher No
-    status: '11%',   // Status (کریڈٹ / ڈیبٹ)
+    status: '10%',   // Status
     debit: '18%',    // Debit
     credit: '18%',   // Credit
-    balance: '21%',  // Balance
+    balance: '22%',  // Balance
   };
 
   const cell = (width, extra = {}) => ({
     flex: `0 0 ${width}`,
     width: width,
     maxWidth: width,
-    padding: '0 4px',
+    padding: '4px 6px',
     overflow: 'visible',
     whiteSpace: 'nowrap',
     boxSizing: 'border-box',
@@ -128,27 +134,25 @@ export default function UrduPartyStatement({
     ...extra,
   });
 
-  // Row style in LTR reading flow
+  // Row style in RTL reading flow
   const rowFlexStyle = {
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    direction: 'ltr',
-    fontSize: '9px',
+    direction: 'rtl',
+    fontSize: '11pt',
     color: '#000',
-    lineHeight: 1.3,
+    lineHeight: 1.4,
     gap: '8px',
     boxSizing: 'border-box',
   };
 
   const colHeaderStyle = {
     ...rowFlexStyle,
-    fontSize: '8.5px',
-    fontWeight: 700,
     borderBottom: '1px solid #000',
     borderTop: '1px solid #000',
-    padding: '3px 0',
+    padding: '6px 0',
     marginBottom: '2px',
     color: '#000',
     backgroundColor: '#f5f5f5',
@@ -156,12 +160,12 @@ export default function UrduPartyStatement({
 
   const ColumnHeaders = () => (
     <div className="statement-col-header" style={colHeaderStyle}>
-      <div className="statement-col-type" style={{ ...cell(colWidths.type, { textAlign: 'left' }), order: 1 }}>لین دین کی قسم</div>
-      <div className="statement-col-billno" style={{ ...cell(colWidths.billNo, { textAlign: 'left' }), order: 2 }}>بل نمبر</div>
-      <div className="statement-col-status" style={{ ...cell(colWidths.status, { textAlign: 'center' }), order: 3 }}>حالت</div>
-      <div className="statement-col-debit" style={{ ...cell(colWidths.debit, { textAlign: 'right' }), order: 4 }}>ڈیبٹ</div>
-      <div className="statement-col-credit" style={{ ...cell(colWidths.credit, { textAlign: 'right' }), order: 5 }}>کریڈٹ</div>
-      <div className="statement-col-balance" style={{ ...cell(colWidths.balance, { textAlign: 'right' }), order: 6 }}>چلتا بیلنس</div>
+      <div className="statement-col-type font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.type, { textAlign: 'start' }), order: 1 }}>قسم</div>
+      <div className="statement-col-billno font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.billNo, { textAlign: 'start' }), order: 2 }}>واؤچر نمبر</div>
+      <div className="statement-col-status font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.status, { textAlign: 'center' }), order: 3 }}>حالت</div>
+      <div className="statement-col-debit font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.debit, { textAlign: 'start' }), order: 4 }}>بنام</div>
+      <div className="statement-col-credit font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.credit, { textAlign: 'start' }), order: 5 }}>جمع</div>
+      <div className="statement-col-balance font-urdu font-bold text-[22px] print:text-[14pt]" style={{ ...cell(colWidths.balance, { textAlign: 'start' }), order: 6 }}>بیلنس</div>
     </div>
   );
 
@@ -180,8 +184,8 @@ export default function UrduPartyStatement({
     segments.push({ type: 'row', row: rows[i], key: `row-${i}` });
   }
 
-  /* ── Plain, dense uniform font family ────────────────────────────────────*/
-  const plainFont = "'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+  /* ── Nastaleeq font family with fallbacks ────────────────────────────*/
+  const plainFont = "var(--font-urdu), 'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
 
   return (
     <div
@@ -203,21 +207,21 @@ export default function UrduPartyStatement({
         className="print-area-inner"
         style={{
           paddingBottom: '4px',
-          marginBottom: '4px',
+          marginBottom: '6px',
           width: '100%',
           boxSizing: 'border-box',
           color: '#000',
         }}
       >
-        {/* Business owner name — uniform small plain text */}
+        {/* Business owner name (Company Name: 22pt bold) */}
         <div
-          className="statement-header-line"
+          className="statement-header-line print-company-name"
           style={{
             display: 'flex',
             justifyContent: 'flex-end',
-            fontSize: '10px',
-            fontWeight: 600,
-            marginBottom: '1px',
+            fontSize: '22pt',
+            fontWeight: 700,
+            marginBottom: '2px',
             color: '#000',
             width: '100%',
           }}
@@ -227,12 +231,12 @@ export default function UrduPartyStatement({
 
         {/* Email */}
         <div
-          className="statement-header-line"
+          className="statement-header-line print-note-text"
           style={{
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center',
-            fontSize: '9px',
+            fontSize: '10pt',
             color: '#000',
             marginBottom: '4px',
             gap: '4px',
@@ -246,96 +250,143 @@ export default function UrduPartyStatement({
         </div>
 
         {/* Divider line under owner & email */}
-        <div style={{ borderBottom: '1px solid #000', width: '100%', marginBottom: '4px' }} />
+        <div style={{ borderBottom: '1px solid #000', width: '100%', marginBottom: '6px' }} />
 
-        {/* Plain centered title inside thin border box matching reference */}
-        <div style={{ display: 'block', textAlign: 'center', margin: '3px 0', width: '100%' }}>
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 700,
-              color: '#000',
-              border: '1px solid #000',
-              padding: '1px 16px',
-              display: 'inline-block',
-              letterSpacing: '0.02em',
-            }}
+        {/* Plain centered title */}
+        <div style={{ display: 'block', textAlign: 'center', margin: '4px 0', width: '100%' }}>
+          <div
+            className="font-urdu font-bold text-[24px] print:text-[18pt] text-black leading-relaxed"
           >
-            پارٹی اسٹیٹمنٹ
-          </span>
+            اسٹیٹمنٹ آف اکاؤنٹ
+          </div>
+          <div
+            className="text-[14px] print:text-[10pt] font-bold text-gray-700 tracking-wider"
+          >
+            STATEMENT OF ACCOUNT
+          </div>
         </div>
 
-        {/* Meta rows — flat, dense, plain weight */}
+        {/* ── Centered Bordered Party / Account Name Box ── */}
+        <div
+          style={{
+            border: '2px solid #000',
+            padding: '10px 16px',
+            textAlign: 'center',
+            backgroundColor: '#fff',
+            margin: '8px 0 12px 0',
+          }}
+        >
+          <div
+            className="font-urdu font-bold text-[40px] print:text-[24pt] text-black leading-tight"
+            dir="rtl"
+          >
+            {party.urduName || party.nameUrdu || party.name}
+          </div>
+          {(party.englishName || party.name) && (
+            <div
+              className="font-bold text-[22px] print:text-[14pt] text-black mt-1"
+              dir="ltr"
+            >
+              {party.englishName || party.name}
+            </div>
+          )}
+          <div
+            className="text-[18px] print:text-[12pt] font-semibold text-gray-800 mt-1 flex items-center justify-center gap-6"
+            dir="rtl"
+          >
+            <span>کوڈ: <strong className="num text-[18px] print:text-[12pt]">{party.code || party.id || '—'}</strong></span>
+            {party.phone && (
+              <span>فون: <strong className="num text-[18px] print:text-[12pt]">{party.phone}</strong></span>
+            )}
+          </div>
+        </div>
+
         {[
-          { label: 'پارٹی کا نام:', value: party.name, ltr: false },
-          { label: 'رابطہ نمبر:', value: party.phone || '—', ltr: true },
           { label: 'پتہ:', value: party.city || '—', ltr: false },
           { label: 'مدت:', value: periodText, ltr: false },
         ].map(({ label, value, ltr }) => (
           <div
             key={label}
-            className="statement-header-line"
+            className="statement-header-line print-note-text"
             style={{
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'flex-start',
               alignItems: 'center',
-              fontSize: '9px',
-              marginBottom: '1px',
-              gap: '4px',
+              fontSize: '18px',
+              marginBottom: '2px',
+              gap: '6px',
               color: '#000',
               width: '100%',
+              direction: 'rtl',
             }}
           >
+            <span className="font-urdu font-bold text-[18px] print:text-[12pt]">{label}</span>
             {ltr ? (
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
+              <span dir="ltr" className="num text-[18px] print:text-[12pt]">
                 {value}
               </span>
             ) : (
-              <span>{value}</span>
+              <span className="font-urdu text-[18px] print:text-[12pt]">{value}</span>
             )}
-            <span style={{ fontWeight: 600 }}>{label}</span>
           </div>
         ))}
+
+        {/* Opening Balance Line */}
+        <div
+          style={{
+            fontSize: '18px',
+            margin: '6px 0',
+            fontWeight: 700,
+            textAlign: 'right',
+            direction: 'rtl',
+          }}
+        >
+          <span className="font-urdu font-bold text-[22px] print:text-[14pt]">سابقہ بیلنس (Opening Balance): </span>
+          <span className="num font-bold text-[22px] print:text-[14pt]">
+            {openingBalance !== 0
+              ? `${formatRs(openingBalance)} ${openingBalance > 0 ? 'Cr' : 'Dr'}`
+              : '0 Rs'}
+          </span>
+        </div>
       </div>
 
       {/* ── Fixed Width Table for Ledger Transactions ─────────────────────────*/}
       <table
-        className="urdu-statement-table"
+        className="urdu-statement-table statement-table classic-ledger-table"
+        dir="rtl"
         style={{
           tableLayout: 'fixed',
           width: '100%',
           borderCollapse: 'collapse',
-          direction: 'ltr',
-          fontSize: '9px',
+          direction: 'rtl',
           color: '#000',
           boxSizing: 'border-box',
+          border: '1px solid #000',
         }}
       >
         <colgroup>
-          <col style={{ width: '18%' }} /> {/* Type */}
-          <col style={{ width: '14%' }} /> {/* Bill No */}
-          <col style={{ width: '12%' }} /> {/* Status */}
-          <col style={{ width: '18%' }} /> {/* Debit */}
-          <col style={{ width: '18%' }} /> {/* Credit */}
-          <col style={{ width: '20%' }} /> {/* Balance */}
+          <col style={{ width: '18%' }} /> {/* قسم */}
+          <col style={{ width: '14%' }} /> {/* واؤچر نمبر */}
+          <col style={{ width: '10%' }} /> {/* حالت */}
+          <col style={{ width: '18%' }} /> {/* بنام */}
+          <col style={{ width: '18%' }} /> {/* جمع */}
+          <col style={{ width: '22%' }} /> {/* بیلنس */}
         </colgroup>
         <thead>
           <tr
             style={{
-              fontSize: '8.5px',
-              fontWeight: 700,
               borderBottom: '1px solid #000',
               borderTop: '1px solid #000',
               backgroundColor: '#f5f5f5',
               color: '#000',
             }}
           >
-            <th style={{ padding: '3px 4px', textAlign: 'left', fontWeight: 700 }}>لین دین کی قسم</th>
-            <th style={{ padding: '3px 4px', textAlign: 'left', fontWeight: 700 }}>بل نمبر</th>
-            <th style={{ padding: '3px 4px', textAlign: 'center', fontWeight: 700 }}>حالت</th>
-            <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>ڈیبٹ</th>
-            <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>کریڈٹ</th>
-            <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>چلتا بیلنس</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>قسم</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>واؤچر نمبر</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'center' }}>حالت</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>بنام</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>جمع</th>
+            <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>بیلنس</th>
           </tr>
         </thead>
         <tbody>
@@ -345,20 +396,18 @@ export default function UrduPartyStatement({
                 <tr
                   key={seg.key}
                   style={{
-                    fontSize: '8.5px',
-                    fontWeight: 700,
                     borderBottom: '1px solid #000',
                     borderTop: '1px solid #000',
                     backgroundColor: '#f5f5f5',
                     color: '#000',
                   }}
                 >
-                  <th style={{ padding: '3px 4px', textAlign: 'left', fontWeight: 700 }}>لین دین کی قسم</th>
-                  <th style={{ padding: '3px 4px', textAlign: 'left', fontWeight: 700 }}>بل نمبر</th>
-                  <th style={{ padding: '3px 4px', textAlign: 'center', fontWeight: 700 }}>حالت</th>
-                  <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>ڈیبٹ</th>
-                  <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>کریڈٹ</th>
-                  <th style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>چلتا بیلنس</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>قسم</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>واؤچر نمبر</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'center' }}>حالت</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>بنام</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>جمع</th>
+                  <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>بیلنس</th>
                 </tr>
               );
             }
@@ -371,18 +420,17 @@ export default function UrduPartyStatement({
                     borderTop: '1px solid #000',
                     borderBottom: '1px solid #000',
                     fontWeight: 700,
-                    fontSize: '8.5px',
                     pageBreakAfter: 'always',
                     breakAfter: 'page',
                     color: '#000',
                   }}
                 >
-                  <td colSpan={6} style={{ padding: '2px 4px', textAlign: 'right', direction: 'rtl' }}>
-                    آگے منتقل:{' '}
-                    <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', margin: '0 4px' }}>
+                  <td colSpan={6} style={{ padding: '6px 10px', textAlign: 'right', direction: 'rtl' }}>
+                    <span className="font-urdu font-bold text-[20px] print:text-[13pt]">آگے منتقل: </span>
+                    <span className="num-total" style={{ margin: '0 6px' }}>
                       {formatRs(seg.balance)}
                     </span>{' '}
-                    {seg.status}
+                    <span className="font-urdu font-bold text-[18px]">{seg.status}</span>
                   </td>
                 </tr>
               );
@@ -397,72 +445,60 @@ export default function UrduPartyStatement({
                   style={{
                     pageBreakInside: 'avoid',
                     breakInside: 'avoid',
+                    minHeight: '40px',
                   }}
                 >
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'left', fontWeight: 600 }}>
+                  <td className="font-urdu font-bold text-[20px] print:text-[13pt]" style={{ padding: '6px 10px', textAlign: 'start' }}>
                     {row.transType}
                   </td>
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'left' }}>
-                    <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontSize: '8.5px' }}>
-                      {row.billNo || '—'}
-                    </span>
+                  <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
+                    {row.billNo || '—'}
                   </td>
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'center', fontSize: '8.5px' }}>
+                  <td className="font-urdu font-bold text-[18px] print:text-[12pt] text-center" style={{ padding: '6px 10px' }}>
                     {row.status || '—'}
                   </td>
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'right' }}>
-                    <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                      {row.dr > 0 ? formatRs(row.dr) : ''}
-                    </span>
+                  <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
+                    {row.dr > 0 ? formatRs(row.dr) : ''}
                   </td>
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'right' }}>
-                    <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                      {row.cr > 0 ? formatRs(row.cr) : ''}
-                    </span>
+                  <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
+                    {row.cr > 0 ? formatRs(row.cr) : ''}
                   </td>
-                  <td style={{ padding: '2px 4px 1px 4px', textAlign: 'right', fontWeight: 600 }}>
-                    <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                      {formatRs(Math.abs(row.bal))}
-                    </span>{' '}
-                    <span style={{ fontWeight: 400, fontSize: '8px' }}>{row.status}</span>
+                  <td className="num-total text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
+                    {formatRs(Math.abs(row.bal))}
+                    {row.status ? ` ${row.status}` : ''}
                   </td>
                 </tr>
 
                 {/* Sub-row for detail note & date */}
                 <tr
                   style={{
-                    borderBottom: '1px dotted #888',
+                    borderBottom: '1px solid #000',
                     pageBreakInside: 'avoid',
                     breakInside: 'avoid',
                   }}
                 >
-                  <td colSpan={6} style={{ padding: '0 4px 2px 4px' }}>
+                  <td colSpan={6} style={{ padding: '4px 10px 8px 10px' }}>
                     {row.note && (
                       <div
-                        className="statement-detail-line"
+                        className="statement-detail-line font-urdu text-[20px] print:text-[13pt] leading-loose text-black"
                         style={{
                           direction: 'rtl',
-                          textAlign: 'right',
-                          fontSize: '8.5px',
-                          color: '#000',
-                          lineHeight: 1.25,
+                          textAlign: 'start',
                         }}
                       >
-                        <span style={{ fontWeight: 600 }}>تفصیل: </span>
+                        <span className="font-bold">تفصیل: </span>
                         <span>{row.note}</span>
                       </div>
                     )}
                     <div
-                      className="statement-date-line"
+                      className="statement-date-line flex items-center gap-2 mt-1"
                       style={{
-                        direction: 'ltr',
-                        textAlign: 'left',
-                        fontSize: '8.5px',
-                        color: '#000',
-                        lineHeight: 1.25,
+                        direction: 'rtl',
+                        textAlign: 'start',
                       }}
                     >
-                      <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
+                      <span className="font-urdu font-bold text-[18px] print:text-[12pt]">تاریخ: </span>
+                      <span className="num text-[18px] print:text-[12pt]" style={{ direction: 'ltr' }}>
                         {fmtDate(row.date)}
                       </span>
                     </div>
@@ -474,36 +510,29 @@ export default function UrduPartyStatement({
         </tbody>
         <tfoot>
           <tr
-            className="statement-total-row"
+            className="statement-total-row bg-white font-bold"
             style={{
-              fontSize: '9.5px',
-              fontWeight: 700,
-              borderTop: '1px solid #000',
-              borderBottom: '1px solid #000',
+              borderTop: '2px solid #000',
+              borderBottom: '2px solid #000',
               color: '#000',
             }}
           >
-            <td style={{ padding: '4px', textAlign: 'left', fontWeight: 700 }}>کل</td>
-            <td style={{ padding: '4px' }}></td>
-            <td style={{ padding: '4px' }}></td>
-            <td style={{ padding: '4px', textAlign: 'right', fontWeight: 700 }}>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                {formatRs(totalDebit)}
-              </span>
+            <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'start' }}>
+              <span className="font-urdu font-bold text-[22px] print:text-[14pt]">میزان کل (ٹوٹل)</span>
             </td>
-            <td style={{ padding: '4px', textAlign: 'right', fontWeight: 700 }}>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                {formatRs(totalCredit)}
-              </span>
+            <td className="num-total text-start" style={{ padding: '8px 10px', direction: 'ltr', color: '#b71c1c' }}>
+              {formatRs(totalDebit)}
             </td>
-            <td style={{ padding: '4px', textAlign: 'right', fontWeight: 700 }}>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace' }}>
-                {formatRs(Math.abs(finalBalance))}
-              </span>{' '}
-              <span style={{ fontWeight: 400, fontSize: '8px' }}>{finalStatus}</span>
+            <td className="num-total text-start" style={{ padding: '8px 10px', direction: 'ltr' }}>
+              {formatRs(totalCredit)}
+            </td>
+            <td className="num-total text-start" style={{ padding: '8px 10px', direction: 'ltr' }}>
+              {formatRs(Math.abs(finalBalance))}
+              {finalStatus ? ` ${finalStatus}` : ''}
             </td>
           </tr>
         </tfoot>
+      </table>
       </table>
 
       {/* ── Closing Footer Block (Monochrome Plain Aesthetic) ───────────────*/}

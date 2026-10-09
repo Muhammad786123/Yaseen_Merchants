@@ -32,7 +32,7 @@ export const capitalService = {
   },
 
   async addEntry(entryData) {
-    const id = entryData.id || 'cap_' + Date.now();
+    const id = entryData.id || 'cap_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const newEntry = {
       id,
       date: entryData.date || new Date().toISOString().split('T')[0],

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import PrintHeader from '../../components/common/PrintHeader.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { safePrint } from '../../utils/printUtils.js';
 import { fmt, fmtNum, formatDate, getTodayStr } from '../../utils/formatters.js';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
 
@@ -483,7 +484,7 @@ export default function PartyQualityAnalysis({
   };
 
   const handlePrint = () => {
-    window.print();
+    safePrint();
   };
 
   // Timestamp for print footer
@@ -619,7 +620,7 @@ export default function PartyQualityAnalysis({
           )}
 
           {/* Active Date Range Indicator */}
-          <div className="ml-auto text-gray-600 font-mono text-[11px] bg-white border border-gray-300 px-2 py-1">
+          <div className="ms-auto text-gray-700 font-mono text-sm bg-white border border-gray-300 px-3 py-1 font-semibold">
             Period: {dateFrom ? formatDate(dateFrom) : 'Start'} → {dateTo ? formatDate(dateTo) : 'Present'}
           </div>
         </div>
@@ -652,9 +653,9 @@ export default function PartyQualityAnalysis({
         />
 
         {/* Screen Header Bar */}
-        <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
+        <div className="p-3.5 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
           <div className="flex items-center gap-2">
-            <span className="font-bold uppercase tracking-wider text-black">
+            <span className="font-bold text-base uppercase tracking-wider text-black">
               {mode === 'party_quality'
                 ? selectedPartyId
                   ? `${selectedPartyObj?.name || 'Selected Party'} — Quality Breakdown`
@@ -664,7 +665,7 @@ export default function PartyQualityAnalysis({
                 : `All Qualities — ${partyLabel} Breakdown`}
             </span>
           </div>
-          <span className="font-mono text-gray-600">
+          <span className="font-mono text-gray-700 text-sm font-semibold">
             {mode === 'party_quality'
               ? `${partyQualityGroups.length} parties grouped`
               : `${qualityPartyGroups.length} parties ranked`}
@@ -677,27 +678,27 @@ export default function PartyQualityAnalysis({
             /* =========================================================
                VIEW 1: PARTY → QUALITY TABLE
                ========================================================= */
-            <table className="w-full text-xs text-left border-collapse border border-black">
+            <table className="w-full text-base text-left border-collapse border border-black">
               <thead className="bg-[#DFDFDF] border-b border-black">
                 <tr>
-                  <th className="border border-black px-2 py-2 w-10 text-center">#</th>
+                  <th className="border border-black px-3 py-2.5 w-12 text-center text-base font-bold">#</th>
                   {!selectedPartyId && (
-                    <th className="border border-black px-2 py-2">{partyLabel}</th>
+                    <th className="border border-black px-3.5 py-2.5 text-base font-bold">{partyLabel}</th>
                   )}
-                  <th className="border border-black px-2 py-2">Item Product</th>
-                  <th className="border border-black px-2 py-2">Quality Grade</th>
-                  <th className="border border-black px-2 py-2 text-right w-28">Total Qty (KG)</th>
-                  <th className="border border-black px-2 py-2 text-right w-28">Avg Rate (Rs)</th>
-                  <th className="border border-black px-2 py-2 text-right w-32">Total Amount (PKR)</th>
-                  <th className="border border-black px-2 py-2 text-center w-24">Invoices</th>
+                  <th className="border border-black px-3.5 py-2.5 text-base font-bold">Item Product</th>
+                  <th className="border border-black px-3.5 py-2.5 text-base font-bold">Quality Grade</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-32 text-base font-bold">Total Qty (KG)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-32 text-base font-bold">Avg Rate (Rs)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-36 text-base font-bold">Total Amount (PKR)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-center w-28 text-base font-bold">Invoices</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="tabular-nums">
                 {partyQualityGroups.length === 0 ? (
                   <tr>
                     <td
                       colSpan={selectedPartyId ? 7 : 8}
-                      className="text-center py-8 text-gray-500 font-bold border border-black text-xs"
+                      className="text-center py-8 text-gray-500 font-bold border border-black text-base"
                     >
                       No records for this selection
                     </td>
@@ -713,13 +714,13 @@ export default function PartyQualityAnalysis({
                           <tr className="bg-[#F2F0EC] border-b border-black font-bold">
                             <td
                               colSpan={8}
-                              className="border border-black px-3 py-1.5 text-xs text-[#1E3A5F] uppercase tracking-wide"
+                              className="border border-black px-3.5 py-2.5 text-base text-[#1E3A5F] uppercase tracking-wide"
                             >
                               <div className="flex items-center justify-between">
-                                <span>
+                                <span className="font-bold text-base">
                                   {partyLabel}: {pg.partyName}
                                 </span>
-                                <span className="font-mono text-gray-700 font-normal">
+                                <span className="font-mono text-gray-800 text-sm font-semibold">
                                   {pg.itemRows.length} item{pg.itemRows.length > 1 ? 's' : ''} • Subtotal: {fmt(pg.totalAmount)}
                                 </span>
                               </div>
@@ -744,41 +745,41 @@ export default function PartyQualityAnalysis({
                                     : 'bg-[#FAF9F7] hover:bg-blue-50/40'
                                 }`}
                               >
-                                <td className="border border-black px-2 py-1.5 text-center text-gray-500 font-mono">
+                                <td className="border border-black px-2.5 py-2.5 text-center text-gray-600 font-mono text-base">
                                   <div className="flex items-center justify-center gap-1">
                                     {isExpanded ? (
-                                      <ChevronDown className="w-3.5 h-3.5 text-amber-700" />
+                                      <ChevronDown className="w-4 h-4 text-amber-700" />
                                     ) : (
-                                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                                      <ChevronRight className="w-4 h-4 text-gray-500" />
                                     )}
                                     <span>{itIdx + 1}</span>
                                   </div>
                                 </td>
                                 {!selectedPartyId && (
-                                  <td className="border border-black px-2 py-1.5 text-gray-900 font-medium">
+                                  <td className="border border-black px-3.5 py-2.5 text-gray-900 font-medium text-base">
                                     {pg.partyName}
                                   </td>
                                 )}
-                                <td className="border border-black px-2 py-1.5 font-bold text-gray-900">
+                                <td className="border border-black px-3.5 py-2.5 font-bold text-gray-900 text-base">
                                   {it.itemName}
                                 </td>
-                                <td className="border border-black px-2 py-1.5">
-                                  <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-xs font-mono font-bold text-[#1E3A5F]">
+                                <td className="border border-black px-3.5 py-2.5">
+                                  <span className="bg-gray-100 border border-black px-2 py-1 text-[22px] font-mono font-bold text-[#1E3A5F] inline-block leading-none">
                                     {it.quality}
                                   </span>
                                 </td>
-                                <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-gray-900">
+                                <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-gray-900 text-base tabular-nums">
                                   {it.totalQty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                                  <span className="text-gray-500 font-normal">kg</span>
+                                  <span className="text-gray-600 font-normal text-sm">kg</span>
                                 </td>
-                                <td className="border border-black px-2 py-1.5 text-right font-mono text-gray-800">
+                                <td className="border border-black px-3.5 py-2.5 text-right font-mono text-gray-800 text-base tabular-nums">
                                   {fmtNum(it.avgRate)}
                                 </td>
-                                <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-[#1E3A5F]">
+                                <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-[#1E3A5F] text-base tabular-nums">
                                   {fmt(it.totalAmount)}
                                 </td>
-                                <td className="border border-black px-2 py-1.5 text-center font-mono">
-                                  <span className="bg-blue-50 border border-blue-400 px-1.5 py-0.5 rounded text-[11px] font-bold text-[#1E3A5F]">
+                                <td className="border border-black px-3.5 py-2.5 text-center font-mono">
+                                  <span className="bg-blue-50 border border-blue-400 px-2 py-0.5 rounded text-xs font-bold text-[#1E3A5F]">
                                     {it.invoicesCount} {it.invoicesCount === 1 ? 'inv' : 'invs'}
                                   </span>
                                 </td>
@@ -789,54 +790,54 @@ export default function PartyQualityAnalysis({
                                 <tr className="bg-[#FFFDF7]">
                                   <td
                                     colSpan={selectedPartyId ? 7 : 8}
-                                    className="border border-black p-3 bg-amber-50/30"
+                                    className="border border-black p-3.5 bg-amber-50/30"
                                   >
-                                    <div className="space-y-1.5">
-                                      <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 border-b border-gray-300 pb-1">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between text-sm font-bold text-gray-800 border-b border-gray-300 pb-1.5">
                                         <span>
                                           Underlying Invoices ({it.itemName} — {it.quality})
                                         </span>
-                                        <span className="font-mono text-gray-500">
+                                        <span className="font-mono text-gray-600 text-sm">
                                           {it.lines.length} invoice line{it.lines.length > 1 ? 's' : ''}
                                         </span>
                                       </div>
 
-                                      <table className="w-full text-xs border-collapse border border-gray-400 bg-white">
-                                        <thead className="bg-[#EBE9E4] text-gray-700">
+                                      <table className="w-full text-sm border-collapse border border-gray-400 bg-white">
+                                        <thead className="bg-[#EBE9E4] text-gray-800">
                                           <tr>
-                                            <th className="border border-gray-400 px-2 py-1 w-24">Date</th>
-                                            <th className="border border-gray-400 px-2 py-1 w-28">Invoice #</th>
-                                            <th className="border border-gray-400 px-2 py-1 text-center w-24">Unit / Nugs</th>
-                                            <th className="border border-gray-400 px-2 py-1 text-right w-24">Weight (KG)</th>
-                                            <th className="border border-gray-400 px-2 py-1 text-right w-24">Rate (Rs)</th>
-                                            <th className="border border-gray-400 px-2 py-1 text-right w-28">Amount (PKR)</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 w-28 text-sm font-bold">Date</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 w-32 text-sm font-bold">Invoice #</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 text-center w-28 text-sm font-bold">Unit / Nugs</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 text-right w-28 text-sm font-bold">Weight (KG)</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 text-right w-28 text-sm font-bold">Rate (Rs)</th>
+                                            <th className="border border-gray-400 px-3 py-1.5 text-right w-32 text-sm font-bold">Amount (PKR)</th>
                                           </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="tabular-nums">
                                           {it.lines.map((ln, lnIdx) => (
                                             <tr key={lnIdx} className="hover:bg-yellow-50/50">
-                                              <td className="border border-gray-400 px-2 py-1 font-mono">
+                                              <td className="border border-gray-400 px-3 py-1.5 font-mono text-sm">
                                                 {formatDate(ln.date)}
                                               </td>
-                                              <td className="border border-gray-400 px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                                              <td className="border border-gray-400 px-3 py-1.5 font-mono font-bold text-[#1E3A5F] text-sm">
                                                 {ln.invoiceNo}
                                               </td>
-                                              <td className="border border-gray-400 px-2 py-1 text-center font-mono">
+                                              <td className="border border-gray-400 px-3 py-1.5 text-center font-mono text-sm">
                                                 {ln.unitType === 'Nug' || ln.nugs > 0 ? (
                                                   <span className="font-bold text-[#A52A2A]">
                                                     {ln.nugs || 0} Nug
                                                   </span>
                                                 ) : (
-                                                  <span className="text-gray-500">KG</span>
+                                                  <span className="text-gray-600">KG</span>
                                                 )}
                                               </td>
-                                              <td className="border border-gray-400 px-2 py-1 text-right font-mono font-bold">
+                                              <td className="border border-gray-400 px-3 py-1.5 text-right font-mono font-bold text-sm">
                                                 {ln.qty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
                                               </td>
-                                              <td className="border border-gray-400 px-2 py-1 text-right font-mono">
+                                              <td className="border border-gray-400 px-3 py-1.5 text-right font-mono text-sm">
                                                 {fmtNum(ln.rate)}
                                               </td>
-                                              <td className="border border-gray-400 px-2 py-1 text-right font-mono font-bold text-gray-900">
+                                              <td className="border border-gray-400 px-3 py-1.5 text-right font-mono font-bold text-gray-900 text-sm">
                                                 {fmt(ln.amount)}
                                               </td>
                                             </tr>
@@ -856,20 +857,20 @@ export default function PartyQualityAnalysis({
                           <tr className="bg-[#DFDFDF] font-bold border-b-2 border-black">
                             <td
                               colSpan={4}
-                              className="border border-black px-3 py-1.5 text-right uppercase text-gray-800"
+                              className="border border-black px-3.5 py-2 text-right uppercase text-gray-900 text-base font-bold"
                             >
                               Subtotal ({pg.partyName}):
                             </td>
-                            <td className="border border-black px-2 py-1.5 text-right font-mono font-bold">
+                            <td className="border border-black px-3.5 py-2 text-right font-mono font-bold text-base tabular-nums">
                               {pg.totalQty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
                             </td>
-                            <td className="border border-black px-2 py-1.5 text-right font-mono text-gray-800">
+                            <td className="border border-black px-3.5 py-2 text-right font-mono text-gray-900 text-base tabular-nums">
                               {fmtNum(pg.avgRate)}
                             </td>
-                            <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-[#1E3A5F]">
+                            <td className="border border-black px-3.5 py-2 text-right font-mono font-bold text-[#1E3A5F] text-base tabular-nums">
                               {fmt(pg.totalAmount)}
                             </td>
-                            <td className="border border-black px-2 py-1.5 text-center font-mono">
+                            <td className="border border-black px-3.5 py-2 text-center font-mono text-base font-bold">
                               {pg.invoicesCount}
                             </td>
                           </tr>
@@ -886,21 +887,21 @@ export default function PartyQualityAnalysis({
                   <tr>
                     <td
                       colSpan={selectedPartyId ? 3 : 4}
-                      className="border border-black px-3 py-2 text-right uppercase text-black font-extrabold"
+                      className="border border-black px-3.5 py-2.5 text-right uppercase text-black font-extrabold text-[17px]"
                     >
                       {selectedPartyId ? 'Party Total Quality Summary:' : 'Grand Quality Summary (All Parties):'}
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-extrabold text-gray-900">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-extrabold text-gray-900 text-[17px] tabular-nums">
                       {partyQualityTotals.totalQty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
                       kg
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-bold text-gray-800">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-gray-800 text-[17px] tabular-nums">
                       {fmtNum(partyQualityTotals.avgRate)}
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-extrabold text-base text-[#1E3A5F]">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-extrabold text-[17px] text-[#1E3A5F] tabular-nums">
                       {fmt(partyQualityTotals.totalAmount)}
                     </td>
-                    <td className="border border-black px-2 py-2 text-center font-mono font-bold">
+                    <td className="border border-black px-3.5 py-2.5 text-center font-mono font-bold text-[17px]">
                       {partyQualityTotals.invoicesCount}
                     </td>
                   </tr>
@@ -911,21 +912,21 @@ export default function PartyQualityAnalysis({
             /* =========================================================
                VIEW 2: QUALITY → PARTY TABLE
                ========================================================= */
-            <table className="w-full text-xs text-left border-collapse border border-black">
+            <table className="w-full text-base text-left border-collapse border border-black">
               <thead className="bg-[#DFDFDF] border-b border-black">
                 <tr>
-                  <th className="border border-black px-2 py-2 w-10 text-center">#</th>
-                  <th className="border border-black px-2 py-2">{partyLabel} Name</th>
-                  <th className="border border-black px-2 py-2 text-right w-32">Total Qty (KG)</th>
-                  <th className="border border-black px-2 py-2 text-right w-28">Avg Rate (Rs)</th>
-                  <th className="border border-black px-2 py-2 text-right w-36">Total Amount (PKR)</th>
-                  <th className="border border-black px-2 py-2 text-center w-28">Invoices</th>
+                  <th className="border border-black px-3 py-2.5 w-12 text-center text-base font-bold">#</th>
+                  <th className="border border-black px-3.5 py-2.5 text-base font-bold">{partyLabel} Name</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-36 text-base font-bold">Total Qty (KG)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-32 text-base font-bold">Avg Rate (Rs)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Total Amount (PKR)</th>
+                  <th className="border border-black px-3.5 py-2.5 text-center w-32 text-base font-bold">Invoices</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="tabular-nums">
                 {qualityPartyGroups.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500 font-bold border border-black text-xs">
+                    <td colSpan={6} className="text-center py-8 text-gray-500 font-bold border border-black text-base">
                       No records for this selection
                     </td>
                   </tr>
@@ -946,31 +947,31 @@ export default function PartyQualityAnalysis({
                               : 'bg-[#FAF9F7] hover:bg-blue-50/40'
                           }`}
                         >
-                          <td className="border border-black px-2 py-1.5 text-center text-gray-500 font-mono">
+                          <td className="border border-black px-2.5 py-2.5 text-center text-gray-600 font-mono text-base">
                             <div className="flex items-center justify-center gap-1">
                               {isExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-amber-700" />
+                                <ChevronDown className="w-4 h-4 text-amber-700" />
                               ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                                <ChevronRight className="w-4 h-4 text-gray-500" />
                               )}
                               <span>{idx + 1}</span>
                             </div>
                           </td>
-                          <td className="border border-black px-2 py-1.5 font-bold text-gray-900">
+                          <td className="border border-black px-3.5 py-2.5 font-bold text-gray-900 text-base">
                             {pg.partyName}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-gray-900">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-gray-900 text-base tabular-nums">
                             {pg.totalQty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                            <span className="text-gray-500 font-normal">kg</span>
+                            <span className="text-gray-600 font-normal text-sm">kg</span>
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono text-gray-800">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-gray-800 text-base tabular-nums">
                             {fmtNum(pg.avgRate)}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-right font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-[#1E3A5F] text-base tabular-nums">
                             {fmt(pg.totalAmount)}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-center font-mono">
-                            <span className="bg-blue-50 border border-blue-400 px-1.5 py-0.5 rounded text-[11px] font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-3.5 py-2.5 text-center font-mono">
+                            <span className="bg-blue-50 border border-blue-400 px-2 py-0.5 rounded text-xs font-bold text-[#1E3A5F]">
                               {pg.invoicesCount} {pg.invoicesCount === 1 ? 'inv' : 'invs'}
                             </span>
                           </td>
@@ -979,60 +980,60 @@ export default function PartyQualityAnalysis({
                         {/* Expanded Invoices for this party */}
                         {isExpanded && (
                           <tr className="bg-[#FFFDF7]">
-                            <td colSpan={6} className="border border-black p-3 bg-amber-50/30">
-                              <div className="space-y-1.5">
-                                <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 border-b border-gray-300 pb-1">
+                            <td colSpan={6} className="border border-black p-3.5 bg-amber-50/30">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm font-bold text-gray-800 border-b border-gray-300 pb-1.5">
                                   <span>
                                     Underlying Invoices for {pg.partyName}
                                   </span>
-                                  <span className="font-mono text-gray-500">
+                                  <span className="font-mono text-gray-600 text-sm">
                                     {pg.lines.length} invoice line{pg.lines.length > 1 ? 's' : ''}
                                   </span>
                                 </div>
 
-                                <table className="w-full text-xs border-collapse border border-gray-400 bg-white">
-                                  <thead className="bg-[#EBE9E4] text-gray-700">
+                                <table className="w-full text-sm border-collapse border border-gray-400 bg-white">
+                                  <thead className="bg-[#EBE9E4] text-gray-800">
                                     <tr>
-                                      <th className="border border-gray-400 px-2 py-1 w-24">Date</th>
-                                      <th className="border border-gray-400 px-2 py-1 w-28">Invoice #</th>
-                                      <th className="border border-gray-400 px-2 py-1">Item &amp; Quality</th>
-                                      <th className="border border-gray-400 px-2 py-1 text-center w-24">Unit / Nugs</th>
-                                      <th className="border border-gray-400 px-2 py-1 text-right w-24">Weight (KG)</th>
-                                      <th className="border border-gray-400 px-2 py-1 text-right w-24">Rate (Rs)</th>
-                                      <th className="border border-gray-400 px-2 py-1 text-right w-28">Amount (PKR)</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 w-28 text-sm font-bold">Date</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 w-32 text-sm font-bold">Invoice #</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 text-sm font-bold">Item &amp; Quality</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 text-center w-28 text-sm font-bold">Unit / Nugs</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 text-right w-28 text-sm font-bold">Weight (KG)</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 text-right w-28 text-sm font-bold">Rate (Rs)</th>
+                                      <th className="border border-gray-400 px-3 py-1.5 text-right w-32 text-sm font-bold">Amount (PKR)</th>
                                     </tr>
                                   </thead>
-                                  <tbody>
+                                  <tbody className="tabular-nums">
                                     {pg.lines.map((ln, lnIdx) => (
                                       <tr key={lnIdx} className="hover:bg-yellow-50/50">
-                                        <td className="border border-gray-400 px-2 py-1 font-mono">
+                                        <td className="border border-gray-400 px-3 py-1.5 font-mono text-sm">
                                           {formatDate(ln.date)}
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                                        <td className="border border-gray-400 px-3 py-1.5 font-mono font-bold text-[#1E3A5F] text-sm">
                                           {ln.invoiceNo}
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1">
+                                        <td className="border border-gray-400 px-3 py-1.5 text-sm">
                                           <span className="font-bold">{ln.itemName}</span>{' '}
-                                          <span className="bg-gray-100 border border-gray-400 px-1 text-[10px] font-mono">
+                                          <span className="bg-gray-100 border border-gray-400 px-1.5 py-0.5 text-xs font-mono font-bold">
                                             {ln.quality}
                                           </span>
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1 text-center font-mono">
+                                        <td className="border border-gray-400 px-3 py-1.5 text-center font-mono text-sm">
                                           {ln.unitType === 'Nug' || ln.nugs > 0 ? (
                                             <span className="font-bold text-[#A52A2A]">
                                               {ln.nugs || 0} Nug
                                             </span>
                                           ) : (
-                                            <span className="text-gray-500">KG</span>
+                                            <span className="text-gray-600">KG</span>
                                           )}
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1 text-right font-mono font-bold">
+                                        <td className="border border-gray-400 px-3 py-1.5 text-right font-mono font-bold text-sm">
                                           {ln.qty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1 text-right font-mono">
+                                        <td className="border border-gray-400 px-3 py-1.5 text-right font-mono text-sm">
                                           {fmtNum(ln.rate)}
                                         </td>
-                                        <td className="border border-gray-400 px-2 py-1 text-right font-mono font-bold text-gray-900">
+                                        <td className="border border-gray-400 px-3 py-1.5 text-right font-mono font-bold text-gray-900 text-sm">
                                           {fmt(ln.amount)}
                                         </td>
                                       </tr>
@@ -1053,20 +1054,20 @@ export default function PartyQualityAnalysis({
               {qualityPartyGroups.length > 0 && (
                 <tfoot className="bg-[#DFDFDF] font-bold border-t-2 border-black">
                   <tr>
-                    <td colSpan={2} className="border border-black px-3 py-2 text-right uppercase text-black font-extrabold">
+                    <td colSpan={2} className="border border-black px-3.5 py-2.5 text-right uppercase text-black font-extrabold text-[17px]">
                       Total {partyPluralLabel} Summary:
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-extrabold text-gray-900">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-extrabold text-gray-900 text-[17px] tabular-nums">
                       {qualityPartyTotals.totalQty.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
                       kg
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-bold text-gray-800">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-bold text-gray-800 text-[17px] tabular-nums">
                       {fmtNum(qualityPartyTotals.avgRate)}
                     </td>
-                    <td className="border border-black px-2 py-2 text-right font-mono font-extrabold text-base text-[#1E3A5F]">
+                    <td className="border border-black px-3.5 py-2.5 text-right font-mono font-extrabold text-[17px] text-[#1E3A5F] tabular-nums">
                       {fmt(qualityPartyTotals.totalAmount)}
                     </td>
-                    <td className="border border-black px-2 py-2 text-center font-mono font-bold">
+                    <td className="border border-black px-3.5 py-2.5 text-center font-mono font-bold text-[17px]">
                       {qualityPartyTotals.invoicesCount}
                     </td>
                   </tr>
@@ -1077,13 +1078,13 @@ export default function PartyQualityAnalysis({
         </div>
 
         {/* ── Reconciliation Footer Box ───────────────────────────────── */}
-        <div className="p-3 bg-[#F9F8F6] border-t-2 border-black space-y-2 text-xs">
+        <div className="p-3.5 bg-[#F9F8F6] border-t-2 border-black space-y-2 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-extrabold text-[#1E3A5F] uppercase tracking-wide">
                 Audit Reconciliation:
               </span>
-              <span className="font-mono text-gray-800">
+              <span className="font-mono text-gray-800 text-sm">
                 Grouped Stock Items Total:{' '}
                 <strong className="text-black">{fmt(displayedGroupedTotal)}</strong>
               </span>
@@ -1091,12 +1092,12 @@ export default function PartyQualityAnalysis({
               {targetReconciliationServiceTotal > 0 && (
                 <>
                   <span className="text-gray-400">+</span>
-                  <span className="font-mono text-gray-800">
+                  <span className="font-mono text-gray-800 text-sm">
                     Service / Other Lines:{' '}
                     <strong className="text-black">{fmt(targetReconciliationServiceTotal)}</strong>
                   </span>
                   <span className="text-gray-400">=</span>
-                  <span className="font-mono text-gray-800 font-bold">
+                  <span className="font-mono text-gray-800 font-bold text-sm">
                     Combined:{' '}
                     <strong className="text-[#1E3A5F]">{fmt(combinedGroupedPlusServices)}</strong>
                   </span>
@@ -1104,7 +1105,7 @@ export default function PartyQualityAnalysis({
               )}
 
               <span className="text-gray-400">vs</span>
-              <span className="font-mono text-gray-800">
+              <span className="font-mono text-gray-800 text-sm">
                 Invoice-wise Total:{' '}
                 <strong className="text-[#1E3A5F]">{fmt(targetReconciliationInvoiceTotal)}</strong>
               </span>
@@ -1113,13 +1114,13 @@ export default function PartyQualityAnalysis({
             {/* Reconciliation Status Badge */}
             <div className="flex items-center gap-1.5">
               {isReconciled ? (
-                <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-600 text-emerald-800 px-2 py-0.5 font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-600 text-emerald-800 px-2.5 py-1 font-bold text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>Matches invoice-wise item total: ✓</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 bg-amber-50 border border-amber-600 text-amber-900 px-2 py-0.5 font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <div className="flex items-center gap-1 bg-amber-50 border border-amber-600 text-amber-900 px-2.5 py-1 font-bold text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
                   <span>
                     Difference: {fmt(targetReconciliationInvoiceTotal - combinedGroupedPlusServices)}
                   </span>
@@ -1128,7 +1129,7 @@ export default function PartyQualityAnalysis({
             </div>
           </div>
 
-          <div className="text-[11px] text-gray-500 italic">
+          <div className="text-xs text-gray-600 italic">
             * Weighted average rates are accurately computed as Σ Amount ÷ Σ KG Quantity across all underlying invoice lines.
             {targetReconciliationServiceTotal > 0 && ' Service lines contain no physical quality grade and are reconciled separately.'}
           </div>
@@ -1140,7 +1141,7 @@ export default function PartyQualityAnalysis({
           style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
         >
           {/* Audit Line */}
-          <div className="flex items-center justify-between text-[9px] text-gray-600 border-b border-gray-400 pb-1.5 mb-6">
+          <div className="flex items-center justify-between text-xs text-gray-700 border-b border-gray-400 pb-2 mb-6 print-note-text">
             <div className="flex items-center gap-2">
               <span>
                 Printed on: <strong className="font-mono">{printTimestamp}</strong>
@@ -1158,29 +1159,29 @@ export default function PartyQualityAnalysis({
           </div>
 
           {/* 3-Column Signatures Block */}
-          <div className="grid grid-cols-3 gap-6 text-center text-xs text-gray-700 pt-2">
+          <div className="grid grid-cols-3 gap-6 text-center text-sm text-gray-700 pt-2">
             <div className="flex flex-col items-center">
               <div className="w-44 max-w-full h-8 border-b-2 border-gray-600 mb-1.5" />
-              <div className="font-bold text-gray-800 uppercase tracking-wide text-[11px]">
+              <div className="font-bold text-gray-800 uppercase tracking-wide text-sm">
                 Prepared By
               </div>
-              <div className="text-[10px] text-gray-500 mt-0.5">Accountant / Data Operator</div>
+              <div className="text-xs text-gray-600 mt-0.5 print-note-text">Accountant / Data Operator</div>
             </div>
 
             <div className="flex flex-col items-center">
               <div className="w-44 max-w-full h-8 border-b-2 border-gray-600 mb-1.5" />
-              <div className="font-bold text-gray-800 uppercase tracking-wide text-[11px]">
+              <div className="font-bold text-gray-800 uppercase tracking-wide text-sm">
                 Verified By
               </div>
-              <div className="text-[10px] text-gray-500 mt-0.5">Accounts Department</div>
+              <div className="text-xs text-gray-600 mt-0.5 print-note-text">Accounts Department</div>
             </div>
 
             <div className="flex flex-col items-center">
               <div className="w-44 max-w-full h-8 border-b-2 border-gray-600 mb-1.5" />
-              <div className="font-bold text-gray-800 uppercase tracking-wide text-[11px]">
+              <div className="font-bold text-gray-800 uppercase tracking-wide text-sm">
                 Authorized Signature
               </div>
-              <div className="text-[10px] text-gray-500 mt-0.5">Proprietor / {legalName}</div>
+              <div className="text-xs text-gray-600 mt-0.5 print-note-text">Proprietor / {legalName}</div>
             </div>
           </div>
         </div>

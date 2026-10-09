@@ -17,6 +17,7 @@ import { useFinances } from '../../hooks/useFinances.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
+import { splitPartyBalances } from '../../utils/partyBalances.js';
 import {
   TrendingUp,
   TrendingDown,
@@ -26,6 +27,7 @@ import {
   BookOpen,
   Plus,
   ArrowRight,
+  Scale,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -46,13 +48,7 @@ export default function Dashboard() {
   const totalStockQty = stockEntries.reduce((sum, s) => sum + Number(s.qty || 0), 0);
   const totalStockVal = stockEntries.reduce((sum, s) => sum + Number(s.value || 0), 0);
 
-  const totalReceivable = parties
-    .filter((p) => p.balance < 0 || p.type === 'Customer')
-    .reduce((sum, p) => sum + Math.abs(Number(p.balance || 0)), 0);
-
-  const totalPayable = parties
-    .filter((p) => p.balance > 0 && p.type !== 'Customer')
-    .reduce((sum, p) => sum + Number(p.balance || 0), 0);
+  const { totalReceivable, totalPayable } = splitPartyBalances(parties);
 
   const totalCashBank = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
@@ -129,7 +125,7 @@ export default function Dashboard() {
             Quick Actions
           </h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <QuickActionCard
             title="Create Purchase"
             description="Record raw material purchase invoice"
@@ -154,6 +150,12 @@ export default function Dashboard() {
             icon={BookOpen}
             onClick={() => navigate('/journal')}
           />
+          <QuickActionCard
+            title="Trial Balance"
+            description="Total accounts sheet - Parties, Cash, Banks, Mall A/C"
+            icon={Scale}
+            onClick={() => navigate('/reports?tab=tb')}
+          />
         </div>
       </div>
 
@@ -169,17 +171,17 @@ export default function Dashboard() {
               className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
             >
               <span>View All</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3 h-3 rtl:rotate-180" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-100 border-b border-black text-black font-bold">
-                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Bill #</th>
-                  <th className="border-r border-black px-2 py-1.5 text-left">Supplier</th>
-                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Date</th>
-                  <th className="border-r border-black px-2 py-1.5 text-right w-24">Total</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start w-20">Bill #</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start">Supplier</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start w-20">Date</th>
+                  <th className="border-e border-black px-2 py-1.5 text-left w-24" dir="ltr">Total</th>
                   <th className="px-2 py-1.5 text-center w-20">Status</th>
                 </tr>
               </thead>
@@ -190,16 +192,16 @@ export default function Dashboard() {
                     onClick={() => navigate('/purchase')}
                     className="border-b border-black hover:bg-gray-50 cursor-pointer"
                   >
-                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-black">
+                    <td className="border-e border-black px-2 py-1.5 font-mono font-bold text-black text-start">
                       {p.no}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px]">
+                    <td className="border-e border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px] text-start">
                       {p.supplierName}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                    <td className="border-e border-black px-2 py-1.5 text-gray-700 whitespace-nowrap text-start">
                       {formatDate(p.date)}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-right text-black whitespace-nowrap">
+                    <td className="border-e border-black px-2 py-1.5 font-mono font-bold text-left text-black whitespace-nowrap tabular-nums" dir="ltr">
                       {fmt(p.total)}
                     </td>
                     <td className="px-2 py-1.5 text-center">
@@ -233,17 +235,17 @@ export default function Dashboard() {
               className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
             >
               <span>View All</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3 h-3 rtl:rotate-180" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-100 border-b border-black text-black font-bold">
-                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Bill #</th>
-                  <th className="border-r border-black px-2 py-1.5 text-left">Customer</th>
-                  <th className="border-r border-black px-2 py-1.5 text-left w-20">Date</th>
-                  <th className="border-r border-black px-2 py-1.5 text-right w-24">Total</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start w-20">Bill #</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start">Customer</th>
+                  <th className="border-e border-black px-2 py-1.5 text-start w-20">Date</th>
+                  <th className="border-e border-black px-2 py-1.5 text-left w-24" dir="ltr">Total</th>
                   <th className="px-2 py-1.5 text-center w-20">Status</th>
                 </tr>
               </thead>
@@ -254,16 +256,16 @@ export default function Dashboard() {
                     onClick={() => navigate('/sale')}
                     className="border-b border-black hover:bg-gray-50 cursor-pointer"
                   >
-                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-black">
+                    <td className="border-e border-black px-2 py-1.5 font-mono font-bold text-black text-start">
                       {s.no}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px]">
+                    <td className="border-e border-black px-2 py-1.5 font-semibold text-gray-900 truncate max-w-[150px] text-start">
                       {s.customerName}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                    <td className="border-e border-black px-2 py-1.5 text-gray-700 whitespace-nowrap text-start">
                       {formatDate(s.date)}
                     </td>
-                    <td className="border-r border-black px-2 py-1.5 font-mono font-bold text-right text-black whitespace-nowrap">
+                    <td className="border-e border-black px-2 py-1.5 font-mono font-bold text-left text-black whitespace-nowrap tabular-nums" dir="ltr">
                       {fmt(s.total)}
                     </td>
                     <td className="px-2 py-1.5 text-center">

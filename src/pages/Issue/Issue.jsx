@@ -67,13 +67,13 @@ export default function Issue() {
             <TD>{formatDate(iss.date)}</TD>
             <TD className="font-bold text-black">{iss.fromWarehouse}</TD>
             <TD>
-              <div className="text-xs text-gray-800 space-y-1">
+              <div className="text-base text-gray-800 space-y-1">
                 {iss.items && iss.items.length > 0 ? (
                   iss.items.map((it, idx) => (
                     <div key={idx} className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-black">{it.itemName}</span>
                       {it.quality && (
-                        <span className="text-black font-bold bg-[#FFEB3B] border border-black px-1.5 py-0.5 text-[10px]">
+                        <span className="text-black font-bold bg-[#FFEB3B] border border-black px-2 py-0.5 text-[22px]">
                           {it.quality}
                         </span>
                       )}

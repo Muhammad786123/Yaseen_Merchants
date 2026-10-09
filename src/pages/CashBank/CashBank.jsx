@@ -158,8 +158,8 @@ export default function CashBank() {
               </div>
               <h3 className="text-base font-bold text-[#1E3A5F] mb-1">{acc.name}</h3>
               <div className="text-xl font-extrabold text-emerald-600 mb-2">{fmt(acc.balance)}</div>
-              <div className="text-[10px] text-gray-400 flex items-center gap-1 font-semibold">
-                <Eye className="w-3 h-3" /> Click to view account ledger
+              <div className="text-xs text-gray-500 flex items-center gap-1 font-semibold">
+                <Eye className="w-3.5 h-3.5" /> Click to view account ledger
               </div>
             </Card>
           );

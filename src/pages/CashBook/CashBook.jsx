@@ -9,6 +9,7 @@ import { useParties } from '../../hooks/useParties.js';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { db } from '../../db/database.js';
+import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
 import {
   Save,
@@ -321,7 +322,7 @@ export default function CashBook() {
       alert('Error: Cash Book print area not found.');
       return;
     }
-    window.print();
+    safePrint();
   };
 
   return (
@@ -371,32 +372,32 @@ export default function CashBook() {
         {/* Top Info Bar (Bordered container) */}
         <div className="cashbook-info-bar max-w-2xl mx-auto mb-4 border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-3 space-y-2">
           {/* Row 1: Cash Book No & Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
             <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Cash Book No</label>
             <div className="sm:col-span-3 print:col-span-3">
               <input
                 type="text"
                 readOnly
                 value={String(cashBookNo).padStart(4, '0')}
-                className="w-full bg-white border border-black px-2 py-1 font-mono font-bold text-gray-900 outline-none text-center"
+                className="w-full bg-white border border-black px-2 py-1 font-mono font-bold text-gray-900 outline-none text-center text-sm"
               />
             </div>
 
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Date(DD/MM/YY)</label>
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Date(DD/MM/YY)</label>
             <div className="sm:col-span-2 print:col-span-2">
-              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-xs font-mono font-bold text-center">
+              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-sm font-mono font-bold text-center">
                 {formattedDateDDMMYY || entryDate}
               </span>
               <input
                 type="date"
                 value={entryDate}
                 onChange={(e) => setEntryDate(e.target.value)}
-                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-xs outline-none"
+                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-sm outline-none"
               />
             </div>
             <div className="sm:col-span-2 print:col-span-2">
               <div
-                className="w-full bg-[#76FF03] border border-black font-bold font-mono text-[11px] text-black px-1 py-1 text-center truncate"
+                className="w-full bg-[#76FF03] border border-black font-bold font-mono text-xs text-black px-1 py-1 text-center truncate"
                 title={dayOfWeek}
               >
                 {dayOfWeek || 'Today'}
@@ -405,16 +406,16 @@ export default function CashBook() {
           </div>
 
           {/* Row 2: Account No & Account Name */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
             <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Account No</label>
             <div className="sm:col-span-3 print:col-span-3">
-              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-xs font-mono font-bold text-center">
+              <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-sm font-mono font-bold text-center">
                 {topAccountNo || (selectedTopParty ? (selectedTopParty.code || selectedTopParty.id) : '-')}
               </span>
               <select
                 value={topAccountId}
                 onChange={(e) => handleTopAccountSelect(e.target.value)}
-                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-xs outline-none font-mono"
+                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-sm outline-none font-mono"
               >
                 <option value="">-- Select Account --</option>
                 <optgroup label="Parties">
@@ -434,9 +435,9 @@ export default function CashBook() {
               </select>
             </div>
 
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Account Name</label>
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Account Name</label>
             <div className="sm:col-span-4 print:col-span-4">
-              <span className="hidden print:block w-full bg-white border border-black px-2 py-1 text-xs font-bold text-gray-900 truncate">
+              <span className="hidden print:block w-full bg-white border border-black px-2 py-1 text-sm font-bold text-gray-900 truncate">
                 {topAccountName || '-'}
               </span>
               <input
@@ -444,17 +445,18 @@ export default function CashBook() {
                 readOnly
                 value={topAccountName}
                 placeholder="Account name..."
-                className="print:hidden w-full bg-white border border-black px-2 py-1 text-xs font-bold text-gray-900 outline-none"
+                dir="auto"
+                className="print:hidden w-full bg-white border border-black px-2 py-1 text-sm font-bold text-gray-900 outline-none text-start"
               />
             </div>
           </div>
 
           {/* Row 3: Previous Balance */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
             <div className="sm:col-span-6 print:col-span-6"></div>
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-right pr-1">Previous Balance</label>
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Previous Balance</label>
             <div className="sm:col-span-4 print:col-span-4">
-              <div className="w-full bg-[#76FF03] border border-black font-bold font-mono text-xs text-black px-2 py-1 text-right">
+              <div className="w-full bg-[#76FF03] border border-black font-bold font-mono text-sm text-black px-2 py-1 text-left tabular-nums" dir="ltr">
                 {previousBalance ? fmt(previousBalance) : '0.00'}
               </div>
             </div>
@@ -467,14 +469,14 @@ export default function CashBook() {
           <div className="lg:col-span-8 print:col-span-8 cashbook-grid-box border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-2 flex flex-col justify-between shadow-none min-h-[460px] print:min-h-0">
             <div>
               <div className="overflow-x-auto print:overflow-visible">
-                <table className="w-full border-collapse border border-black text-xs bg-white">
+                <table className="w-full border-collapse border border-black text-base bg-white">
                   <thead>
                     <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
-                      <th className="border border-black px-2 py-1.5 w-24">Acc/ No</th>
-                      <th className="border border-black px-2 py-1.5 w-44 text-left">Account Name</th>
-                      <th className="border border-black px-2 py-1.5 text-left">Detail</th>
-                      <th className="border border-black px-2 py-1.5 w-24 text-right">Credit/Jamma</th>
-                      <th className="border border-black px-2 py-1.5 w-24 text-right">Debit/Benaam</th>
+                      <th className="border border-black px-3 py-2.5 w-24 text-base font-bold">Acc/ No</th>
+                      <th className="border border-black px-3 py-2.5 w-48 text-start text-base font-bold">Account Name</th>
+                      <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Detail</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">Credit/Jamma</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">Debit/Benaam</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -482,13 +484,13 @@ export default function CashBook() {
                       <tr key={row.id} className="hover:bg-blue-50/40">
                         {/* Acc/ No Selector */}
                         <td className="border border-black p-0 text-center">
-                          <span className="hidden print:block px-1 py-1 text-[11px] font-mono">
+                          <span className="hidden print:block px-2 py-2 text-base font-mono tabular-nums">
                             {row.accountNo || '-'}
                           </span>
                           <select
                             value={row.accountId}
                             onChange={(e) => handleRowChange(idx, 'accountId', e.target.value)}
-                            className="print:hidden w-full px-1 py-1 text-[11px] font-mono outline-none bg-transparent"
+                            className="print:hidden w-full px-2 py-2 text-base font-mono outline-none bg-transparent"
                           >
                             <option value="">-</option>
                             <optgroup label="Parties">
@@ -510,7 +512,7 @@ export default function CashBook() {
 
                         {/* Account Name */}
                         <td className="border border-black p-0">
-                          <span className="hidden print:block px-2 py-1 text-xs font-medium truncate">
+                          <span className="hidden print:block px-3 py-2 text-base font-medium truncate text-start">
                             {row.accountName || ''}
                           </span>
                           <input
@@ -518,13 +520,14 @@ export default function CashBook() {
                             value={row.accountName}
                             onChange={(e) => handleRowChange(idx, 'accountName', e.target.value)}
                             placeholder="Select or enter account..."
-                            className="print:hidden w-full px-2 py-1 text-xs outline-none bg-transparent font-medium"
+                            dir="auto"
+                            className="print:hidden w-full px-3 py-2 text-base outline-none bg-transparent font-medium text-start"
                           />
                         </td>
 
                         {/* Detail Narration */}
                         <td className="border border-black p-0">
-                          <span className="hidden print:block px-2 py-1 text-xs text-gray-800 truncate">
+                          <span className="hidden print:block px-3 py-2 text-base text-gray-800 truncate text-start">
                             {row.detail || ''}
                           </span>
                           <input
@@ -532,13 +535,14 @@ export default function CashBook() {
                             value={row.detail}
                             onChange={(e) => handleRowChange(idx, 'detail', e.target.value)}
                             placeholder="Manual description..."
-                            className="print:hidden w-full px-2 py-1 text-xs outline-none bg-transparent"
+                            dir="auto"
+                            className="print:hidden w-full px-3 py-2 text-base outline-none bg-transparent text-start"
                           />
                         </td>
 
                         {/* Credit / Jamma (Cash In) */}
-                        <td className="border border-black p-0">
-                          <span className="hidden print:block px-2 py-1 text-xs font-mono font-bold text-right text-emerald-800">
+                        <td className="border border-black p-0" dir="ltr">
+                          <span className="hidden print:block px-3 py-2 text-base font-mono font-bold text-left text-emerald-800 tabular-nums">
                             {row.credit ? Number(row.credit).toLocaleString('en-PK') : '-'}
                           </span>
                           <input
@@ -547,13 +551,14 @@ export default function CashBook() {
                             value={row.credit}
                             onChange={(e) => handleRowChange(idx, 'credit', e.target.value)}
                             placeholder="0"
-                            className="print:hidden w-full px-2 py-1 text-xs font-mono font-bold text-right outline-none bg-transparent text-emerald-800"
+                            dir="ltr"
+                            className="print:hidden w-full px-3 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-emerald-800 tabular-nums"
                           />
                         </td>
 
                         {/* Debit / Benaam (Cash Out) */}
-                        <td className="border border-black p-0">
-                          <span className="hidden print:block px-2 py-1 text-xs font-mono font-bold text-right text-red-800">
+                        <td className="border border-black p-0" dir="ltr">
+                          <span className="hidden print:block px-3 py-2 text-base font-mono font-bold text-left text-red-800 tabular-nums">
                             {row.debit ? Number(row.debit).toLocaleString('en-PK') : '-'}
                           </span>
                           <input
@@ -562,7 +567,8 @@ export default function CashBook() {
                             value={row.debit}
                             onChange={(e) => handleRowChange(idx, 'debit', e.target.value)}
                             placeholder="0"
-                            className="print:hidden w-full px-2 py-1 text-xs font-mono font-bold text-right outline-none bg-transparent text-red-800"
+                            dir="ltr"
+                            className="print:hidden w-full px-3 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-red-800 tabular-nums"
                           />
                         </td>
                       </tr>
@@ -572,7 +578,7 @@ export default function CashBook() {
               </div>
 
               {/* Helper hint */}
-              <div className="mt-1 flex items-center justify-between text-[11px] text-gray-700 px-1 font-medium no-print">
+              <div className="mt-1 flex items-center justify-between text-sm text-gray-700 px-1 font-medium no-print">
                 <span>Credit/Jamma = Cash Received | Debit/Benaam = Cash Paid</span>
                 <button
                   type="button"
@@ -586,27 +592,27 @@ export default function CashBook() {
 
             {/* Bottom Totals Bar */}
             <div className="mt-4 pt-2 border-t border-black space-y-2">
-              <div className="flex items-center justify-end gap-2 text-xs">
+              <div className="flex items-center justify-end gap-2 text-base">
                 <span className="font-bold text-gray-900">Total</span>
-                <div className="w-24 bg-white border border-black px-2 py-1 text-right font-mono font-bold text-emerald-800">
+                <div className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-emerald-800 tabular-nums" dir="ltr">
                   {totalCredit ? totalCredit.toLocaleString('en-PK') : '0'}
                 </div>
-                <div className="w-24 bg-white border border-black px-2 py-1 text-right font-mono font-bold text-red-800">
+                <div className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-red-800 tabular-nums" dir="ltr">
                   {totalDebit ? totalDebit.toLocaleString('en-PK') : '0'}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm pt-1">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-red-700">Party Balance</span>
-                  <div className="bg-[#0000FF] border border-black px-4 py-1 text-white font-mono font-bold text-sm min-w-[120px] text-center">
+                  <div className="bg-[#0000FF] border border-black px-4 py-1.5 text-white font-mono font-bold text-[17px] min-w-[130px] text-center tabular-nums" dir="ltr">
                     {activePartyBalance ? fmt(activePartyBalance) : (previousBalance ? fmt(previousBalance) : '0.00')}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-gray-900">Current Cash Balance</span>
-                  <div className="bg-[#76FF03] border border-black px-4 py-1 text-black font-mono font-bold text-sm min-w-[130px] text-right">
+                  <div className="bg-[#76FF03] border border-black px-4 py-1.5 text-black font-mono font-bold text-[17px] min-w-[140px] text-left tabular-nums" dir="ltr">
                     {fmt(currentRunningBalance)}
                   </div>
                 </div>
@@ -616,27 +622,27 @@ export default function CashBook() {
 
           {/* Right Side: Cash Details Denomination Breakdown */}
           <div className="lg:col-span-4 print:col-span-4">
-            <h3 className="text-center font-bold text-sm text-[#800000] uppercase tracking-wider mb-1">
+            <h3 className="text-center font-bold text-base text-[#800000] uppercase tracking-wider mb-1">
               CASH DETAILS
             </h3>
 
             <div className="cashbook-denom-box border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-2">
-              <table className="w-full border-collapse border border-black text-xs bg-white">
+              <table className="w-full border-collapse border border-black text-base bg-white">
                 <thead>
                   <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
-                    <th className="border border-black px-2 py-1 w-16 text-left">Details</th>
-                    <th className="border border-black px-2 py-1 w-16">Count</th>
-                    <th className="border border-black px-2 py-1 text-right">Cash</th>
+                    <th className="border border-black px-2.5 py-2 w-16 text-start text-sm font-bold">Details</th>
+                    <th className="border border-black px-2.5 py-2 w-16 text-sm font-bold">Count</th>
+                    <th className="border border-black px-2.5 py-2 text-left text-sm font-bold" dir="ltr">Cash</th>
                   </tr>
                 </thead>
                 <tbody>
                   {denominationValues.detailList.map((item) => (
                     <tr key={item.denom} className="hover:bg-gray-50">
-                      <td className="border border-black px-2 py-0.5 font-bold font-mono text-gray-900">
+                      <td className="border border-black px-2.5 py-1.5 font-bold font-mono text-gray-900 tabular-nums text-start">
                         {item.denom}
                       </td>
                       <td className="border border-black p-0 text-center">
-                        <span className="hidden print:block font-mono text-xs text-center py-0.5">
+                        <span className="hidden print:block font-mono text-base text-center py-1 tabular-nums">
                           {denominations[item.denom] || '-'}
                         </span>
                         <input
@@ -647,10 +653,11 @@ export default function CashBook() {
                             setDenominations((prev) => ({ ...prev, [item.denom]: e.target.value }))
                           }
                           placeholder="0"
-                          className="print:hidden w-full px-1.5 py-0.5 text-xs font-mono text-center outline-none bg-transparent"
+                          dir="ltr"
+                          className="print:hidden w-full px-2 py-1.5 text-base font-mono text-center outline-none bg-transparent tabular-nums"
                         />
                       </td>
-                      <td className="border border-black px-2 py-0.5 text-right font-mono font-bold text-gray-900">
+                      <td className="border border-black px-2.5 py-1.5 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
                         {item.val ? item.val.toLocaleString('en-PK') : '-'}
                       </td>
                     </tr>
@@ -658,11 +665,11 @@ export default function CashBook() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#DFDFDF] font-bold">
-                    <td className="border border-black px-2 py-1 text-gray-900">Total</td>
-                    <td className="border border-black px-1 py-1 text-center font-mono">
+                    <td className="border border-black px-2.5 py-2 text-gray-900 text-base font-bold text-start">Total</td>
+                    <td className="border border-black px-2 py-2 text-center font-mono text-[17px] font-bold tabular-nums">
                       {denominationValues.countSum || 0}
                     </td>
-                    <td className="border border-black px-2 py-1 text-right font-mono text-emerald-900">
+                    <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-900 tabular-nums" dir="ltr">
                       {denominationValues.valSum.toLocaleString('en-PK')}
                     </td>
                   </tr>
@@ -670,12 +677,13 @@ export default function CashBook() {
               </table>
 
               {/* Difference Box */}
-              <div className="mt-3 pt-2 border-t border-black flex items-center justify-between text-xs">
+              <div className="mt-3 pt-2 border-t border-black flex items-center justify-between text-sm">
                 <span className="font-bold text-[#A52A2A]">Difference</span>
                 <div
-                  className={`bg-[#76FF03] border border-black px-3 py-1 font-mono font-bold text-xs min-w-[100px] text-right ${
+                  className={`bg-[#76FF03] border border-black px-3 py-1 font-mono font-bold text-base min-w-[110px] text-left tabular-nums ${
                     cashDifference !== 0 ? 'text-red-900' : 'text-black'
                   }`}
+                  dir="ltr"
                 >
                   {cashDifference ? fmt(cashDifference) : '0.00'}
                 </div>
@@ -686,23 +694,23 @@ export default function CashBook() {
 
         {/* Print-only Signatures & Audit Footer */}
         <div className="hidden print:block mt-6 pt-3 border-t border-black">
-          <div className="flex items-center justify-between text-[9px] text-gray-600 mb-6">
+          <div className="flex items-center justify-between text-sm text-gray-600 mb-6 print-note-text">
             <span>Printed on: <strong>{new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
             <span>Cash Book Voucher #<strong>{String(cashBookNo).padStart(4, '0')}</strong></span>
             <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
           </div>
-          <div className="grid grid-cols-3 gap-6 text-center text-xs">
+          <div className="grid grid-cols-3 gap-6 text-center text-sm">
             <div className="flex flex-col items-center">
               <div className="w-40 border-b border-black mb-1 h-6" />
-              <span className="font-bold text-[10px] uppercase">Cashier / Prepared By</span>
+              <span className="font-bold text-sm uppercase print-note-text">Cashier / Prepared By</span>
             </div>
             <div className="flex flex-col items-center">
               <div className="w-40 border-b border-black mb-1 h-6" />
-              <span className="font-bold text-[10px] uppercase">Checked / Verified By</span>
+              <span className="font-bold text-sm uppercase print-note-text">Checked / Verified By</span>
             </div>
             <div className="flex flex-col items-center">
               <div className="w-40 border-b border-black mb-1 h-6" />
-              <span className="font-bold text-[10px] uppercase">Proprietor / Authorized</span>
+              <span className="font-bold text-sm uppercase print-note-text">Proprietor / Authorized</span>
             </div>
           </div>
         </div>

@@ -4,6 +4,8 @@ import Button from '../ui/Button';
 import logoImg from '../../assets/logo.png';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
 
+import { safePrint } from '../../utils/printUtils.js';
+
 /**
  * Format timestamp for the audit line: e.g. "30 Sep 2026, 11:45 AM"
  */
@@ -88,6 +90,7 @@ export default function PrintDocument({
   return (
     <div
       id={id}
+      dir="rtl"
       className={`print-document print-area w-full bg-white text-black p-4 sm:p-6 print:p-0 print:m-0 ${className}`}
       style={{ boxSizing: 'border-box' }}
     >
@@ -96,11 +99,11 @@ export default function PrintDocument({
       {/* ── Screen-only Action Toolbar ─────────────────────────────── */}
       <div className="pb-3 mb-4 border-b border-[#E0DBD3] no-print space-y-2">
         <div className="flex justify-between items-center">
-          <div>
-            <span className="text-[11px] uppercase font-bold text-gray-400 tracking-wider">
+          <div className="text-start">
+            <span className="text-xs uppercase font-bold text-gray-400 tracking-wider">
               Document View
             </span>
-            <h3 className="text-sm font-bold text-[#1E3A5F]">
+            <h3 className="text-base font-bold text-[#1E3A5F]">
               {actionTitle || `${title} — ${documentNo || 'Preview'}`}
             </h3>
           </div>
@@ -108,15 +111,15 @@ export default function PrintDocument({
             variant="primary"
             size="sm"
             icon={Printer}
-            onClick={onPrint || (() => window.print())}
+            onClick={onPrint || safePrint}
           >
             {printButtonText || `Print ${title.toLowerCase().includes('voucher') || title.toLowerCase().includes('slip') ? title : 'Invoice'}`}
           </Button>
         </div>
 
         {/* Tip for browser print settings: Scale and Headers & Footers */}
-        <div className="flex items-center gap-2 text-[11px] text-amber-900 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200">
-          <Info className="w-3.5 h-3.5 flex-shrink-0 text-amber-600" />
+        <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200">
+          <Info className="w-4 h-4 flex-shrink-0 text-amber-600" />
           <span>
             <strong>Print Settings Tip:</strong> In print dialog under <strong>More settings</strong>, ensure <strong>Scale</strong> is <strong>Default (100%)</strong> and turn off <strong>&quot;Headers and footers&quot;</strong>.
           </span>
@@ -126,38 +129,38 @@ export default function PrintDocument({
       {/* ── Printable Header Block (Production Slip Reference Standard) ── */}
       <div className="print-header-block border-b-2 border-[#1E3A5F] pb-4 mb-4">
         <div className="flex items-start justify-between gap-4">
-          {/* Company Branding */}
-          <div className="flex items-center gap-4">
+          {/* Company Branding (Right in RTL) */}
+          <div className="flex items-center gap-4 text-start">
             <img
               src={effectiveLogo}
               alt={`${legalName} Logo`}
               className="h-16 w-auto object-contain flex-shrink-0"
             />
-            <div>
-              <h1 className="text-xl font-black text-[#1E3A5F] uppercase tracking-wide leading-tight">
+            <div className="text-start">
+              <h1 className="text-2xl font-black text-[#1E3A5F] uppercase tracking-wide leading-tight print-company-name">
                 {legalName}
               </h1>
-              <p className="text-xs text-gray-600 font-medium mt-0.5">
+              <p className="text-sm text-gray-700 font-medium mt-0.5 print-note-text">
                 {tagline}
               </p>
-              <p className="text-[11px] text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-600 mt-0.5 print-note-text">
                 {address}{phone ? ` • Tel: ${phone}` : ''}
               </p>
             </div>
           </div>
 
-          {/* Document Type Badge & Doc Details */}
-          <div className="text-right flex-shrink-0">
-            <div className="text-sm font-extrabold text-[#1E3A5F] uppercase tracking-wider bg-[#FAF9F7] px-3.5 py-1.5 rounded border border-[#1E3A5F]/20 inline-block">
+          {/* Document Type Badge & Doc Details (Left in RTL) */}
+          <div className="text-end flex-shrink-0">
+            <div className="text-base font-extrabold text-[#1E3A5F] uppercase tracking-wider bg-[#FAF9F7] px-3.5 py-1.5 rounded border border-[#1E3A5F]/20 inline-block print-statement-title">
               {title}
             </div>
             {documentNo && (
-              <div className="text-xs font-mono font-bold text-[#1E3A5F] mt-1.5">
+              <div className="text-sm font-mono font-bold text-[#1E3A5F] mt-1.5 print-note-text" dir="ltr">
                 {title.toLowerCase().includes('slip') ? 'Slip #:' : 'Doc #:'} {documentNo}
               </div>
             )}
             {date && (
-              <div className="text-xs text-gray-700 font-medium mt-0.5">
+              <div className="text-sm text-gray-700 font-medium mt-0.5 print-note-text" dir="ltr">
                 Date: {date}
               </div>
             )}
@@ -168,7 +171,7 @@ export default function PrintDocument({
       {/* ── Two-Column Metadata Info Card (Production Slip Reference Standard) ── */}
       {metadata && metadata.length > 0 && (
         <div
-          className={`grid gap-4 text-xs bg-[#FAF9F7] p-3.5 rounded-lg border border-[#D1D5DB] mb-5 ${
+          className={`grid gap-4 text-sm bg-[#FAF9F7] p-3.5 rounded-lg border border-[#D1D5DB] mb-5 ${
             metadata.length === 1
               ? 'grid-cols-1'
               : 'grid-cols-2'
@@ -181,10 +184,10 @@ export default function PrintDocument({
                 : item.value;
             return (
               <div key={idx} className={item.span ? `col-span-${item.span}` : ''}>
-                <span className="text-gray-500 font-bold block text-[11px] uppercase tracking-wider">
+                <span className="text-gray-600 font-bold block text-xs uppercase tracking-wider text-start">
                   {item.label}
                 </span>
-                <div className={`font-bold text-sm mt-0.5 break-words ${item.color || 'text-[#1E3A5F]'}`}>
+                <div className={`font-bold text-base mt-0.5 break-words text-start ${item.color || 'text-[#1E3A5F]'}`}>
                   {cleanVal || '—'}
                 </div>
               </div>
@@ -211,7 +214,7 @@ export default function PrintDocument({
         style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
       >
         {/* Audit Line */}
-        <div className="flex items-center justify-between text-[8.5px] text-gray-600 border-t border-b border-gray-300 py-1.5 mb-6">
+        <div className="flex items-center justify-between text-xs text-gray-700 border-t border-b border-gray-300 py-2 mb-6 print-note-text">
           <div className="flex items-center gap-2">
             <span>Printed on: <strong className="font-mono">{timestamp}</strong></span>
             <span>·</span>
@@ -219,22 +222,22 @@ export default function PrintDocument({
             <span>·</span>
             <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
           </div>
-          <div className="font-medium text-gray-500">
+          <div className="font-medium text-gray-600">
             {address}
           </div>
         </div>
 
         {/* Clean 3-Column Signature Block */}
-        <div className="grid grid-cols-3 gap-6 text-center text-xs text-gray-700 mt-2">
+        <div className="grid grid-cols-3 gap-6 text-center text-sm text-gray-700 mt-2">
           {resolvedSignatures.map((sig, idx) => (
             <div key={idx} className="flex flex-col items-center">
               {/* Working signature line with signing space */}
               <div className="w-44 max-w-full h-8 border-b-2 border-gray-600 mb-1.5" />
-              <div className="font-bold text-gray-800 uppercase tracking-wide text-[11px]">
+              <div className="font-bold text-gray-800 uppercase tracking-wide text-sm">
                 {sig.label}
               </div>
               {sig.sub && (
-                <div className="text-[10px] text-gray-500 mt-0.5">
+                <div className="text-xs text-gray-600 mt-0.5 print-note-text">
                   {sig.sub}
                 </div>
               )}

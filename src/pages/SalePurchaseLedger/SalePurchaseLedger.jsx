@@ -5,6 +5,7 @@ import MallAcStatement from '../../components/common/MallAcStatement.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
 import Select from '../../components/ui/Select.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { safePrint } from '../../utils/printUtils.js';
 import { Table, TR, TD } from '../../components/ui/Table.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
@@ -61,7 +62,7 @@ export default function SalePurchaseLedger() {
   });
 
   const handlePrint = () => {
-    window.print();
+    safePrint();
   };
 
   return (
@@ -134,13 +135,28 @@ export default function SalePurchaseLedger() {
         </div>
       </div>
 
+      {/* ── Centered Bordered Party / Account Name Box ── */}
+      <div className="border-2 border-black p-4 text-center bg-white shadow-sm rounded-none my-4">
+        <div className="font-urdu font-bold text-[40px] print:text-[24pt] text-black leading-tight" dir="rtl">
+          مال کھاتہ (سیلز اینڈ پرچیز)
+        </div>
+        <div className="font-bold text-[22px] print:text-[14pt] text-black mt-1" dir="ltr">
+          Mall Account (Sale & Purchase Ledger)
+        </div>
+        <div className="text-[18px] print:text-[12pt] font-semibold text-gray-800 mt-1 flex items-center justify-center gap-6" dir="rtl">
+          <span>کوڈ: <strong className="num text-[18px] print:text-[12pt]">99010 (MALL-AC)</strong></span>
+        </div>
+      </div>
+
       {/* ── PRINT VIEW — MallAcStatement (PERBALACC bordered grid) ────────── */}
       <MallAcStatement
         ledgerRows={filtered}
         openingBalance={0}
         dateFrom={dateFrom}
         dateTo={dateTo}
-        acCode="MALL-AC"
+        acCode="99010 (MALL-AC)"
+        accountName="Mall Account (Sale & Purchase Ledger)"
+        urduName="مال کھاتہ (سیلز اینڈ پرچیز)"
       />
 
       {/* ── SCREEN VIEW ──────────────────────────────────────────────────── */}
@@ -187,15 +203,15 @@ export default function SalePurchaseLedger() {
         {/* Ledger Table */}
         <Table
           headers={[
-            'Date',
-            'Voucher / Ref #',
-            'Transaction Type / Category',
-            'Party / Description',
-            'Debit (Purchases & Expenses)',
-            'Credit (Sales Revenue)',
-            'Mall A/C Balance',
+            'تاریخ',
+            'واؤچر نمبر',
+            'قسم',
+            'تفصیل',
+            'بنام',
+            'جمع',
+            'بیلنس',
           ]}
-          emptyText="No transactions posted to Sale Purchase A/C (Mall A/C)."
+          emptyText="اس مدت میں کوئی لین دین درج نہیں ہے۔ (No transactions posted to Mall A/C)"
         >
           {filtered.map((r, idx) => {
             let badgeVariant = 'orange';
@@ -206,24 +222,24 @@ export default function SalePurchaseLedger() {
 
             return (
               <TR key={idx}>
-                <TD>{formatDate(r.date)}</TD>
-                <TD mono className="font-bold text-[#1E3A5F]">
+                <TD className="num text-center">{formatDate(r.date)}</TD>
+                <TD className="num text-center font-bold text-[#1E3A5F]">
                   {r.no}
                 </TD>
                 <TD>
                   <Badge variant={badgeVariant}>{r.type}</Badge>
                 </TD>
                 <TD>
-                  <div className="font-semibold text-gray-900">{r.partyName}</div>
-                  <div className="text-xs text-gray-500 truncate max-w-xs">{r.description || '-'}</div>
+                  <div className="font-urdu font-bold text-[20px] text-gray-900 leading-relaxed">{r.partyName}</div>
+                  <div className="font-urdu text-[16px] text-gray-600 truncate max-w-xs">{r.description || '-'}</div>
                 </TD>
-                <TD mono right className="text-red-600 font-bold">
+                <TD right className="num text-red-600 font-bold">
                   {r.debit > 0 ? fmt(r.debit) : '-'}
                 </TD>
-                <TD mono right className="text-emerald-600 font-bold">
+                <TD right className="num text-emerald-600 font-bold">
                   {r.credit > 0 ? fmt(r.credit) : '-'}
                 </TD>
-                <TD mono right className="font-extrabold text-[#1E3A5F]">
+                <TD right className="num-total font-extrabold text-[#1E3A5F]">
                   {fmt(r.balance)}
                 </TD>
               </TR>

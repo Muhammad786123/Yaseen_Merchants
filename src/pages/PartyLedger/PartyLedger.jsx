@@ -53,6 +53,9 @@ export default function PartyLedger() {
         accountType={selectedParty?.type || 'Customer'}
         acCode={selectedParty?.code || selectedParty?.id || '10051'}
         accountName={selectedParty ? `${selectedParty.name} (${selectedParty.city || ''})` : ''}
+        urduName={selectedParty?.urduName || selectedParty?.nameUrdu}
+        englishName={selectedParty?.name}
+        phone={selectedParty?.phone}
         badgeText={getBadgeText(selectedParty)}
         rows={ledgerRows}
         openingBalance={openingBalance}

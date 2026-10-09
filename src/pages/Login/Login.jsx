@@ -38,8 +38,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#F5F4F0] flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Subtle Background Decorative Shapes */}
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1E3A5F]/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-[#C97B2E]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-24 -start-24 w-96 h-96 bg-[#1E3A5F]/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -end-24 w-96 h-96 bg-[#C97B2E]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md z-10">
         {/* Main Login Card */}
@@ -107,7 +107,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-7.5 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute end-3 top-7.5 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -130,7 +130,7 @@ export default function Login() {
         </Card>
 
         {/* Footer info */}
-        <p className="text-center text-[11px] text-gray-400 mt-6 font-medium">
+        <p className="text-center text-xs text-gray-500 mt-6 font-medium">
           {legalName} ERP &copy; {new Date().getFullYear()}
         </p>
       </div>

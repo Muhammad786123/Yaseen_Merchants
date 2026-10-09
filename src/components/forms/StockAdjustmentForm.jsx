@@ -189,14 +189,14 @@ export default function StockAdjustmentForm({
       {/* Financial Valuation Summary Card */}
       <div className="p-2.5 bg-white border border-black flex items-center justify-between">
         <div>
-          <span className="text-[11px] text-gray-700 font-bold">Calculated Stock Value:</span>
-          <div className="font-mono text-sm font-black text-black">
+          <span className="text-xs text-gray-700 font-bold">Calculated Stock Value:</span>
+          <div className="font-mono text-base font-black text-black">
             {fmt(totalValue)}
           </div>
         </div>
         <div className="text-right">
-          <span className="text-[11px] text-gray-700 font-bold">Stock Added:</span>
-          <div className="font-mono text-sm font-bold text-[#1a6b2e]">
+          <span className="text-xs text-gray-700 font-bold">Stock Added:</span>
+          <div className="font-mono text-base font-bold text-[#1a6b2e]">
             +{numQty.toLocaleString('en-PK')} KG
           </div>
         </div>

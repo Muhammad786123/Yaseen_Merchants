@@ -171,7 +171,7 @@ export default function Stock() {
               </Badge>
             </TD>
             <TD>
-              <span className="bg-[#FFEB3B] border border-black px-1.5 py-0.5 font-bold text-[10px] text-black">
+              <span className="bg-[#FFEB3B] border border-black px-2 py-0.5 font-bold text-[22px] text-black">
                 {s.quality}
               </span>
             </TD>

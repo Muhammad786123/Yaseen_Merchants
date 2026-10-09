@@ -42,6 +42,7 @@ import {
   Calendar,
   Layers,
   Image as ImageIcon,
+  Sliders,
 } from 'lucide-react';
 
 const defaultNumbering = [
@@ -70,7 +71,7 @@ function formatBackupDate(isoStr) {
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'company';
-  const { showToast } = useApp();
+  const { showToast, direction, setDirection } = useApp();
   const { profile, updateProfile, reloadProfile, defaultLogo } = useCompanyProfile();
 
   const [companyName, setCompanyName] = useState(profile?.legalName || 'Shahid Yaseen Cotton Waste Merchant');
@@ -465,6 +466,17 @@ export default function Settings() {
           <Database className="w-3.5 h-3.5" />
           Data Backup &amp; Restore
         </button>
+        <button
+          onClick={() => handleTabChange('preferences')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+            activeTab === 'preferences'
+              ? 'bg-[#1E3A5F] text-white shadow-xs'
+              : 'text-gray-600 hover:bg-[#F5F4F0]'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          Preferences
+        </button>
       </div>
 
       {/* ── COMPANY PROFILE TAB ────────────────────────────────────────────── */}
@@ -562,7 +574,7 @@ export default function Settings() {
                     placeholder="e.g. 2026-2027"
                     required
                   />
-                  <p className="text-[11px] text-gray-400 mt-1 italic">
+                  <p className="text-xs text-gray-500 mt-1 italic">
                     The active financial cycle referenced on ledgers, financial statements, and printable documentation.
                   </p>
                 </div>
@@ -599,7 +611,7 @@ export default function Settings() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Prefix</label>
+                      <label className="text-xs text-gray-500 block mb-1">Prefix</label>
                       <input
                         type="text"
                         className="w-16 px-2 py-1.5 text-xs border border-[#E0DBD3] rounded-lg outline-none focus:border-[#1E3A5F]"
@@ -612,7 +624,7 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Next Number</label>
+                      <label className="text-xs text-gray-500 block mb-1">Next Number</label>
                       <input
                         type="number"
                         className="w-20 px-2 py-1.5 text-xs border border-[#E0DBD3] rounded-lg outline-none focus:border-[#1E3A5F]"
@@ -624,8 +636,8 @@ export default function Settings() {
                         }}
                       />
                     </div>
-                    <div className="ml-auto">
-                      <span className="text-[10px] text-gray-400 block mb-1">Preview</span>
+                    <div className="ms-auto">
+                      <span className="text-xs text-gray-500 block mb-1">Preview</span>
                       <div className="font-mono text-xs font-bold text-[#C97B2E] bg-amber-50 px-3 py-1 rounded-lg border border-amber-200">
                         {n.prefix}-{String(n.next).padStart(n.digits, '0')}
                       </div>
@@ -762,13 +774,13 @@ export default function Settings() {
                 Contains active business ledgers, parties, warehouse inventories, and transaction vouchers.
               </p>
             </div>
-            <div className="flex items-center gap-6 text-right">
+            <div className="flex items-center gap-6 text-end">
               <div>
-                <span className="text-[11px] text-gray-300 block uppercase">Total Records</span>
+                <span className="text-xs text-gray-300 block uppercase">Total Records</span>
                 <span className="text-xl font-black font-mono text-emerald-400">{dbStats.total}</span>
               </div>
-              <div className="border-l border-white/20 pl-6">
-                <span className="text-[11px] text-gray-300 block uppercase">Last Export</span>
+              <div className="border-s border-white/20 ps-6">
+                <span className="text-xs text-gray-300 block uppercase">Last Export</span>
                 <span className="text-xs font-bold font-mono text-white">
                   {lastManualBackup ? formatBackupDate(lastManualBackup) : 'None'}
                 </span>
@@ -787,7 +799,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-[#1E3A5F]">Manual Backup (Export)</h4>
-                    <p className="text-[11px] text-gray-500">Download JSON file to your device</p>
+                    <p className="text-xs text-gray-500">Download JSON file to your device</p>
                   </div>
                 </div>
 
@@ -834,7 +846,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-[#1E3A5F]">Restore from Backup</h4>
-                    <p className="text-[11px] text-gray-500">Import a previously downloaded .json file</p>
+                    <p className="text-xs text-gray-500">Import a previously downloaded .json file</p>
                   </div>
                 </div>
 
@@ -880,7 +892,7 @@ export default function Settings() {
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-[#1E3A5F]">Automatic Backup Snapshots</h4>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-xs text-gray-500">
                     Background snapshots saved directly into IndexedDB (kept up to {5} versions)
                   </p>
                 </div>
@@ -902,7 +914,7 @@ export default function Settings() {
             {/* Auto Backup Controls */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-[#FAF9F7] p-4 rounded-xl border border-[#E0DBD3]">
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Automatic Backup Status
                 </span>
                 <div className="flex items-center gap-2 pt-1">
@@ -922,7 +934,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Backup Frequency
                 </span>
                 <select
@@ -938,7 +950,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Last Auto-Backup
                 </span>
                 <div className="text-xs font-mono font-bold text-[#1E3A5F] pt-1 flex items-center gap-1.5">
@@ -974,10 +986,10 @@ export default function Settings() {
                           <div className="font-bold text-xs text-[#1E3A5F]">
                             Snapshot — {formatBackupDate(snap.timestamp)}
                           </div>
-                          <div className="text-[11px] text-gray-500 mt-0.5">
+                          <div className="text-xs text-gray-500 mt-0.5">
                             Total Records: <strong>{snap.totalRecords || 0}</strong>
                             {snap.itemCounts && (
-                              <span className="ml-2 text-gray-400">
+                              <span className="ms-2 text-gray-400">
                                 ({snap.itemCounts.parties || 0} parties, {snap.itemCounts.purchases || 0} purchases, {snap.itemCounts.sales || 0} sales)
                               </span>
                             )}
@@ -1009,7 +1021,7 @@ export default function Settings() {
             </div>
 
             {/* Caveat Note */}
-            <div className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-start gap-2">
+            <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-start gap-2">
               <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
               <span>
                 <strong>Important note on browser storage:</strong> Auto-backups are stored inside your browser&apos;s local IndexedDB.
@@ -1223,9 +1235,9 @@ export default function Settings() {
               <div className="bg-[#FAF9F7] p-3 rounded-xl border border-[#E0DBD3] text-xs space-y-2">
                 <div className="font-bold text-gray-800 border-b border-gray-200 pb-1 flex justify-between">
                   <span>Scope of Wipe</span>
-                  <span className="text-red-600 uppercase font-mono text-[10px]">Permanent</span>
+                  <span className="text-red-600 uppercase font-mono text-xs">Permanent</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600 text-[11px]">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600 text-xs">
                   <div>• Parties, Suppliers &amp; Customers</div>
                   <div>• Items &amp; Qualities Master</div>
                   <div>• All Warehouses &amp; Stock Entries</div>
@@ -1235,7 +1247,7 @@ export default function Settings() {
                   <div>• Expense Records &amp; Transfers</div>
                   <div>• Cash Book &amp; Mall A/C Ledgers</div>
                 </div>
-                <div className="pt-1.5 border-t border-gray-200 text-[11px] text-emerald-800 font-medium">
+                <div className="pt-1.5 border-t border-gray-200 text-xs text-emerald-800 font-medium">
                   ✓ Preserved: Company Profile, Document Numbering, and User Logins. Account structures (Cash, Meezan, HBL, UBL) remain intact with zero balances.
                 </div>
               </div>
@@ -1315,6 +1327,91 @@ export default function Settings() {
               </div>
             </div>
           </Modal>
+        </div>
+      )}
+
+      {/* ── PREFERENCES TAB ─────────────────────────────────────────────────── */}
+      {activeTab === 'preferences' && (
+        <div className="space-y-6 max-w-2xl">
+          <Card className="p-6 space-y-6">
+            <div className="border-b border-[#E0DBD3] pb-4">
+              <h3 className="text-base font-bold text-[#1E3A5F]">Display &amp; Layout Direction</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Configure your preferred application reading direction. Setting is automatically preserved in your browser.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-xs font-bold text-gray-900">
+                Layout Direction
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Right-to-Left (Default) */}
+                <div
+                  onClick={() => {
+                    setDirection('rtl');
+                    showToast('Layout direction updated to Right-to-Left (Urdu layout)');
+                  }}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    direction === 'rtl'
+                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
+                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-[#1E3A5F]">Right-to-Left (Default)</span>
+                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      direction === 'rtl' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
+                    }`}>
+                      {direction === 'rtl' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed font-urdu text-base">
+                    دائیں سے بائیں (اردو طرز)
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sidebar on right, reports, ledgers &amp; vouchers formatted in native Urdu accounting flow.
+                  </p>
+                </div>
+
+                {/* Left-to-Right */}
+                <div
+                  onClick={() => {
+                    setDirection('ltr');
+                    showToast('Layout direction updated to Left-to-Right (English layout)');
+                  }}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    direction === 'ltr'
+                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
+                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-[#1E3A5F]">Left-to-Right</span>
+                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      direction === 'ltr' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
+                    }`}>
+                      {direction === 'ltr' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed font-semibold">
+                    Left-to-Right (English Layout)
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sidebar on left, standard Western reading orientation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Tip:</strong> All amounts, ledger values, dates, and accounting calculations remain strictly 100% identical in both layout modes.
+                </span>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

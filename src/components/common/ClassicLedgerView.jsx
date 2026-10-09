@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer } from 'lucide-react';
 import Button from '../ui/Button.jsx';
+import { safePrint } from '../../utils/printUtils.js';
 import { fmt, fmtNum, formatDate } from '../../utils/formatters.js';
 
 function fmtDateShort(d) {
@@ -44,6 +45,9 @@ export default function ClassicLedgerView({
   accountType = 'Customer', // 'Customer' | 'Supplier' | 'Warehouse' | 'Quality' | 'Item'
   acCode = '10051',
   accountName = '',
+  urduName = '',
+  englishName = '',
+  phone = '',
   badgeText = 'خریدار',
   rows = [], // [{ id, date, billNo, detail, quantity, weight, rate, debit, credit, balance, marker, ... }]
   openingBalance = 0,
@@ -75,8 +79,12 @@ export default function ClassicLedgerView({
   const finalBalance =
     filteredRows.length > 0 ? Number(filteredRows[filteredRows.length - 1].balance || 0) : openingBalance;
 
+  const hasUrdu = /[\u0600-\u06FF]/.test(accountName);
+  const displayUrduName = urduName || (hasUrdu ? accountName : '');
+  const displayEnglishName = englishName || (!hasUrdu ? accountName : '');
+
   const handlePrint = () => {
-    window.print();
+    safePrint();
   };
 
   return (
@@ -103,88 +111,119 @@ export default function ClassicLedgerView({
         }}
       >
         {/* Header Block */}
-        <div className="mb-3 space-y-1.5 border-b border-black pb-3">
+        <div className="mb-4 space-y-2 border-b border-black pb-3">
           {/* Top Line: Timestamp, Title, Account Badge */}
-          <div className="flex items-start justify-between">
+          <div className="flex items-center justify-between">
             {/* Top-left: Live timestamp */}
-            <div className="text-[11px] font-mono text-gray-700 w-1/4">
+            <div className="text-sm num text-gray-700 w-1/4" dir="ltr">
               {timestamp}
             </div>
 
             {/* Center: STATEMENT OF ACCOUNT */}
             <div className="text-center w-2/4">
-              <h1 className="text-xl sm:text-2xl font-black text-[#1a6b2e] tracking-wider uppercase">
+              <h2 className="text-[26px] font-bold text-[#1a6b2e] tracking-wider font-urdu leading-normal">
+                اسٹیٹمنٹ آف اکاؤنٹ
+              </h2>
+              <h1 className="text-xs font-black text-gray-700 tracking-wider uppercase">
                 STATEMENT OF ACCOUNT
               </h1>
             </div>
 
-            {/* Top-right: Account Name & Yellow Badge */}
+            {/* Top-right: Yellow Badge */}
             <div className="flex items-center justify-end gap-2 w-1/4">
-              <span className="text-sm font-bold text-[#0d47a1] font-serif" dir="rtl">
-                {accountName}
-              </span>
-              <div className="bg-[#FFEB3B] border border-black px-3 py-0.5 text-xs font-bold text-red-900 shadow-xs">
+              <div className="bg-[#FFEB3B] border border-black px-3 py-1 text-sm font-bold text-red-900 shadow-xs font-urdu">
                 {badgeText}
               </div>
             </div>
           </div>
 
-          {/* Second Line: A/C Code, Account Name, Period Date Range Filter */}
-          <div className="flex flex-wrap items-center justify-between text-xs pt-1 gap-2">
-            <div className="font-bold flex items-center gap-2">
-              <span>A/C Code </span>
-              <span className="font-mono text-sm font-extrabold bg-gray-100 px-1.5 py-0.5 border border-black/40">{acCode}</span>
-              {accountName && (
-                <span className="text-[#0d47a1] font-serif text-sm font-bold ml-1">
-                  — {accountName}
+          {/* Dedicated Account / Party Name Box (40px bold on screen, 24pt bold in print, centered inside a bordered box at top) */}
+          <div className="text-center py-2.5 px-4 border-2 border-black my-2 bg-white shadow-xs">
+            {/* Urdu Name first (40px screen / 24pt print) */}
+            <div
+              className="text-[40px] print:text-[24pt] font-bold text-black font-urdu leading-normal tracking-wide"
+              dir="rtl"
+            >
+              {displayUrduName || displayEnglishName || accountName || 'کھاتہ'}
+            </div>
+
+            {/* English Name below at 22px */}
+            {displayEnglishName && displayEnglishName !== displayUrduName && (
+              <div className="text-[22px] print:text-[14pt] font-bold text-gray-800 tracking-wide mt-0.5">
+                {displayEnglishName}
+              </div>
+            )}
+
+            {/* Party Code and Phone below at 18px */}
+            <div className="flex items-center justify-center gap-6 text-[18px] print:text-[12pt] font-bold text-gray-800 mt-1">
+              {acCode && (
+                <span>
+                  کوڈ (Code): <span className="num font-bold text-[18px] print:text-[12pt]">{acCode}</span>
+                </span>
+              )}
+              {phone && (
+                <span>
+                  فون (Phone): <span className="num font-bold text-[18px] print:text-[12pt]">{phone}</span>
                 </span>
               )}
             </div>
+          </div>
 
-            <div className="flex items-center gap-1.5 font-medium text-xs">
-              <span className="font-bold">A/C Ledger for the period From</span>
+          {/* Line: A/C Code, Period Date Range Filter */}
+          <div className="flex flex-wrap items-center justify-between text-base pt-1 gap-2">
+            <div className="font-bold flex items-center gap-2">
+              <span className="font-urdu text-[18px]">کوڈ:</span>
+              <span className="num font-extrabold bg-gray-100 px-2.5 py-0.5 border border-black/40 text-[18px]">{acCode}</span>
+            </div>
+
+            <div className="flex items-center gap-2 font-medium text-base">
+              <span className="font-urdu font-bold text-[18px]">مدت از:</span>
               {/* Screen editable date inputs */}
-              <div className="print:hidden flex items-center gap-1">
+              <div className="print:hidden flex items-center gap-1.5">
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom && setDateFrom(e.target.value)}
-                  className="border border-black px-1.5 py-0.5 font-mono text-xs bg-white outline-none cursor-pointer"
+                  className="border border-black px-2 py-1 num text-base bg-white outline-none cursor-pointer"
                   title="Filter start date"
                 />
-                <span className="font-bold">To</span>
+                <span className="font-urdu font-bold text-[18px]">تا:</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo && setDateTo(e.target.value)}
-                  className="border border-black px-1.5 py-0.5 font-mono text-xs bg-white outline-none cursor-pointer"
+                  className="border border-black px-2 py-1 num text-base bg-white outline-none cursor-pointer"
                   title="Filter end date"
                 />
               </div>
               {/* Print view boxed dates matching reference format e.g. 01-MAR-22 To 03-OCT-26 */}
               <div className="hidden print:inline-flex items-center gap-1.5">
-                <span className="border border-black px-2 py-0.5 font-mono text-xs font-bold">
+                <span className="border border-black px-2.5 py-0.5 num text-base font-bold">
                   {dateFrom ? fmtDateUpper(dateFrom) : filteredRows[0]?.date ? fmtDateUpper(filteredRows[0].date) : 'START'}
                 </span>
-                <span className="font-bold">To</span>
-                <span className="border border-black px-2 py-0.5 font-mono text-xs font-bold">
+                <span className="font-urdu font-bold text-[18px]">تا</span>
+                <span className="border border-black px-2.5 py-0.5 num text-base font-bold">
                   {dateTo ? fmtDateUpper(dateTo) : fmtDateUpper(new Date())}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Third Line: Opening Balance (سابقہ بقایا) */}
-          <div className="flex items-center justify-between text-xs pt-0.5">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm" dir="rtl">سابقہ بقایا</span>
-              <span className="font-mono font-bold text-sm">
-                {openingBalance ? (mode === 'currency' ? fmt(openingBalance) : `${fmtNum(openingBalance)} ${unitLabel}`) : '0'}
+          {/* Opening Balance Line (سابقہ بیلنس) */}
+          <div className="flex items-center justify-between text-base pt-1">
+            <div className="flex items-center gap-3">
+              <span className="font-urdu font-bold text-[22px] print:text-[14pt]" dir="rtl">سابقہ بیلنس (Opening Balance):</span>
+              <span className="num font-bold text-[22px] print:text-[14pt]">
+                {openingBalance
+                  ? mode === 'currency'
+                    ? `${fmtNum(Math.abs(openingBalance))}${openingBalance > 0 ? ' Cr' : openingBalance < 0 ? ' Dr' : ''}`
+                    : `${fmtNum(openingBalance)} ${unitLabel}`
+                  : '0'}
               </span>
             </div>
             {filteredRows.length > 0 && (
-              <span className="text-[11px] text-gray-500 font-mono">
-                Showing {filteredRows.length} transaction entries
+              <span className="text-sm text-gray-500 font-sans">
+                Showing {filteredRows.length} entries
               </span>
             )}
           </div>
@@ -192,53 +231,55 @@ export default function ClassicLedgerView({
 
         {/* ── Main Ledger Grid (PERBALACC Exact Bordered Table) ── */}
         <table
-          className="w-full border-collapse text-xs text-black"
+          className="classic-ledger-table w-full border-collapse text-base text-black"
+          dir="rtl"
           style={{
             borderCollapse: 'collapse',
             border: BORDER_STYLE,
             tableLayout: 'fixed',
+            direction: 'rtl',
           }}
         >
-          {/* Column definitions matching reference proportions:
-              Physical Left-to-Right: [marker] | بقایا | جمع | بنام | ریٹ | وزن | تعداد | بل | تفصیل | تاریخ
+          {/* Column definitions matching RTL order:
+              Right-to-Left: تاریخ | تفصیل | واؤچر نمبر | نگ | کلو | ریٹ | بنام | جمع | بیلنس | [حالت]
           */}
           <colgroup>
-            <col style={{ width: '4%' }} />  {/* Marker: جمع/نام */}
-            <col style={{ width: '13%' }} /> {/* بقایا: Balance */}
-            <col style={{ width: '13%' }} /> {/* جمع: Credit / Total */}
-            <col style={{ width: '13%' }} /> {/* بنام: Debit / Counterparty */}
-            <col style={{ width: '8%' }} />  {/* ریٹ: Rate */}
-            <col style={{ width: '9%' }} />  {/* وزن: Weight */}
-            <col style={{ width: '7%' }} />  {/* تعداد: Quantity */}
-            <col style={{ width: '9%' }} />  {/* بل: Bill No */}
-            <col style={{ width: '15%' }} /> {/* تفصیل: Detail */}
-            <col style={{ width: '9%' }} />  {/* تاریخ: Date */}
+            <col style={{ width: '10%' }} /> {/* تاریخ: Date */}
+            <col style={{ width: '22%' }} /> {/* تفصیل: Detail */}
+            <col style={{ width: '9%' }} />  {/* واؤچر نمبر: Voucher No */}
+            <col style={{ width: '6%' }} />  {/* نگ: Nug */}
+            <col style={{ width: '8%' }} />  {/* کلو: KG */}
+            <col style={{ width: '7%' }} />  {/* ریٹ: Rate */}
+            <col style={{ width: '12%' }} /> {/* بنام: Debit */}
+            <col style={{ width: '12%' }} /> {/* جمع: Credit */}
+            <col style={{ width: '11%' }} /> {/* بیلنس: Balance */}
+            <col style={{ width: '3%' }} />  {/* Marker: جمع/نام */}
           </colgroup>
 
           <thead>
             <tr className="bg-white text-center font-bold">
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}></th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>بقایا</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>جمع</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>بنام</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>ریٹ</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>وزن</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>تعداد</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>بل</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 4px', textAlign: 'right' }}>تفصیل</th>
-              <th style={{ border: BORDER_STYLE, padding: '4px 2px' }}>تاریخ</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>تاریخ</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 8px', textAlign: 'start' }}>تفصیل</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>واؤچر نمبر</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>نگ</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>کلو</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>ریٹ</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>بنام</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>جمع</th>
+              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>بیلنس</th>
+              <th className="font-urdu font-bold text-[18px] print:text-[12pt]" style={{ border: BORDER_STYLE, padding: '6px 2px' }}></th>
             </tr>
           </thead>
 
-          <tbody>
+          <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
             {filteredRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={10}
-                  className="py-8 text-center text-gray-500 font-medium"
+                  className="py-8 text-center text-gray-500 font-urdu text-[20px] print:text-[13pt]"
                   style={{ border: BORDER_STYLE }}
                 >
-                  No transaction history recorded for this period.
+                  اس مدت میں کوئی لین دین درج نہیں ہے۔ (No transaction history)
                 </td>
               </tr>
             ) : (
@@ -262,155 +303,131 @@ export default function ClassicLedgerView({
                     className={`${onRowClick ? 'cursor-pointer hover:bg-yellow-50/50' : ''}`}
                     style={{
                       backgroundColor: idx % 2 === 1 ? '#FAFAFA' : '#FFFFFF',
-                      lineHeight: '1.2',
+                      minHeight: '40px',
                     }}
                   >
-                    {/* 1. Marker column (جمع or بنام) */}
+                    {/* 1. تاریخ (Date) */}
                     <td
+                      className="num text-center"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'center',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        color: rowMarker === 'جمع' ? '#1b5e20' : '#b71c1c',
+                        padding: '6px 8px',
+                        whiteSpace: 'nowrap',
+                        direction: 'ltr',
                       }}
                     >
-                      {rowMarker}
+                      {fmtDateShort(row.date)}
                     </td>
 
-                    {/* 2. بقایا (Balance) */}
+                    {/* 2. تفصیل (Detail) */}
                     <td
+                      className="font-urdu text-[20px] print:text-[13pt] leading-relaxed"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '3px 4px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {row.balance !== undefined && row.balance !== null
-                        ? Number(row.balance).toLocaleString('en-US', {
-                            minimumFractionDigits: mode === 'currency' ? 0 : 0,
-                            maximumFractionDigits: 2,
-                          })
-                        : '—'}
-                    </td>
-
-                    {/* 3. جمع (Credit / Total) */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 4px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {Number(row.credit) > 0
-                        ? Number(row.credit).toLocaleString('en-US', {
-                            maximumFractionDigits: 2,
-                          })
-                        : ''}
-                    </td>
-
-                    {/* 4. بنام (Debit / Counterparty) */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 4px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {Number(row.debit) > 0
-                        ? Number(row.debit).toLocaleString('en-US', {
-                            maximumFractionDigits: 2,
-                          })
-                        : ''}
-                    </td>
-
-                    {/* 5. ریٹ (Rate) — Blank for pure cash entries */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {Number(row.rate) > 0
-                        ? Number(row.rate).toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : ''}
-                    </td>
-
-                    {/* 6. وزن (Weight / KG) — Blank for pure cash entries */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'right',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {Number(row.weight) > 0
-                        ? Number(row.weight).toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : ''}
-                    </td>
-
-                    {/* 7. تعداد (Quantity / Nug) — Blank for pure cash entries */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'center',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {Number(row.quantity) > 0 ? Number(row.quantity) : ''}
-                    </td>
-
-                    {/* 8. بل (Bill No / Ref) */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'center',
-                        fontFamily: 'monospace',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {row.billNo || '—'}
-                    </td>
-
-                    {/* 9. تفصیل (Detail) */}
-                    <td
-                      style={{
-                        border: BORDER_STYLE,
-                        padding: '3px 6px',
-                        textAlign: 'right',
+                        padding: '6px 10px',
+                        textAlign: 'start',
                         wordBreak: 'break-word',
                       }}
                     >
                       {row.detail || '—'}
                     </td>
 
-                    {/* 10. تاریخ (Date) */}
+                    {/* 3. واؤچر نمبر (Voucher / Bill No) */}
                     <td
+                      className="num text-center"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '3px 2px',
-                        textAlign: 'center',
-                        fontFamily: 'monospace',
-                        whiteSpace: 'nowrap',
+                        padding: '6px 6px',
+                        direction: 'ltr',
                       }}
                     >
-                      {fmtDateShort(row.date)}
+                      {row.billNo || '—'}
+                    </td>
+
+                    {/* 4. نگ (Quantity / Nug) */}
+                    <td
+                      className="num text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {Number(row.quantity) > 0 ? fmtNum(row.quantity) : ''}
+                    </td>
+
+                    {/* 5. کلو (Weight / KG) */}
+                    <td
+                      className="num text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {Number(row.weight) > 0 ? fmtNum(row.weight) : ''}
+                    </td>
+
+                    {/* 6. ریٹ (Rate) */}
+                    <td
+                      className="num text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {Number(row.rate) > 0 ? fmtNum(row.rate) : ''}
+                    </td>
+
+                    {/* 7. بنام (Debit) */}
+                    <td
+                      className="num text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {Number(row.debit) > 0 ? fmtNum(row.debit) : ''}
+                    </td>
+
+                    {/* 8. جمع (Credit) */}
+                    <td
+                      className="num text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {Number(row.credit) > 0 ? fmtNum(row.credit) : ''}
+                    </td>
+
+                    {/* 9. بیلنس (Balance) */}
+                    <td
+                      className="num-total text-start"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 8px',
+                        direction: 'ltr',
+                      }}
+                    >
+                      {row.balance !== undefined && row.balance !== null
+                        ? `${fmtNum(Math.abs(Number(row.balance)))}${Number(row.balance) > 0 ? ' Cr' : Number(row.balance) < 0 ? ' Dr' : ''}`
+                        : '—'}
+                    </td>
+
+                    {/* 10. Marker column (جمع or بنام) */}
+                    <td
+                      className="font-urdu font-bold text-[18px] print:text-[12pt] text-center"
+                      style={{
+                        border: BORDER_STYLE,
+                        padding: '6px 2px',
+                        color: rowMarker === 'جمع' ? '#000000' : '#b71c1c',
+                      }}
+                    >
+                      {rowMarker}
                     </td>
                   </tr>
                 );
@@ -421,79 +438,77 @@ export default function ClassicLedgerView({
           {/* Total Footer Row */}
           <tfoot>
             <tr className="bg-white font-bold text-center" style={{ borderTop: '2px solid #000' }}>
-              <td style={{ border: BORDER_STYLE, padding: '4px 2px' }}></td>
-
-              {/* Total Balance */}
-              <td
-                style={{
-                  border: BORDER_STYLE,
-                  padding: '4px',
-                  textAlign: 'right',
-                  fontFamily: 'monospace',
-                  fontWeight: 800,
-                }}
-              >
-                {finalBalance.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              <td colSpan={3} style={{ border: BORDER_STYLE, padding: '8px 10px', textAlign: 'start' }}>
+                <span className="font-urdu font-bold text-[22px] print:text-[14pt]">میزان کل (ٹوٹل)</span>
               </td>
 
-              {/* Total Credit */}
+              {/* Total Qty (نگ) */}
               <td
+                className="num-total text-start"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '4px',
-                  textAlign: 'right',
-                  fontFamily: 'monospace',
-                  fontWeight: 800,
-                  color: '#1b5e20',
+                  padding: '6px 8px',
+                  direction: 'ltr',
                 }}
               >
-                {totalCredit ? totalCredit.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
+                {totalQty ? fmtNum(totalQty) : ''}
               </td>
 
-              {/* Total Debit */}
+              {/* Total Weight (کلو) */}
               <td
+                className="num-total text-start"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '4px',
-                  textAlign: 'right',
-                  fontFamily: 'monospace',
-                  fontWeight: 800,
-                  color: '#b71c1c',
+                  padding: '6px 8px',
+                  direction: 'ltr',
                 }}
               >
-                {totalDebit ? totalDebit.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}
+                {totalWeight ? fmtNum(totalWeight) : ''}
               </td>
 
               {/* Empty rate column */}
-              <td style={{ border: BORDER_STYLE, padding: '4px' }}></td>
+              <td style={{ border: BORDER_STYLE, padding: '6px 4px' }}></td>
 
-              {/* Total Weight */}
+              {/* Total Debit (بنام) */}
               <td
+                className="num-total text-start"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '4px',
-                  textAlign: 'right',
-                  fontFamily: 'monospace',
+                  padding: '6px 8px',
+                  direction: 'ltr',
+                  color: '#b71c1c',
                 }}
               >
-                {totalWeight ? totalWeight.toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''}
+                {totalDebit ? fmtNum(totalDebit) : '0'}
               </td>
 
-              {/* Total Qty */}
+              {/* Total Credit (جمع) */}
               <td
+                className="num-total text-start"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '4px',
-                  textAlign: 'center',
-                  fontFamily: 'monospace',
+                  padding: '6px 8px',
+                  direction: 'ltr',
                 }}
               >
-                {totalQty ? totalQty : ''}
+                {totalCredit ? fmtNum(totalCredit) : '0'}
               </td>
 
-              <td colSpan={3} style={{ border: BORDER_STYLE, padding: '4px 8px', textAlign: 'left' }}>
-                <span className="font-serif font-bold text-xs">میزان کل (Total Summary)</span>
+              {/* Total Balance (بیلنس) */}
+              <td
+                className="num-total text-start"
+                style={{
+                  border: BORDER_STYLE,
+                  padding: '6px 8px',
+                  direction: 'ltr',
+                }}
+              >
+                {fmtNum(Math.abs(finalBalance))}
+                {finalBalance > 0 ? ' Cr' : finalBalance < 0 ? ' Dr' : ''}
               </td>
+
+              {/* Marker column */}
+              <td style={{ border: BORDER_STYLE, padding: '6px 2px' }}></td>
             </tr>
           </tfoot>
         </table>

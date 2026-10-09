@@ -104,7 +104,7 @@ export default function Sidebar({
 
   return (
     <div
-      className={`h-full bg-[#1E3A5F] flex flex-col border-r border-[#1E3A5F] no-print transition-all duration-200 ${isCollapsed ? 'w-16' : 'w-60'
+      className={`h-full bg-[#1E3A5F] flex flex-col border-e border-[#1E3A5F] no-print transition-all duration-200 ${isCollapsed ? 'w-16' : 'w-60'
         }`}
     >
       {/* Brand Header */}
@@ -147,16 +147,16 @@ export default function Sidebar({
               key={item.path}
               onClick={() => handleNav(item.path)}
               title={isCollapsed ? item.label : undefined}
-              className={`w-full flex items-center rounded-lg text-sm font-medium transition-all relative cursor-pointer ${isCollapsed
+              className={`w-full flex items-center rounded-lg text-base font-medium transition-all relative cursor-pointer ${isCollapsed
                   ? 'justify-center py-3 px-2'
-                  : 'gap-3 px-3.5 py-3 text-left'
+                  : 'gap-3 px-3.5 py-3 text-start'
                 } ${active
                   ? 'bg-[#C97B2E] text-white shadow-xs font-semibold'
                   : 'text-white/75 hover:bg-white/10 hover:text-white'
                 }`}
             >
               {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r bg-gradient-to-b from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></span>
+                <span className="absolute start-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-e bg-gradient-to-b from-[#00D084] via-[#00D0B6] to-[#00A3FF]"></span>
               )}
               <ItemIcon className="w-4.5 h-4.5 shrink-0" />
               {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -176,16 +176,16 @@ export default function Sidebar({
             type="button"
             onClick={toggleCollapse}
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`hidden lg:flex items-center rounded-lg text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer ${isCollapsed
+            className={`hidden lg:flex items-center rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer ${isCollapsed
                 ? 'w-full justify-center py-2.5'
                 : 'w-full gap-2.5 px-3 py-2.5'
               }`}
           >
             {isCollapsed ? (
-              <ChevronRight className="w-4 h-4 shrink-0" />
+              <ChevronRight className="w-4 h-4 shrink-0 rtl:rotate-180" />
             ) : (
               <>
-                <ChevronLeft className="w-4 h-4 shrink-0" />
+                <ChevronLeft className="w-4 h-4 shrink-0 rtl:rotate-180" />
                 <span className="truncate">Collapse</span>
               </>
             )}
@@ -196,21 +196,21 @@ export default function Sidebar({
         <button
           onClick={handleLogout}
           title={isCollapsed ? 'Logout' : undefined}
-          className={`w-full flex items-center rounded-lg text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-600 transition-all border border-red-500/20 cursor-pointer ${isCollapsed
+          className={`w-full flex items-center rounded-lg text-sm font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-600 transition-all border border-red-500/20 cursor-pointer ${isCollapsed
               ? 'justify-center py-2.5'
               : 'justify-center gap-2 px-3 py-2'
             }`}
         >
-          <LogOut className="w-3.5 h-3.5 shrink-0" />
+          <LogOut className="w-3.5 h-3.5 shrink-0 rtl:rotate-180" />
           {!isCollapsed && <span>Logout</span>}
         </button>
 
         {!isCollapsed && (
           <div className="text-center pt-0.5">
-            <div className="text-[10px] text-white/40 font-semibold truncate" title={legalName}>
+            <div className="text-xs text-white/50 font-semibold truncate" title={legalName}>
               {legalName}
             </div>
-            <div className="text-[9px] text-white/25 mt-0.5">SYCWM ERP v1.0</div>
+            <div className="text-xs text-white/35 mt-0.5">SYCWM ERP v1.0</div>
           </div>
         )}
       </div>

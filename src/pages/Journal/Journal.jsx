@@ -15,6 +15,7 @@ import { useApp } from '../../context/AppContext.jsx';
 import { db } from '../../db/database.js';
 import { cashBookService } from '../../services/cashBookService.js';
 import { capitalService } from '../../services/capitalService.js';
+import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
 import {
   Save,
@@ -299,7 +300,7 @@ export default function Journal() {
             <Button
               variant="outline"
               icon={Printer}
-              onClick={() => window.print()}
+              onClick={safePrint}
             >
               Print
             </Button>
@@ -344,21 +345,21 @@ export default function Journal() {
 
         {/* Multi-row Transaction Grid (Exact Classic Bordered Table) */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-black text-xs bg-white">
+          <table className="w-full border-collapse border border-black text-base bg-white">
             <thead>
               <tr className="bg-[#DFDFDF] border-b-2 border-black text-black font-bold text-center">
-                <th className="border border-black px-2 py-2 w-10">#</th>
-                <th className="border border-black px-3 py-2 w-72 text-left">Account (کھاتہ)</th>
-                <th className="border border-black px-3 py-2 text-left">Particulars / Detail (تفصیل)</th>
-                <th className="border border-black px-3 py-2 w-36 text-right">Debit / بنام (Rs.)</th>
-                <th className="border border-black px-3 py-2 w-36 text-right">Credit / جمع (Rs.)</th>
-                <th className="border border-black px-2 py-2 w-12 text-center">Del</th>
+                <th className="border border-black px-2.5 py-2.5 w-10 text-base font-bold">#</th>
+                <th className="border border-black px-3.5 py-2.5 w-72 text-start text-base font-bold">Account (کھاتہ)</th>
+                <th className="border border-black px-3.5 py-2.5 text-start text-base font-bold">Particulars / Detail (تفصیل)</th>
+                <th className="border border-black px-3.5 py-2.5 w-40 text-left text-base font-bold" dir="ltr">Debit / بنام (Rs.)</th>
+                <th className="border border-black px-3.5 py-2.5 w-40 text-left text-base font-bold" dir="ltr">Credit / جمع (Rs.)</th>
+                <th className="border border-black px-2.5 py-2.5 w-12 text-center text-base font-bold">Del</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((line, idx) => (
                 <tr key={line.id} className="hover:bg-gray-50 border-b border-black">
-                  <td className="border border-black px-2 py-1 text-center font-mono font-bold text-gray-700">
+                  <td className="border border-black px-2.5 py-2 text-center font-mono font-bold text-gray-700 text-base">
                     {idx + 1}
                   </td>
 
@@ -367,7 +368,7 @@ export default function Journal() {
                     <select
                       value={line.accountId ? `${line.accountType}:${line.accountId}` : ''}
                       onChange={(e) => handleAccountSelect(idx, e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs outline-none bg-transparent font-bold text-black"
+                      className="w-full px-2.5 py-2 text-base outline-none bg-transparent font-bold text-black"
                     >
                       <option value="">-- Select Account --</option>
                       <optgroup label="Parties (Suppliers / Customers)">
@@ -406,31 +407,34 @@ export default function Journal() {
                       value={line.detail}
                       onChange={(e) => handleFieldChange(idx, 'detail', e.target.value)}
                       placeholder="Transaction details for this line..."
-                      className="w-full px-2 py-1.5 text-xs outline-none bg-transparent text-gray-900"
+                      dir="auto"
+                      className="w-full px-2.5 py-2 text-base outline-none bg-transparent text-gray-900 text-start"
                     />
                   </td>
 
                   {/* Debit */}
-                  <td className="border border-black p-0">
+                  <td className="border border-black p-0" dir="ltr">
                     <input
                       type="number"
                       min="0"
                       value={line.debit}
                       onChange={(e) => handleFieldChange(idx, 'debit', e.target.value)}
                       placeholder="0"
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-right outline-none bg-transparent text-red-700"
+                      dir="ltr"
+                      className="w-full px-2.5 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-red-700 tabular-nums"
                     />
                   </td>
 
                   {/* Credit */}
-                  <td className="border border-black p-0">
+                  <td className="border border-black p-0" dir="ltr">
                     <input
                       type="number"
                       min="0"
                       value={line.credit}
                       onChange={(e) => handleFieldChange(idx, 'credit', e.target.value)}
                       placeholder="0"
-                      className="w-full px-2 py-1.5 text-xs font-mono font-bold text-right outline-none bg-transparent text-[#1a6b2e]"
+                      dir="ltr"
+                      className="w-full px-2.5 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-[#1a6b2e] tabular-nums"
                     />
                   </td>
 
@@ -443,7 +447,7 @@ export default function Journal() {
                       className="p-1 text-red-600 hover:text-red-900 disabled:opacity-30 cursor-pointer"
                       title="Delete line"
                     >
-                      <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                      <Trash2 className="w-4 h-4 mx-auto" />
                     </button>
                   </td>
                 </tr>
@@ -452,13 +456,13 @@ export default function Journal() {
             <tfoot>
               {/* Total Row */}
               <tr className="bg-[#DFDFDF] font-bold">
-                <td colSpan={3} className="border border-black px-3 py-2 text-right uppercase text-black font-black">
+                <td colSpan={3} className="border border-black px-3.5 py-2.5 text-end uppercase text-black font-black text-base">
                   Total (میزان)
                 </td>
-                <td className="border border-black px-3 py-2 text-right font-mono text-red-800 text-sm font-black">
+                <td className="border border-black px-3.5 py-2.5 text-left font-mono text-red-800 text-[17px] font-black tabular-nums" dir="ltr">
                   {totalDebit ? totalDebit.toLocaleString('en-PK') : '0'}
                 </td>
-                <td className="border border-black px-3 py-2 text-right font-mono text-[#1a6b2e] text-sm font-black">
+                <td className="border border-black px-3.5 py-2.5 text-left font-mono text-[#1a6b2e] text-[17px] font-black tabular-nums" dir="ltr">
                   {totalCredit ? totalCredit.toLocaleString('en-PK') : '0'}
                 </td>
                 <td className="border border-black"></td>
@@ -481,12 +485,12 @@ export default function Journal() {
           {/* Balance Check Indicator */}
           <div className="flex items-center gap-3">
             {isBalanced ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#E8F5E9] text-[#1B5E20] border border-black text-xs font-bold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#E8F5E9] text-[#1B5E20] border border-black text-sm font-bold">
                 <CheckCircle2 className="w-4 h-4 text-[#1B5E20]" />
                 <span>✓ Balanced: {fmt(totalDebit)}</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FFEB3B] text-black border border-black text-xs font-bold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FFEB3B] text-black border border-black text-sm font-bold">
                 <AlertCircle className="w-4 h-4 text-red-700" />
                 <span>
                   Difference: {fmt(difference)} (Debit must equal Credit)
@@ -515,7 +519,7 @@ export default function Journal() {
             placeholder="Search journal vouchers by JV #, narration, or account..."
             className="w-full sm:w-96"
           />
-          <div className="text-xs font-bold text-black">
+          <div className="text-sm font-bold text-black">
             Total Recorded JVs: <span className="font-mono font-black">{savedVouchers.length}</span>
           </div>
         </div>
@@ -531,7 +535,7 @@ export default function Journal() {
               </TD>
               <TD>{formatDate(v.date)}</TD>
               <TD className="font-bold text-black">{v.narration}</TD>
-              <TD className="text-xs text-gray-800">
+              <TD className="text-sm text-gray-800">
                 {v.lines?.map((l) => l.accountName).filter(Boolean).slice(0, 3).join(', ')}
                 {v.lines?.length > 3 ? ` +${v.lines.length - 3} more` : ''}
               </TD>
@@ -543,10 +547,10 @@ export default function Journal() {
                   <button
                     type="button"
                     onClick={() => setViewingVoucher(v)}
-                    className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
+                    className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                     title="View Voucher Slip"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-4 h-4" />
                   </button>
                 </div>
               </TD>
@@ -563,8 +567,8 @@ export default function Journal() {
         maxWidth="max-w-2xl"
       >
         {viewingVoucher && (
-          <div className="space-y-4 text-xs font-sans">
-            <div className="flex justify-between border-b-2 border-black pb-2 bg-[#EBE9ED] p-2">
+          <div className="space-y-4 text-base font-sans">
+            <div className="flex justify-between border-b-2 border-black pb-2 bg-[#EBE9ED] p-3">
               <div>
                 <span className="font-bold text-black">Voucher No: </span>
                 <span className="font-mono font-black text-black">{viewingVoucher.no}</span>
@@ -584,24 +588,24 @@ export default function Journal() {
               <span className="font-semibold text-gray-900">{viewingVoucher.narration || '-'}</span>
             </div>
 
-            <table className="w-full border-collapse border border-black">
+            <table className="w-full border-collapse border border-black text-base">
               <thead>
                 <tr className="bg-[#DFDFDF] border-b-2 border-black text-black font-bold text-center">
-                  <th className="border border-black p-1.5 text-left">Account</th>
-                  <th className="border border-black p-1.5 text-left">Particulars</th>
-                  <th className="border border-black p-1.5 text-right w-28">Debit (بنام)</th>
-                  <th className="border border-black p-1.5 text-right w-28">Credit (جمع)</th>
+                  <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Account</th>
+                  <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Particulars</th>
+                  <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Debit (بنام)</th>
+                  <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Credit (جمع)</th>
                 </tr>
               </thead>
               <tbody>
                 {viewingVoucher.lines?.map((l, i) => (
                   <tr key={i} className="border-b border-black">
-                    <td className="border border-black p-1.5 font-bold text-black">{l.accountName}</td>
-                    <td className="border border-black p-1.5 text-gray-800">{l.detail || '-'}</td>
-                    <td className="border border-black p-1.5 font-mono font-bold text-right text-red-700">
+                    <td className="border border-black px-3 py-2.5 font-bold text-black text-start">{l.accountName}</td>
+                    <td className="border border-black px-3 py-2.5 text-gray-800 text-start">{l.detail || '-'}</td>
+                    <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-red-700 tabular-nums" dir="ltr">
                       {l.debit ? fmt(l.debit) : '-'}
                     </td>
-                    <td className="border border-black p-1.5 font-mono font-bold text-right text-[#1a6b2e]">
+                    <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-[#1a6b2e] tabular-nums" dir="ltr">
                       {l.credit ? fmt(l.credit) : '-'}
                     </td>
                   </tr>
@@ -609,23 +613,23 @@ export default function Journal() {
               </tbody>
               <tfoot>
                 <tr className="bg-[#DFDFDF] font-bold">
-                  <td colSpan={2} className="border border-black p-1.5 text-right font-black">Total</td>
-                  <td className="border border-black p-1.5 font-mono font-black text-right text-red-700">
+                  <td colSpan={2} className="border border-black px-3 py-2.5 text-end font-black text-base">Total</td>
+                  <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-red-700 text-[17px] tabular-nums" dir="ltr">
                     {fmt(viewingVoucher.totalAmount)}
                   </td>
-                  <td className="border border-black p-1.5 font-mono font-black text-right text-[#1a6b2e]">
+                  <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-[#1a6b2e] text-[17px] tabular-nums" dir="ltr">
                     {fmt(viewingVoucher.totalAmount)}
                   </td>
                 </tr>
               </tfoot>
             </table>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-black">
+            <div className="flex justify-between items-center pt-2 border-t border-black">
+              <Button variant="primary" icon={Printer} onClick={safePrint}>
+                Print Voucher Slip
+              </Button>
               <Button variant="secondary" onClick={() => setViewingVoucher(null)}>
                 Close
-              </Button>
-              <Button variant="primary" icon={Printer} onClick={() => window.print()}>
-                Print Voucher Slip
               </Button>
             </div>
           </div>

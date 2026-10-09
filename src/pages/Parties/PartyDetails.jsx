@@ -27,6 +27,11 @@ export default function PartyDetails({ party, onClose }) {
           <h3 className="text-base font-bold text-[#1E3A5F]">{party.name} — A/C Ledger</h3>
           <p className="text-xs text-gray-500">
             {party.type} | {party.city || 'No city'} | Phone: {party.phone || '-'}
+            {party.balance !== undefined && (
+              <span className="ms-2 font-mono font-bold text-gray-800" dir="ltr">
+                | Balance: Rs. {Math.abs(Number(party.balance)).toLocaleString('en-US', { maximumFractionDigits: 2 })} {Number(party.balance) > 0 ? 'Cr' : Number(party.balance) < 0 ? 'Dr' : ''}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -53,6 +58,9 @@ export default function PartyDetails({ party, onClose }) {
         accountType={party.type || 'Customer'}
         acCode={party.code || party.id || '10051'}
         accountName={`${party.name} (${party.city || ''})`}
+        urduName={party?.urduName || party?.nameUrdu}
+        englishName={party?.name}
+        phone={party?.phone}
         badgeText={getBadgeText(party)}
         rows={ledgerRows}
         openingBalance={openingBalance}

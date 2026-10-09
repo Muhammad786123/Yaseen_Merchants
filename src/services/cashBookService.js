@@ -59,7 +59,7 @@ export const cashBookService = {
    */
   async depositToBank({ date, bankAccountId, bankAccountName, amount, description }) {
     const numAmount = Number(amount || 0);
-    const trfId = 'trf_' + Date.now();
+    const trfId = 'trf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const count = await db.bankTransfers.count();
     const no = `TRF-${String(count + 1).padStart(4, '0')}`;
 
@@ -110,7 +110,7 @@ export const cashBookService = {
    */
   async withdrawFromBank({ date, bankAccountId, bankAccountName, amount, description }) {
     const numAmount = Number(amount || 0);
-    const trfId = 'trf_' + Date.now();
+    const trfId = 'trf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const count = await db.bankTransfers.count();
     const no = `TRF-${String(count + 1).padStart(4, '0')}`;
 

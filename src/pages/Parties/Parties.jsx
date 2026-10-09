@@ -120,7 +120,7 @@ export default function Parties() {
                     : 'text-gray-800'
                 }`}
               >
-                {fmt(p.balance)}
+                {fmt(Math.abs(p.balance || 0))} {p.balance > 0 ? 'Cr' : p.balance < 0 ? 'Dr' : ''}
               </span>
             </TD>
             <TD>

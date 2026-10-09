@@ -223,7 +223,7 @@ export default function TransactionItemsTable({
                   <div className="grid grid-cols-12 gap-2 items-center">
                     {/* Item Selector */}
                     <div className="col-span-12 sm:col-span-5">
-                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Item Name</label>
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Item Name</label>
                       <Select
                         value={line.itemId}
                         onChange={(v) => handleLineChange(idx, 'itemId', v)}
@@ -234,7 +234,7 @@ export default function TransactionItemsTable({
 
                     {/* Quality Grade */}
                     <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Quality Grade</label>
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Quality Grade</label>
                       <Select
                         value={line.quality}
                         onChange={(v) => handleLineChange(idx, 'quality', v)}
@@ -244,7 +244,7 @@ export default function TransactionItemsTable({
 
                     {/* Unit Selector (KG vs Nug) */}
                     <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Unit Type</label>
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Unit Type</label>
                       <Select
                         value={line.unitType || 'KG'}
                         onChange={(v) => handleLineChange(idx, 'unitType', v)}
@@ -255,7 +255,7 @@ export default function TransactionItemsTable({
                       />
                     </div>
 
-                    <div className="col-span-12 sm:col-span-1 text-right">
+                    <div className="col-span-12 sm:col-span-1 text-end">
                       <button
                         type="button"
                         onClick={() => removeRow(idx)}
@@ -273,7 +273,7 @@ export default function TransactionItemsTable({
                     {line.unitType === 'Nug' ? (
                       <>
                         <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Nugs (Pieces)</label>
+                          <label className="block text-xs font-bold text-gray-800 mb-0.5">Nugs (Pieces)</label>
                           <Input
                             type="number"
                             min="1"
@@ -283,7 +283,7 @@ export default function TransactionItemsTable({
                           />
                         </div>
                         <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-[10px] font-bold text-gray-800 mb-0.5">KG Equivalent</label>
+                          <label className="block text-xs font-bold text-gray-800 mb-0.5">KG Equivalent</label>
                           <Input
                             type="number"
                             value={line.qty}
@@ -294,7 +294,7 @@ export default function TransactionItemsTable({
                       </>
                     ) : (
                       <div className="col-span-8 sm:col-span-6">
-                        <label className="block text-[10px] font-bold text-gray-800 mb-0.5">Quantity (KG)</label>
+                        <label className="block text-xs font-bold text-gray-800 mb-0.5">Quantity (KG)</label>
                         <Input
                           type="number"
                           placeholder="Qty in KG"
@@ -305,7 +305,7 @@ export default function TransactionItemsTable({
                     )}
 
                     <div className="col-span-4 sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-gray-800 mb-0.5">
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5">
                         Rate (Rs. / KG) <span className="text-red-600">*</span>
                       </label>
                       <Input
@@ -317,9 +317,9 @@ export default function TransactionItemsTable({
                       />
                     </div>
 
-                    <div className="col-span-12 sm:col-span-3 text-right">
-                      <span className="block text-[10px] font-bold text-gray-600">Line Amount</span>
-                      <span className="text-sm font-mono font-black text-black">
+                    <div className="col-span-12 sm:col-span-3 text-end">
+                      <span className="block text-xs font-bold text-gray-600">Line Amount</span>
+                      <span className="text-base font-mono font-black text-black" dir="ltr">
                         {fmt(line.amount)}
                       </span>
                     </div>
@@ -335,11 +335,11 @@ export default function TransactionItemsTable({
       <div className="mt-3 pt-2 border-t-2 border-black flex flex-wrap items-center justify-between text-xs font-bold text-black">
         <div>
           Total Physical Quantity:{' '}
-          <span className="font-mono font-black text-sm">{totalKg.toLocaleString()} KG</span>
+          <span className="font-mono font-black text-sm" dir="ltr">{totalKg.toLocaleString()} KG</span>
         </div>
         <div>
           Calculated Total Amount:{' '}
-          <span className="font-mono font-black text-sm text-[#1a6b2e]">{fmt(totalAmount)}</span>
+          <span className="font-mono font-black text-sm text-[#1a6b2e]" dir="ltr">{fmt(totalAmount)}</span>
         </div>
       </div>
     </div>

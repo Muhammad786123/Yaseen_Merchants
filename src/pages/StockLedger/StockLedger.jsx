@@ -212,6 +212,8 @@ export default function StockLedger() {
         accountType="Item"
         acCode={selectedItem?.code || selectedItem?.id || 'ITM-01'}
         accountName={selectedItem?.name || ''}
+        urduName={selectedItem?.urduName || selectedItem?.nameUrdu || selectedItem?.name}
+        englishName={selectedItem?.name}
         badgeText={selectedItem?.category === 'Finished Good' ? 'تیار مال' : 'خام مال'}
         rows={ledgerRows}
         openingBalance={openingStock}

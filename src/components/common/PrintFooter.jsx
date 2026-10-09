@@ -70,7 +70,7 @@ export default function PrintFooter({
   /* ── 1. URDU BORDERLESS FOOTER (Monochrome Plain Reference Style) ────── */
   if (isUrdu) {
     const balSign = closingBalance > 0 ? '(کریڈٹ)' : closingBalance < 0 ? '(ڈیبٹ)' : '';
-    const plainFont = "'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    const plainFont = "var(--font-urdu), 'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
     return (
       <div
         className={`print-footer-ur ${className}`}
@@ -91,8 +91,8 @@ export default function PrintFooter({
           style={{
             borderTop: '1px solid #000',
             borderBottom: '1px solid #000',
-            padding: '5px 8px',
-            marginBottom: '8px',
+            padding: '6px 8px',
+            marginBottom: '10px',
             backgroundColor: 'transparent',
             boxSizing: 'border-box',
             width: '100%',
@@ -101,10 +101,10 @@ export default function PrintFooter({
         >
           <div
             style={{
-              fontSize: '9.5px',
+              fontSize: '11pt',
               fontWeight: 700,
               color: '#000',
-              marginBottom: '3px',
+              marginBottom: '4px',
               paddingRight: '4px',
             }}
           >
@@ -115,8 +115,8 @@ export default function PrintFooter({
             style={{
               display: 'grid',
               gridTemplateColumns: '33.3% 33.3% 33.3%',
-              fontSize: '9px',
-              padding: '2px 4px',
+              fontSize: '11pt',
+              padding: '3px 4px',
               lineHeight: 1.35,
               boxSizing: 'border-box',
               color: '#000',
@@ -124,22 +124,22 @@ export default function PrintFooter({
           >
             <div>
               <span style={{ fontWeight: 600 }}>کل ڈیبٹ (Total Dr): </span>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700 }}>
+              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700, fontSize: '11pt' }}>
                 {fmtAmt(totalDebit)} Rs
               </span>
             </div>
             <div>
               <span style={{ fontWeight: 600 }}>کل کریڈٹ (Total Cr): </span>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700 }}>
+              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700, fontSize: '11pt' }}>
                 {fmtAmt(totalCredit)} Rs
               </span>
             </div>
             <div>
               <span style={{ fontWeight: 600 }}>آخری بقایا (Closing): </span>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700 }}>
+              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700, fontSize: '12pt' }}>
                 {fmtAmt(Math.abs(closingBalance))} Rs
               </span>{' '}
-              <span style={{ fontSize: '8.5px', fontWeight: 600 }}>{balSign}</span>
+              <span style={{ fontSize: '11pt', fontWeight: 600 }}>{balSign}</span>
             </div>
           </div>
         </div>
@@ -147,10 +147,10 @@ export default function PrintFooter({
         {/* Audit / Metadata line */}
         <div
           style={{
-            fontSize: '8px',
+            fontSize: '10pt',
             color: '#000',
             borderBottom: '1px dashed #666',
-            paddingBottom: '3px',
+            paddingBottom: '4px',
             marginBottom: '20px',
             display: 'flex',
             justifyContent: 'space-between',
@@ -178,7 +178,7 @@ export default function PrintFooter({
             width: '100%',
             borderCollapse: 'collapse',
             border: 'none',
-            marginTop: '16px',
+            marginTop: '18px',
           }}
         >
           <tbody>
@@ -196,15 +196,15 @@ export default function PrintFooter({
                 <div
                   style={{
                     borderTop: '1px solid #000',
-                    paddingTop: '3px',
-                    fontSize: '9px',
+                    paddingTop: '4px',
+                    fontSize: '11pt',
                     fontWeight: 700,
                     color: '#000',
                   }}
                 >
                   تیار کردہ / Prepared By
                 </div>
-                <div style={{ fontSize: '7.5px', color: '#000' }}>(اکاؤنٹنٹ / مجاز عملہ)</div>
+                <div style={{ fontSize: '10pt', color: '#000', marginTop: '2px' }}>(اکاؤنٹنٹ / مجاز عملہ)</div>
               </td>
 
               {/* Spacer */}
@@ -223,15 +223,15 @@ export default function PrintFooter({
                 <div
                   style={{
                     borderTop: '1px solid #000',
-                    paddingTop: '3px',
-                    fontSize: '9px',
+                    paddingTop: '4px',
+                    fontSize: '11pt',
                     fontWeight: 700,
                     color: '#000',
                   }}
                 >
                   منظور شدہ / Authorized Signature
                 </div>
-                <div style={{ fontSize: '7.5px', color: '#000' }}>(پروپرائیٹر / شاہد یاسین)</div>
+                <div style={{ fontSize: '10pt', color: '#000', marginTop: '2px' }}>(پروپرائیٹر / شاہد یاسین)</div>
               </td>
             </tr>
           </tbody>
@@ -245,12 +245,12 @@ export default function PrintFooter({
   return (
     <div
       className={`print-footer-en ${className}`}
-      dir="ltr"
+      dir="rtl"
       style={{
         marginTop: '14px',
         width: '100%',
         boxSizing: 'border-box',
-        textAlign: 'left',
+        textAlign: 'start',
         color: '#000',
         pageBreakInside: 'avoid',
         breakInside: 'avoid',
@@ -269,11 +269,12 @@ export default function PrintFooter({
           style={{
             backgroundColor: '#f5f4f0',
             borderBottom: '1px solid #222',
-            padding: '3px 8px',
-            fontSize: '9px',
+            padding: '4px 8px',
+            fontSize: '11pt',
             fontWeight: 800,
             color: '#1E3A5F',
             letterSpacing: '0.04em',
+            textAlign: 'start',
           }}
         >
           STATEMENT OF ACCOUNT SUMMARY
@@ -293,16 +294,17 @@ export default function PrintFooter({
               <td
                 style={{
                   width: '33.33%',
-                  padding: '5px 8px',
-                  borderRight: '1px solid #222',
+                  padding: '6px 8px',
+                  borderInlineEnd: '1px solid #222',
                   borderBottom: 'none',
                   verticalAlign: 'middle',
+                  textAlign: 'start',
                 }}
               >
-                <div style={{ fontSize: '8px', color: '#666', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '10pt', color: '#666', textTransform: 'uppercase' }}>
                   Total Debit (Dr)
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: 800, color: '#c0392b', marginTop: '1px' }}>
+                <div style={{ fontSize: '12pt', fontWeight: 800, color: '#c0392b', marginTop: '2px', direction: 'ltr', unicodeBidi: 'isolate', textAlign: 'left' }}>
                   Rs. {fmtAmt(totalDebit)}
                 </div>
               </td>
@@ -311,16 +313,17 @@ export default function PrintFooter({
               <td
                 style={{
                   width: '33.33%',
-                  padding: '5px 8px',
-                  borderRight: '1px solid #222',
+                  padding: '6px 8px',
+                  borderInlineEnd: '1px solid #222',
                   borderBottom: 'none',
                   verticalAlign: 'middle',
+                  textAlign: 'start',
                 }}
               >
-                <div style={{ fontSize: '8px', color: '#666', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '10pt', color: '#666', textTransform: 'uppercase' }}>
                   Total Credit (Cr)
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: 800, color: '#1a6b2e', marginTop: '1px' }}>
+                <div style={{ fontSize: '12pt', fontWeight: 800, color: '#1a6b2e', marginTop: '2px', direction: 'ltr', unicodeBidi: 'isolate', textAlign: 'left' }}>
                   Rs. {fmtAmt(totalCredit)}
                 </div>
               </td>
@@ -329,21 +332,25 @@ export default function PrintFooter({
               <td
                 style={{
                   width: '33.34%',
-                  padding: '5px 8px',
+                  padding: '6px 8px',
                   border: 'none',
                   verticalAlign: 'middle',
                   backgroundColor: '#fafafa',
+                  textAlign: 'start',
                 }}
               >
-                <div style={{ fontSize: '8px', color: '#666', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '10pt', color: '#666', textTransform: 'uppercase' }}>
                   Closing Balance
                 </div>
                 <div
                   style={{
-                    fontSize: '11.5px',
+                    fontSize: '12pt',
                     fontWeight: 900,
                     color: closingBalance >= 0 ? '#1a6b2e' : '#c0392b',
-                    marginTop: '1px',
+                    marginTop: '2px',
+                    direction: 'ltr',
+                    unicodeBidi: 'isolate',
+                    textAlign: 'left',
                   }}
                 >
                   Rs. {fmtAmt(Math.abs(closingBalance))} {balSignEn}
@@ -357,10 +364,10 @@ export default function PrintFooter({
       {/* Audit / Metadata line */}
       <div
         style={{
-          fontSize: '8px',
+          fontSize: '10pt',
           color: '#666',
           borderBottom: '1px dashed #ccc',
-          paddingBottom: '3px',
+          paddingBottom: '4px',
           marginBottom: '20px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -402,14 +409,14 @@ export default function PrintFooter({
                 style={{
                   borderTop: '1px solid #222',
                   paddingTop: '4px',
-                  fontSize: '9px',
+                  fontSize: '11pt',
                   fontWeight: 700,
                   color: '#222',
                 }}
               >
                 Prepared By: ___________________________
               </div>
-              <div style={{ fontSize: '7.5px', color: '#666' }}>(Accountant / Data Operator)</div>
+              <div style={{ fontSize: '10pt', color: '#666', marginTop: '2px' }}>(Accountant / Data Operator)</div>
             </td>
 
             {/* Spacer */}
@@ -429,14 +436,14 @@ export default function PrintFooter({
                 style={{
                   borderTop: '1px solid #222',
                   paddingTop: '4px',
-                  fontSize: '9px',
+                  fontSize: '11pt',
                   fontWeight: 700,
                   color: '#222',
                 }}
               >
                 Authorized By: ___________________________
               </div>
-              <div style={{ fontSize: '7.5px', color: '#666' }}>(Proprietor / {legalName})</div>
+              <div style={{ fontSize: '10pt', color: '#666', marginTop: '2px' }}>(Proprietor / {legalName})</div>
             </td>
           </tr>
         </tbody>

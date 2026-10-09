@@ -28,7 +28,7 @@ export default function Pagination({
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
         >
-          <ChevronLeft className="w-4 h-4" /> Previous
+          <ChevronLeft className="w-4 h-4 rtl:rotate-180" /> Previous
         </Button>
         <span className="px-2 font-medium">
           Page {currentPage} of {totalPages}
@@ -39,7 +39,7 @@ export default function Pagination({
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
         >
-          Next <ChevronRight className="w-4 h-4" />
+          Next <ChevronRight className="w-4 h-4 rtl:rotate-180" />
         </Button>
       </div>
     </div>
