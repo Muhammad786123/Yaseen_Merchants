@@ -627,7 +627,7 @@ export default function PartyQualityAnalysis({
       </div>
 
       {/* ── Main Printable Container ─────────────────────────────────── */}
-      <div id="party-quality-print-area" className="bg-white border-2 border-black">
+      <div id="party-quality-print-area" className="report-rtl bg-white border-2 border-black w-full max-w-[1400px] mx-auto flex flex-col" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
         {/* Printable Official Header */}
         <PrintHeader
           documentTitle={
@@ -653,7 +653,7 @@ export default function PartyQualityAnalysis({
         />
 
         {/* Screen Header Bar */}
-        <div className="p-3.5 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+        <div className="p-3.5 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="font-bold text-base uppercase tracking-wider text-black">
               {mode === 'party_quality'
@@ -665,7 +665,7 @@ export default function PartyQualityAnalysis({
                 : `All Qualities — ${partyLabel} Breakdown`}
             </span>
           </div>
-          <span className="font-mono text-gray-700 text-sm font-semibold">
+          <span className="font-mono text-gray-700 text-sm font-semibold" dir="ltr">
             {mode === 'party_quality'
               ? `${partyQualityGroups.length} parties grouped`
               : `${qualityPartyGroups.length} parties ranked`}
@@ -673,13 +673,13 @@ export default function PartyQualityAnalysis({
         </div>
 
         {/* ── Table Layout ────────────────────────────────────────────── */}
-        <div className="overflow-x-auto">
+        <div className="overflow-y-auto flex-1 min-h-0 w-full">
           {mode === 'party_quality' ? (
             /* =========================================================
                VIEW 1: PARTY → QUALITY TABLE
                ========================================================= */
-            <table className="w-full text-base text-left border-collapse border border-black">
-              <thead className="bg-[#DFDFDF] border-b border-black">
+            <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+              <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                 <tr>
                   <th className="border border-black px-3 py-2.5 w-12 text-center text-base font-bold">#</th>
                   {!selectedPartyId && (
@@ -912,8 +912,8 @@ export default function PartyQualityAnalysis({
             /* =========================================================
                VIEW 2: QUALITY → PARTY TABLE
                ========================================================= */
-            <table className="w-full text-base text-left border-collapse border border-black">
-              <thead className="bg-[#DFDFDF] border-b border-black">
+            <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+              <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                 <tr>
                   <th className="border border-black px-3 py-2.5 w-12 text-center text-base font-bold">#</th>
                   <th className="border border-black px-3.5 py-2.5 text-base font-bold">{partyLabel} Name</th>

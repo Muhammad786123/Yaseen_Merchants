@@ -51,7 +51,7 @@ export default function Header({ onToggleSidebar }) {
           className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1.5 text-sm font-medium border border-transparent hover:border-red-200 cursor-pointer"
           title="Logout"
         >
-          <LogOut className="w-4 h-4 rtl:rotate-180" />
+          <LogOut className="w-4 h-4" />
           <span className="hidden md:inline">Logout</span>
         </button>
       </div>

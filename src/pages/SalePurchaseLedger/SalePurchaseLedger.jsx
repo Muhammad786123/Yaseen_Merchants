@@ -201,51 +201,53 @@ export default function SalePurchaseLedger() {
         </div>
 
         {/* Ledger Table */}
-        <Table
-          headers={[
-            'تاریخ',
-            'واؤچر نمبر',
-            'قسم',
-            'تفصیل',
-            'بنام',
-            'جمع',
-            'بیلنس',
-          ]}
-          emptyText="اس مدت میں کوئی لین دین درج نہیں ہے۔ (No transactions posted to Mall A/C)"
-        >
-          {filtered.map((r, idx) => {
-            let badgeVariant = 'orange';
-            if (r.category === 'Sale') badgeVariant = 'green';
-            else if (r.category === 'Purchase') badgeVariant = 'orange';
-            else if (r.category === 'Journal') badgeVariant = 'blue';
-            else badgeVariant = 'amber';
+        <div className="report-rtl max-w-[1400px] w-full mx-auto" dir="rtl">
+          <Table
+            headers={[
+              'تاریخ',
+              'واؤچر نمبر',
+              'قسم',
+              'تفصیل',
+              'بنام',
+              'جمع',
+              'بیلنس',
+            ]}
+            emptyText="اس مدت میں کوئی لین دین درج نہیں ہے۔ (No transactions posted to Mall A/C)"
+          >
+            {filtered.map((r, idx) => {
+              let badgeVariant = 'orange';
+              if (r.category === 'Sale') badgeVariant = 'green';
+              else if (r.category === 'Purchase') badgeVariant = 'orange';
+              else if (r.category === 'Journal') badgeVariant = 'blue';
+              else badgeVariant = 'amber';
 
-            return (
-              <TR key={idx}>
-                <TD className="num text-center">{formatDate(r.date)}</TD>
-                <TD className="num text-center font-bold text-[#1E3A5F]">
-                  {r.no}
-                </TD>
-                <TD>
-                  <Badge variant={badgeVariant}>{r.type}</Badge>
-                </TD>
-                <TD>
-                  <div className="font-urdu font-bold text-[20px] text-gray-900 leading-relaxed">{r.partyName}</div>
-                  <div className="font-urdu text-[16px] text-gray-600 truncate max-w-xs">{r.description || '-'}</div>
-                </TD>
-                <TD right className="num text-red-600 font-bold">
-                  {r.debit > 0 ? fmt(r.debit) : '-'}
-                </TD>
-                <TD right className="num text-emerald-600 font-bold">
-                  {r.credit > 0 ? fmt(r.credit) : '-'}
-                </TD>
-                <TD right className="num-total font-extrabold text-[#1E3A5F]">
-                  {fmt(r.balance)}
-                </TD>
-              </TR>
-            );
-          })}
-        </Table>
+              return (
+                <TR key={idx}>
+                  <TD className="num text-center">{formatDate(r.date)}</TD>
+                  <TD className="num text-center font-bold text-[#1E3A5F]">
+                    {r.no}
+                  </TD>
+                  <TD>
+                    <Badge variant={badgeVariant}>{r.type}</Badge>
+                  </TD>
+                  <TD>
+                    <div className="font-urdu font-bold text-[20px] text-gray-900 leading-relaxed">{r.partyName}</div>
+                    <div className="font-urdu text-[16px] text-gray-600 truncate max-w-xs">{r.description || '-'}</div>
+                  </TD>
+                  <TD right className="num text-red-600 font-bold">
+                    {r.debit > 0 ? fmt(r.debit) : '-'}
+                  </TD>
+                  <TD right className="num text-emerald-600 font-bold">
+                    {r.credit > 0 ? fmt(r.credit) : '-'}
+                  </TD>
+                  <TD right className="num-total font-extrabold text-[#1E3A5F]">
+                    {fmt(r.balance)}
+                  </TD>
+                </TR>
+              );
+            })}
+          </Table>
+        </div>
       </div>
     </div>
   );

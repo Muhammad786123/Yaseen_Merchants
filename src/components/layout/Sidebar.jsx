@@ -182,10 +182,10 @@ export default function Sidebar({
               }`}
           >
             {isCollapsed ? (
-              <ChevronRight className="w-4 h-4 shrink-0 rtl:rotate-180" />
+              <ChevronRight className="w-4 h-4 shrink-0" />
             ) : (
               <>
-                <ChevronLeft className="w-4 h-4 shrink-0 rtl:rotate-180" />
+                <ChevronLeft className="w-4 h-4 shrink-0" />
                 <span className="truncate">Collapse</span>
               </>
             )}
@@ -201,7 +201,7 @@ export default function Sidebar({
               : 'justify-center gap-2 px-3 py-2'
             }`}
         >
-          <LogOut className="w-3.5 h-3.5 shrink-0 rtl:rotate-180" />
+          <LogOut className="w-3.5 h-3.5 shrink-0" />
           {!isCollapsed && <span>Logout</span>}
         </button>
 

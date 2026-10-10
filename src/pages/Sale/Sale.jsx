@@ -189,7 +189,8 @@ export default function Sale() {
         isOpen={!!viewingSale}
         onClose={() => setViewingSale(null)}
         title={`Sale Invoice - ${viewingSale?.no}`}
-        maxWidth="max-w-4xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingSale && (
           <PrintDocument

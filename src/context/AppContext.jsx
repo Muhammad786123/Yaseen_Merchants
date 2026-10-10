@@ -33,10 +33,10 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.documentElement.dir = direction;
-      document.documentElement.lang = direction === 'rtl' ? 'ur' : 'en';
+      document.documentElement.dir = 'ltr';
+      document.documentElement.lang = 'en';
     }
-  }, [direction]);
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type, id: Date.now() });

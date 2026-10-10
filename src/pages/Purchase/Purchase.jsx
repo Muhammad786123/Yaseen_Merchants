@@ -189,7 +189,8 @@ export default function Purchase() {
         isOpen={!!viewingPurchase}
         onClose={() => setViewingPurchase(null)}
         title={`Purchase Invoice - ${viewingPurchase?.no}`}
-        maxWidth="max-w-4xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingPurchase && (
           <PrintDocument

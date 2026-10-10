@@ -142,7 +142,8 @@ export default function Issue() {
         isOpen={!!viewingIssue}
         onClose={() => setViewingIssue(null)}
         title={`Material Issue Slip - ${viewingIssue?.no}`}
-        maxWidth="max-w-4xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingIssue && (
           <PrintDocument

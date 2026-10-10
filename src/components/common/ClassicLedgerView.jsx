@@ -87,10 +87,30 @@ export default function ClassicLedgerView({
     safePrint();
   };
 
+  const containerRef = React.useRef(null);
+  const [fitScale, setFitScale] = React.useState(1.0);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      const availWidth = containerRef.current.clientWidth;
+      const targetWidth = 860;
+      if (availWidth < targetWidth && availWidth > 0) {
+        const scale = Math.max(0.75, availWidth / targetWidth);
+        setFitScale(scale);
+      } else {
+        setFitScale(1.0);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Top Controls: Entity Selector and Print Action (Hidden on paper) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 no-print bg-[#FAF9F7] p-3 rounded-xl border border-[#E0DBD3]">
+    <div className={`w-full max-w-[1400px] mx-auto space-y-3 ${className}`}>
+      {/* Top Controls: Entity Selector and Print Action (Hidden on paper) — LTR */}
+      <div className="flex flex-wrap items-center justify-between gap-3 no-print bg-[#FAF9F7] p-2.5 rounded-xl border border-[#E0DBD3]" dir="ltr">
         <div className="flex items-center gap-3 flex-1 min-w-[280px]">
           {entitySelector}
         </div>
@@ -101,20 +121,26 @@ export default function ClassicLedgerView({
 
       {/* Main Classic "PERBALACC" Statement Container */}
       <div
+        ref={containerRef}
         id="classic-ledger-print-area"
-        className="bg-white print-area p-4 sm:p-6 border border-gray-400 shadow-sm font-sans text-black overflow-x-auto print:p-0 print:border-none print:shadow-none"
+        className="report-rtl bg-white print-area p-3 sm:p-5 border-2 border-black shadow-sm font-sans text-black w-full flex flex-col print:p-0 print:border-none print:shadow-none"
+        dir="rtl"
         style={{
-          minWidth: '780px',
           boxSizing: 'border-box',
           backgroundColor: '#FFFFFF',
           color: '#000000',
+          width: '100%',
+          maxHeight: 'calc(100vh - 180px)',
+          minHeight: '450px',
+          transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+          transformOrigin: 'top center',
         }}
       >
-        {/* Header Block */}
-        <div className="mb-2 space-y-1.5 border-b border-black pb-2">
+        {/* Header Block — Sticky top with reduced vertical padding */}
+        <div className="sticky top-0 bg-white z-20 pb-1 mb-1 border-b border-black flex-shrink-0">
           {/* Top Line: Timestamp, Title, Account Badge */}
           <div className="flex items-center justify-between">
-            {/* Top-left: Live timestamp */}
+            {/* Timestamp */}
             <div className="text-xs num text-gray-700 w-1/4" dir="ltr">
               {timestamp}
             </div>
@@ -129,7 +155,7 @@ export default function ClassicLedgerView({
               </h1>
             </div>
 
-            {/* Top-right: Yellow Badge */}
+            {/* Account Badge */}
             <div className="flex items-center justify-end gap-2 w-1/4">
               <div className="bg-[#FFEB3B] border border-black px-2.5 py-0.5 text-xs font-bold text-red-900 shadow-xs font-urdu">
                 {badgeText}
@@ -137,11 +163,11 @@ export default function ClassicLedgerView({
             </div>
           </div>
 
-          {/* Dedicated Account / Party Name Box */}
-          <div className="text-center py-1.5 px-3 border-2 border-black my-1.5 bg-white shadow-xs">
+          {/* Dedicated Account / Party Name Box (tight padding, keep large font sizes) */}
+          <div className="text-center py-1 px-3 border-2 border-black my-1 bg-white shadow-xs">
             {/* Urdu Name */}
             <div
-              className="text-2xl print:text-xl font-bold text-black font-urdu leading-normal tracking-wide"
+              className="text-2xl print:text-xl font-bold text-black font-urdu leading-tight tracking-wide"
               dir="rtl"
             >
               {displayUrduName || displayEnglishName || accountName || 'کھاتہ'}
@@ -149,7 +175,7 @@ export default function ClassicLedgerView({
 
             {/* English Name below */}
             {displayEnglishName && displayEnglishName !== displayUrduName && (
-              <div className="text-sm print:text-xs font-bold text-gray-800 tracking-wide mt-0.5">
+              <div className="text-xs font-bold text-gray-800 tracking-wide mt-0.5">
                 {displayEnglishName}
               </div>
             )}
@@ -158,12 +184,12 @@ export default function ClassicLedgerView({
             <div className="flex items-center justify-center gap-6 text-xs print:text-[10px] font-bold text-gray-700 mt-0.5">
               {acCode && (
                 <span>
-                  کوڈ (Code): <span className="num font-bold text-xs">{acCode}</span>
+                  کوڈ (Code): <span className="num font-bold text-xs" dir="ltr">{acCode}</span>
                 </span>
               )}
               {phone && (
                 <span>
-                  فون (Phone): <span className="num font-bold text-xs">{phone}</span>
+                  فون (Phone): <span className="num font-bold text-xs" dir="ltr">{phone}</span>
                 </span>
               )}
             </div>
@@ -173,13 +199,13 @@ export default function ClassicLedgerView({
           <div className="flex flex-wrap items-center justify-between text-xs pt-0.5 gap-2">
             <div className="font-bold flex items-center gap-2">
               <span className="font-urdu text-sm">کوڈ:</span>
-              <span className="num font-extrabold bg-gray-100 px-2 py-0.5 border border-black/40 text-xs">{acCode}</span>
+              <span className="num font-extrabold bg-gray-100 px-2 py-0.5 border border-black/40 text-xs" dir="ltr">{acCode}</span>
             </div>
 
             <div className="flex items-center gap-2 font-medium text-xs">
               <span className="font-urdu font-bold text-sm">مدت از:</span>
               {/* Screen editable date inputs */}
-              <div className="print:hidden flex items-center gap-1.5">
+              <div className="print:hidden flex items-center gap-1.5" dir="ltr">
                 <input
                   type="date"
                   value={dateFrom}
@@ -198,11 +224,11 @@ export default function ClassicLedgerView({
               </div>
               {/* Print view boxed dates */}
               <div className="hidden print:inline-flex items-center gap-1.5">
-                <span className="border border-black px-2 py-0.5 num text-xs font-bold">
+                <span className="border border-black px-2 py-0.5 num text-xs font-bold" dir="ltr">
                   {dateFrom ? fmtDateUpper(dateFrom) : filteredRows[0]?.date ? fmtDateUpper(filteredRows[0].date) : 'START'}
                 </span>
                 <span className="font-urdu font-bold text-xs">تا</span>
-                <span className="border border-black px-2 py-0.5 num text-xs font-bold">
+                <span className="border border-black px-2 py-0.5 num text-xs font-bold" dir="ltr">
                   {dateTo ? fmtDateUpper(dateTo) : fmtDateUpper(new Date())}
                 </span>
               </div>
@@ -213,7 +239,7 @@ export default function ClassicLedgerView({
           <div className="flex items-center justify-between text-xs pt-0.5">
             <div className="flex items-center gap-2">
               <span className="font-urdu font-bold text-sm" dir="rtl">سابقہ بیلنس (Opening Balance):</span>
-              <span className="num font-bold text-sm">
+              <span className="num font-bold text-sm" dir="ltr">
                 {openingBalance
                   ? mode === 'currency'
                     ? `${fmtNum(Math.abs(openingBalance))}${openingBalance > 0 ? ' Cr' : openingBalance < 0 ? ' Dr' : ''}`
@@ -222,41 +248,44 @@ export default function ClassicLedgerView({
               </span>
             </div>
             {filteredRows.length > 0 && (
-              <span className="text-xs text-gray-500 font-sans">
+              <span className="text-xs text-gray-500 font-sans" dir="ltr">
                 Showing {filteredRows.length} entries
               </span>
             )}
           </div>
         </div>
-        {/* ── Main Ledger Grid (PERBALACC Exact Bordered Table) ── */}
-        <table
-          className="classic-ledger-table w-full border-collapse text-xs sm:text-sm text-black"
-          dir="rtl"
-          style={{
-            borderCollapse: 'collapse',
-            border: BORDER_STYLE,
-            tableLayout: 'fixed',
-            direction: 'rtl',
-          }}
-        >
-          {/* Column definitions matching RTL order:
-              Right-to-Left: تاریخ | تفصیل | واؤچر نمبر | نگ | کلو | ریٹ | بنام | جمع | بیلنس | [حالت]
-          */}
-          <colgroup>
-            <col style={{ width: '10%' }} /> {/* تاریخ: Date */}
-            <col style={{ width: '22%' }} /> {/* تفصیل: Detail */}
-            <col style={{ width: '9%' }} />  {/* واؤچر نمبر: Voucher No */}
-            <col style={{ width: '6%' }} />  {/* نگ: Nug */}
-            <col style={{ width: '8%' }} />  {/* کلو: KG */}
-            <col style={{ width: '7%' }} />  {/* ریٹ: Rate */}
-            <col style={{ width: '12%' }} /> {/* بنام: Debit */}
-            <col style={{ width: '12%' }} /> {/* جمع: Credit */}
-            <col style={{ width: '11%' }} /> {/* بیلنس: Balance */}
-            <col style={{ width: '3%' }} />  {/* Marker: جمع/نام */}
-          </colgroup>
 
-          <thead>
-            <tr className="bg-white text-center font-bold">
+        {/* ── Scrollable Table Area (Rows scroll vertically, header & totals sticky) ── */}
+        <div className="overflow-y-auto flex-1 min-h-0 w-full">
+          <table
+            className="classic-ledger-table w-full border-collapse text-xs sm:text-sm text-black"
+            dir="rtl"
+            style={{
+              borderCollapse: 'collapse',
+              border: BORDER_STYLE,
+              tableLayout: 'fixed',
+              width: '100%',
+              direction: 'rtl',
+            }}
+          >
+            {/* Column definitions matching RTL order:
+                Right-to-Left: تاریخ | تفصیل | واؤچر نمبر | نگ | کلو | ریٹ | بنام | جمع | بیلنس | [حالت]
+            */}
+            <colgroup>
+              <col style={{ width: '10%' }} /> {/* تاریخ: Date */}
+              <col style={{ width: '22%' }} /> {/* تفصیل: Detail */}
+              <col style={{ width: '9%' }} />  {/* واؤچر نمبر: Voucher No */}
+              <col style={{ width: '6%' }} />  {/* نگ: Nug */}
+              <col style={{ width: '8%' }} />  {/* کلو: KG */}
+              <col style={{ width: '7%' }} />  {/* ریٹ: Rate */}
+              <col style={{ width: '12%' }} /> {/* بنام: Debit */}
+              <col style={{ width: '12%' }} /> {/* جمع: Credit */}
+              <col style={{ width: '11%' }} /> {/* بیلنس: Balance */}
+              <col style={{ width: '3%' }} />  {/* Marker: جمع/نام */}
+            </colgroup>
+
+            <thead className="sticky top-0 z-10 bg-white shadow-xs">
+              <tr className="bg-white text-center font-bold">
               <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>تاریخ</th>
               <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 6px', textAlign: 'start' }}>تفصیل</th>
               <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>واؤچر نمبر</th>
@@ -511,6 +540,7 @@ export default function ClassicLedgerView({
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
     </div>
   );

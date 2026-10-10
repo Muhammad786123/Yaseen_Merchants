@@ -638,29 +638,40 @@ export default function Reports() {
             </div>
 
             {purchaseViewMode === 'invoice' ? (
-              <div className="border-2 border-black bg-white">
-                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+              <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
                   <span className="font-bold uppercase tracking-wider text-black text-base">
                     Purchase Invoices &amp; Inward Consignments
                   </span>
-                  <span className="font-mono text-gray-600">
+                  <span className="font-mono text-gray-600" dir="ltr">
                     Found {filteredPurchases.length} invoices
                   </span>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-base text-left border-collapse border border-black">
-                    <thead className="bg-[#DFDFDF] border-b border-black">
+                <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                  <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
+                    </colgroup>
+                    <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                       <tr>
-                        <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
-                        <th className="border border-black px-3 py-2.5 w-32 text-base font-bold">Invoice #</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Supplier / Party</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Items &amp; Quality</th>
-                        <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Unit / Nugs</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-28 text-base font-bold">Rate (Rs)</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Weight (KG)</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Total (PKR)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">بل # (Invoice)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">پارٹی (Supplier)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">آئٹم و کوالٹی</th>
+                        <th className="border border-black px-2 py-2 text-center font-bold">نگ (Unit)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Rate (Rs)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Weight (KG)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Total (PKR)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -675,17 +686,17 @@ export default function Reports() {
                           const totalWeight = p.items?.reduce((sum, it) => sum + Number(it.qty || 0), 0) || 0;
                           return (
                             <tr key={p.id} className="hover:bg-blue-50/30">
-                              <td className="border border-black px-3 py-2.5 font-mono">{formatDate(p.date)}</td>
-                              <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
+                              <td className="border border-black px-2 py-2 font-mono text-start" dir="ltr">{formatDate(p.date)}</td>
+                              <td className="border border-black px-2 py-2 font-mono font-bold text-[#1E3A5F] text-start" dir="ltr">
                                 {p.no}
                               </td>
-                              <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
+                              <td className="border border-black px-2 py-2 font-semibold text-gray-900 text-start">
                                 {p.supplierName || '-'}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-gray-700">
+                              <td className="border border-black px-2 py-2 text-gray-700 text-start">
                                 {p.warehouseName || '-'}
                               </td>
-                              <td className="border border-black px-3 py-2.5">
+                              <td className="border border-black px-2 py-2 text-start">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
                                     <span className="font-bold text-gray-900">{it.itemName}</span>
@@ -697,7 +708,7 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-center font-mono">
+                              <td className="border border-black px-2 py-2 text-center font-mono">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5 text-base">
                                     {it.unitType === 'Nug' ? (
@@ -708,17 +719,17 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-800 tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono text-gray-800 tabular-nums" dir="ltr">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5">
                                     {it.rate ? Number(it.rate).toLocaleString('en-PK') : '-'}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
                                 {totalWeight.toLocaleString('en-PK')} kg
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-[#1E3A5F] tabular-nums" dir="ltr">
                                 {fmt(p.total)}
                               </td>
                             </tr>
@@ -727,18 +738,19 @@ export default function Reports() {
                       )}
                     </tbody>
                     {filteredPurchases.length > 0 && (
-                      <tfoot className="bg-[#DFDFDF] font-bold">
+                      <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                         <tr>
-                          <td colSpan={7} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
-                            Total Purchases Summary:
+                          <td colSpan={6} className="border border-black px-3 py-2 text-start uppercase text-base">
+                            میزان کل خریداری (Total Purchases):
                           </td>
-                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono text-gray-500" dir="ltr">-</td>
+                          <td className="border border-black px-2 py-2 text-left font-mono text-[17px] tabular-nums" dir="ltr">
                             {filteredPurchases
                               .reduce((sum, p) => sum + (p.items?.reduce((w, it) => w + Number(it.qty || 0), 0) || 0), 0)
                               .toLocaleString('en-PK')}{' '}
                             kg
                           </td>
-                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums" dir="ltr">
                             {fmt(filteredPurchases.reduce((sum, p) => sum + Number(p.total || 0), 0))}
                           </td>
                         </tr>
@@ -802,29 +814,40 @@ export default function Reports() {
             </div>
 
             {saleViewMode === 'invoice' ? (
-              <div className="border-2 border-black bg-white">
-                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+              <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+                <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
                   <span className="font-bold uppercase tracking-wider text-black text-base">
                     Sale Invoices &amp; Outward Dispatches
                   </span>
-                  <span className="font-mono text-gray-600">
+                  <span className="font-mono text-gray-600" dir="ltr">
                     Found {filteredSales.length} invoices
                   </span>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-base text-left border-collapse border border-black">
-                    <thead className="bg-[#DFDFDF] border-b border-black">
+                <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                  <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
+                    </colgroup>
+                    <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                       <tr>
-                        <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
-                        <th className="border border-black px-3 py-2.5 w-32 text-base font-bold">Invoice #</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Customer / Party</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
-                        <th className="border border-black px-3 py-2.5 text-base font-bold">Products &amp; Quality</th>
-                        <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Unit / Nugs</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-28 text-base font-bold">Rate (Rs)</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Weight (KG)</th>
-                        <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Total (PKR)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">بل # (Invoice)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">گاہک (Customer)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">مصنوعات و کوالٹی</th>
+                        <th className="border border-black px-2 py-2 text-center font-bold">نگ (Unit)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Rate (Rs)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Weight (KG)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Total (PKR)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -839,17 +862,17 @@ export default function Reports() {
                           const totalWeight = s.items?.reduce((sum, it) => sum + Number(it.qty || 0), 0) || 0;
                           return (
                             <tr key={s.id} className="hover:bg-blue-50/30">
-                              <td className="border border-black px-3 py-2.5 font-mono">{formatDate(s.date)}</td>
-                              <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
+                              <td className="border border-black px-2 py-2 font-mono text-start" dir="ltr">{formatDate(s.date)}</td>
+                              <td className="border border-black px-2 py-2 font-mono font-bold text-[#1E3A5F] text-start" dir="ltr">
                                 {s.no}
                               </td>
-                              <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
+                              <td className="border border-black px-2 py-2 font-semibold text-gray-900 text-start">
                                 {s.customerName || '-'}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-gray-700">
+                              <td className="border border-black px-2 py-2 text-gray-700 text-start">
                                 {s.warehouseName || '-'}
                               </td>
-                              <td className="border border-black px-3 py-2.5">
+                              <td className="border border-black px-2 py-2 text-start">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
                                     <span className="font-bold text-gray-900">{it.itemName}</span>
@@ -861,7 +884,7 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-center font-mono">
+                              <td className="border border-black px-2 py-2 text-center font-mono">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5 text-base">
                                     {it.unitType === 'Nug' ? (
@@ -872,17 +895,17 @@ export default function Reports() {
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-800 tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono text-gray-800 tabular-nums" dir="ltr">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5">
                                     {it.rate ? Number(it.rate).toLocaleString('en-PK') : '-'}
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
                                 {totalWeight.toLocaleString('en-PK')} kg
                               </td>
-                              <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                                 {fmt(s.total)}
                               </td>
                             </tr>
@@ -891,18 +914,19 @@ export default function Reports() {
                       )}
                     </tbody>
                     {filteredSales.length > 0 && (
-                      <tfoot className="bg-[#DFDFDF] font-bold">
+                      <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                         <tr>
-                          <td colSpan={7} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
-                            Total Sales Revenue Summary:
+                          <td colSpan={6} className="border border-black px-3 py-2 text-start uppercase text-base">
+                            میزان کل فروخت (Total Sales):
                           </td>
-                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono text-gray-500" dir="ltr">-</td>
+                          <td className="border border-black px-2 py-2 text-left font-mono text-[17px] tabular-nums" dir="ltr">
                             {filteredSales
                               .reduce((sum, s) => sum + (s.items?.reduce((w, it) => w + Number(it.qty || 0), 0) || 0), 0)
                               .toLocaleString('en-PK')}{' '}
                             kg
                           </td>
-                          <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-800 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-800 tabular-nums" dir="ltr">
                             {fmt(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0))}
                           </td>
                         </tr>
@@ -949,13 +973,13 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+            <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="font-bold uppercase tracking-wider text-black text-base">
                     Live Stock Positions &amp; Moving Average Valuation
                   </span>
-                  <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 font-bold font-mono text-xs">
+                  <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 font-bold font-mono text-xs" dir="ltr">
                     100% In Sync with Ledger
                   </span>
                 </div>
@@ -973,17 +997,26 @@ export default function Reports() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-base text-left border-collapse border border-black">
-                  <thead className="bg-[#DFDFDF] border-b border-black">
+              <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                  </colgroup>
+                  <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                     <tr>
-                      <th className="border border-black px-3 py-2.5 text-base font-bold">Item Name</th>
-                      <th className="border border-black px-3 py-2.5 w-36 text-base font-bold">Quality Grade</th>
-                      <th className="border border-black px-3 py-2.5 text-base font-bold">Warehouse</th>
-                      <th className="border border-black px-3 py-2.5 w-36 text-base font-bold">Category</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Quantity (KG)</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Avg Rate (Rs)</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-40 text-base font-bold">Valuation (PKR)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">نام آئٹم (Item)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">کوالٹی (Quality)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">قسم (Category)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Quantity (KG)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Avg Rate (Rs)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Valuation (PKR)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -996,27 +1029,27 @@ export default function Reports() {
                     ) : (
                       filteredStock.map((s, idx) => (
                         <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="border border-black px-3 py-2.5 font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-2 py-2 font-bold text-[#1E3A5F] text-start">
                             {s.itemName}
                           </td>
-                          <td className="border border-black px-3 py-2.5">
+                          <td className="border border-black px-2 py-2 text-start">
                             <span className="bg-gray-100 border border-black px-2 py-0.5 text-xs font-mono font-bold text-gray-800">
                               {s.quality || 'Cotton A'}
                             </span>
                           </td>
-                          <td className="border border-black px-3 py-2.5 font-medium text-gray-800">
+                          <td className="border border-black px-2 py-2 font-medium text-gray-800 text-start">
                             {s.warehouseName}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-gray-600">
+                          <td className="border border-black px-2 py-2 text-gray-600 text-start">
                             {s.category || 'Raw Material'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
                             {Number(s.qty || 0).toLocaleString('en-PK')} kg
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono text-gray-700 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono text-gray-700 tabular-nums" dir="ltr">
                             Rs.{Number(s.avgRate || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                             {fmt(s.value)}
                           </td>
                         </tr>
@@ -1024,16 +1057,16 @@ export default function Reports() {
                     )}
                   </tbody>
                   {filteredStock.length > 0 && (
-                    <tfoot className="bg-[#DFDFDF] font-bold">
+                    <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
-                          Total Warehouse Inventory Valuation:
+                        <td colSpan={4} className="border border-black px-3 py-2 text-start uppercase text-base">
+                          میزان کل مال / اسٹاک ویلیوایشن (Total Stock Valuation):
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] tabular-nums" dir="ltr">
                           {totalStockQty.toLocaleString('en-PK')} kg
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-gray-500">-</td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-900 tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-gray-500" dir="ltr">-</td>
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-900 tabular-nums" dir="ltr">
                           {fmt(stockValuation)}
                         </td>
                       </tr>
@@ -1078,28 +1111,38 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+            <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
                 <span className="font-bold uppercase tracking-wider text-black text-base">
                   Cash Book Register &amp; Physical Roznamcha Transactions
                 </span>
-                <span className="font-mono text-gray-600">
+                <span className="font-mono text-gray-600" dir="ltr">
                   {filteredCashBook.length} entries recorded
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-base text-left border-collapse border border-black">
-                  <thead className="bg-[#DFDFDF] border-b border-black">
+              <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '10%' }} />
+                  </colgroup>
+                  <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                     <tr>
-                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
-                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">CB #</th>
-                      <th className="border border-black px-3 py-2.5 text-base font-bold">Account / Party / Bank</th>
-                      <th className="border border-black px-3 py-2.5 text-base font-bold">Narration / Details</th>
-                      <th className="border border-black px-3 py-2.5 text-center w-28 text-base font-bold">Type</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Credit/Jamma (In)</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Debit/Benaam (Out)</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-36 text-base font-bold">Balance (PKR)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">روکڑ # (CB #)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">کھاتہ / پارٹی (Account)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">تفصیل (Narration)</th>
+                      <th className="border border-black px-2 py-2 text-center font-bold">نوعیت</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">جمع / Credit (In)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">بنام / Debit (Out)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">بیلنس (Balance)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1112,28 +1155,28 @@ export default function Reports() {
                     ) : (
                       filteredCashBook.map((cb) => (
                         <tr key={cb.id} className="hover:bg-blue-50/30">
-                          <td className="border border-black px-3 py-2.5 font-mono">{formatDate(cb.date)}</td>
-                          <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-2 py-2 font-mono text-start" dir="ltr">{formatDate(cb.date)}</td>
+                          <td className="border border-black px-2 py-2 font-mono font-bold text-[#1E3A5F] text-start" dir="ltr">
                             {cb.cashBookNo ? `#${cb.cashBookNo}` : cb.refNo || '-'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 font-semibold text-gray-900">
+                          <td className="border border-black px-2 py-2 font-semibold text-gray-900 text-start">
                             {cb.partyName || cb.bankAccountName || 'Physical Cash'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-gray-700">
+                          <td className="border border-black px-2 py-2 text-gray-700 text-start">
                             {cb.description || '-'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-center">
+                          <td className="border border-black px-2 py-2 text-center">
                             <span className="border border-black px-2 py-0.5 text-xs font-mono font-bold bg-gray-100">
                               {cb.type || (Number(cb.credit) > 0 ? 'Cash In' : 'Cash Out')}
                             </span>
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                             {cb.credit ? fmt(cb.credit) : '-'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-red-800 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-red-800 tabular-nums" dir="ltr">
                             {cb.debit ? fmt(cb.debit) : '-'}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-gray-900 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
                             {fmt(cb.runningBalance)}
                           </td>
                         </tr>
@@ -1141,18 +1184,18 @@ export default function Reports() {
                     )}
                   </tbody>
                   {filteredCashBook.length > 0 && (
-                    <tfoot className="bg-[#DFDFDF] font-bold">
+                    <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                       <tr>
-                        <td colSpan={5} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
-                          Total Cash Movement Summary:
+                        <td colSpan={5} className="border border-black px-3 py-2 text-start uppercase text-base">
+                          میزان کل روکڑ کی نقل و حرکت (Total Movement):
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-900 tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-900 tabular-nums" dir="ltr">
                           {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.credit || 0), 0))}
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-red-900 tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-red-900 tabular-nums" dir="ltr">
                           {fmt(filteredCashBook.reduce((sum, e) => sum + Number(e.debit || 0), 0))}
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums" dir="ltr">
                           {fmt(cashInHand)}
                         </td>
                       </tr>
@@ -1188,64 +1231,71 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="border-2 border-black bg-white">
-              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm">
+            <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+              <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
                 <span className="font-bold uppercase tracking-wider text-black text-base">
                   Journal Voucher Audit Register (Double-Entry Adjustments)
                 </span>
-                <span className="font-mono text-gray-600">
+                <span className="font-mono text-gray-600" dir="ltr">
                   {filteredJournals.length} JVs recorded
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-base text-left border-collapse border border-black">
-                  <thead className="bg-[#DFDFDF] border-b border-black">
+              <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '36%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
+                  </colgroup>
+                  <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                     <tr>
-                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">Date</th>
-                      <th className="border border-black px-3 py-2.5 w-28 text-base font-bold">JV #</th>
-                      <th className="border border-black px-3 py-2.5 w-56 text-base font-bold">Description / Narration</th>
-                      <th className="border border-black px-3 py-2.5 text-base font-bold">Accounts Debited &amp; Credited Breakdown</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Debit (PKR)</th>
-                      <th className="border border-black px-3 py-2.5 text-right w-32 text-base font-bold">Credit (PKR)</th>
-                      <th className="border border-black px-3 py-2.5 text-center w-24 text-base font-bold">Status</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">جے وی # (JV)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">تفصیل (Narration)</th>
+                      <th className="border border-black px-2 py-2 text-start font-bold">کھاتہ جات و تفصیل (Accounts)</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Debit / بنام</th>
+                      <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Credit / جمع</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredJournals.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-6 text-gray-500 font-medium border border-black">
+                        <td colSpan={6} className="text-center py-6 text-gray-500 font-medium border border-black">
                           No journal voucher records found matching the selected filter.
                         </td>
                       </tr>
                     ) : (
                       filteredJournals.map((jv) => (
                         <tr key={jv.id} className="hover:bg-blue-50/20 align-top">
-                          <td className="border border-black px-3 py-2.5 font-mono">{formatDate(jv.date)}</td>
-                          <td className="border border-black px-3 py-2.5 font-mono font-bold text-[#1E3A5F]">
+                          <td className="border border-black px-2 py-2 font-mono text-start" dir="ltr">{formatDate(jv.date)}</td>
+                          <td className="border border-black px-2 py-2 font-mono font-bold text-[#1E3A5F] text-start" dir="ltr">
                             {jv.no || jv.refNo}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-gray-700 font-medium">
+                          <td className="border border-black px-2 py-2 text-gray-700 font-medium text-start">
                             {jv.description || '-'}
                           </td>
-                          <td className="border border-black p-0">
-                            <table className="w-full text-sm border-collapse">
+                          <td className="border border-black p-0 text-start">
+                            <table className="w-full text-sm border-collapse" dir="rtl">
                               <tbody>
                                 {jv.lines?.map((line, lIdx) => (
                                   <tr key={lIdx} className="border-b border-gray-200 last:border-b-0">
-                                    <td className="px-2.5 py-1.5 font-bold text-gray-900 w-48">
+                                    <td className="px-2.5 py-1.5 font-bold text-gray-900 w-48 text-start">
                                       {line.accountName || '-'}
-                                      <span className="text-xs text-gray-500 ms-1 font-mono font-normal">
+                                      <span className="text-xs text-gray-500 ms-1 font-mono font-normal" dir="ltr">
                                         ({line.accountType})
                                       </span>
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-gray-600 italic">
+                                    <td className="px-2.5 py-1.5 text-gray-600 italic text-start">
                                       {line.detail || '-'}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-[#1E3A5F] w-28 tabular-nums">
+                                    <td className="px-2.5 py-1.5 text-left font-mono font-bold text-[#1E3A5F] w-28 tabular-nums" dir="ltr">
                                       {line.debit ? fmt(line.debit) : '-'}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-emerald-800 w-28 tabular-nums">
+                                    <td className="px-2.5 py-1.5 text-left font-mono font-bold text-emerald-800 w-28 tabular-nums" dir="ltr">
                                       {line.credit ? fmt(line.credit) : '-'}
                                     </td>
                                   </tr>
@@ -1253,34 +1303,28 @@ export default function Reports() {
                               </tbody>
                             </table>
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-[#1E3A5F] tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-[#1E3A5F] tabular-nums" dir="ltr">
                             {fmt(jv.totalDebit)}
                           </td>
-                          <td className="border border-black px-3 py-2.5 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                          <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                             {fmt(jv.totalCredit)}
-                          </td>
-                          <td className="border border-black px-3 py-2.5 text-center">
-                            <span className="bg-[#E8F5E9] text-[#1B5E20] border border-black px-2 py-0.5 text-xs font-bold">
-                              Balanced
-                            </span>
                           </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                   {filteredJournals.length > 0 && (
-                    <tfoot className="bg-[#DFDFDF] font-bold">
+                    <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3.5 py-2.5 text-right uppercase text-base">
-                          Total Journal Turnover:
+                        <td colSpan={4} className="border border-black px-3 py-2 text-start uppercase text-base">
+                          میزان کل جرنل واؤچرز (Total Journal Turnover):
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-[#1E3A5F] tabular-nums" dir="ltr">
                           {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalDebit || 0), 0))}
                         </td>
-                        <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[17px] font-bold text-emerald-800 tabular-nums">
+                        <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-800 tabular-nums" dir="ltr">
                           {fmt(filteredJournals.reduce((sum, jv) => sum + Number(jv.totalCredit || 0), 0))}
                         </td>
-                        <td className="border border-black px-2 py-2.5 text-center text-sm font-bold">✓</td>
                       </tr>
                     </tfoot>
                   )}
@@ -1294,28 +1338,38 @@ export default function Reports() {
             TAB 6: PRODUCTION YIELD REPORT
         ───────────────────────────────────────────────────────────── */}
         {activeTab === 'production' && (
-          <div className="border-2 border-black bg-white">
-            <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-xs">
-              <span className="font-bold uppercase tracking-wider text-black">
+          <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
+            <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
+              <span className="font-bold uppercase tracking-wider text-black text-base">
                 Production Process Yield &amp; Material Conversion Register
               </span>
-              <span className="font-mono text-gray-600">
+              <span className="font-mono text-gray-600" dir="ltr">
                 {filteredProductions.length} production runs
               </span>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse border border-black">
-                <thead className="bg-[#DFDFDF] border-b border-black">
+            <div className="overflow-y-auto flex-1 min-h-0 w-full">
+              <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
+                <colgroup>
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '10%' }} />
+                </colgroup>
+                <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                   <tr>
-                    <th className="border border-black px-2 py-1.5 w-24">Date</th>
-                    <th className="border border-black px-2 py-1.5 w-28">Production #</th>
-                    <th className="border border-black px-2 py-1.5">Finished Product</th>
-                    <th className="border border-black px-2 py-1.5">Warehouse</th>
-                    <th className="border border-black px-2 py-1.5 text-right w-28">Input (KG)</th>
-                    <th className="border border-black px-2 py-1.5 text-right w-28">Output (KG)</th>
-                    <th className="border border-black px-2 py-1.5 text-right w-28">Wastage (KG)</th>
-                    <th className="border border-black px-2 py-1.5 text-center w-24">Yield %</th>
+                    <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
+                    <th className="border border-black px-2 py-2 text-start font-bold">پروڈکشن #</th>
+                    <th className="border border-black px-2 py-2 text-start font-bold">تیار شدہ مال (Product)</th>
+                    <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
+                    <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Input (KG)</th>
+                    <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Output (KG)</th>
+                    <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Wastage (KG)</th>
+                    <th className="border border-black px-2 py-2 text-center font-bold">Yield %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1328,26 +1382,26 @@ export default function Reports() {
                   ) : (
                     filteredProductions.map((p) => (
                       <tr key={p.id} className="hover:bg-blue-50/30">
-                        <td className="border border-black px-2 py-1 font-mono">{formatDate(p.date)}</td>
-                        <td className="border border-black px-2 py-1 font-mono font-bold text-[#1E3A5F]">
+                        <td className="border border-black px-2 py-2 font-mono text-start" dir="ltr">{formatDate(p.date)}</td>
+                        <td className="border border-black px-2 py-2 font-mono font-bold text-[#1E3A5F] text-start" dir="ltr">
                           {p.no}
                         </td>
-                        <td className="border border-black px-2 py-1 font-bold text-gray-900">
+                        <td className="border border-black px-2 py-2 font-bold text-gray-900 text-start">
                           {p.product}
                         </td>
-                        <td className="border border-black px-2 py-1 text-gray-700">
+                        <td className="border border-black px-2 py-2 text-gray-700 text-start">
                           {p.warehouseName || 'Factory Floor'}
                         </td>
-                        <td className="border border-black px-2 py-1 text-right font-mono">
+                        <td className="border border-black px-2 py-2 text-left font-mono tabular-nums" dir="ltr">
                           {Number(p.totalInput || 0).toLocaleString('en-PK')} kg
                         </td>
-                        <td className="border border-black px-2 py-1 text-right font-mono font-bold text-emerald-800">
+                        <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                           {Number(p.outputQty || 0).toLocaleString('en-PK')} kg
                         </td>
-                        <td className="border border-black px-2 py-1 text-right font-mono font-bold text-red-700">
+                        <td className="border border-black px-2 py-2 text-left font-mono font-bold text-red-700 tabular-nums" dir="ltr">
                           {Number(p.wasteQty || 0).toLocaleString('en-PK')} kg
                         </td>
-                        <td className="border border-black px-2 py-1 text-center font-mono font-bold text-[#1E3A5F]">
+                        <td className="border border-black px-2 py-2 text-center font-mono font-bold text-[#1E3A5F]">
                           <span className="bg-gray-100 border border-black px-2 py-0.5 text-xs">
                             {p.yieldPct || 0}%
                           </span>
@@ -1357,30 +1411,30 @@ export default function Reports() {
                   )}
                 </tbody>
                 {filteredProductions.length > 0 && (
-                  <tfoot className="bg-[#DFDFDF] font-bold">
+                  <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                     <tr>
-                      <td colSpan={4} className="border border-black px-3 py-1.5 text-right uppercase">
-                        Total Manufacturing Yield Summary:
+                      <td colSpan={4} className="border border-black px-3 py-2 text-start uppercase text-base">
+                        میزان پیداواری پیداوار (Total Manufacturing Yield):
                       </td>
-                      <td className="border border-black px-2 py-1.5 text-right font-mono">
+                      <td className="border border-black px-2 py-2 text-left font-mono tabular-nums" dir="ltr">
                         {filteredProductions
                           .reduce((sum, p) => sum + Number(p.totalInput || 0), 0)
                           .toLocaleString('en-PK')}{' '}
                         kg
                       </td>
-                      <td className="border border-black px-2 py-1.5 text-right font-mono text-emerald-900">
+                      <td className="border border-black px-2 py-2 text-left font-mono text-emerald-900 tabular-nums" dir="ltr">
                         {filteredProductions
                           .reduce((sum, p) => sum + Number(p.outputQty || 0), 0)
                           .toLocaleString('en-PK')}{' '}
                         kg
                       </td>
-                      <td className="border border-black px-2 py-1.5 text-right font-mono text-red-900">
+                      <td className="border border-black px-2 py-2 text-left font-mono text-red-900 tabular-nums" dir="ltr">
                         {filteredProductions
                           .reduce((sum, p) => sum + Number(p.wasteQty || 0), 0)
                           .toLocaleString('en-PK')}{' '}
                         kg
                       </td>
-                      <td className="border border-black px-2 py-1.5 text-center font-mono text-[#1E3A5F]">
+                      <td className="border border-black px-2 py-2 text-center font-mono text-[#1E3A5F]">
                         {(() => {
                           const inTot = filteredProductions.reduce((sum, p) => sum + Number(p.totalInput || 0), 0);
                           const outTot = filteredProductions.reduce((sum, p) => sum + Number(p.outputQty || 0), 0);
@@ -1437,7 +1491,7 @@ export default function Reports() {
             )}
 
             {/* Printable Traditional Paper Layout */}
-            <div id="trial-balance-print-area" className="bg-white border-2 border-black p-4 print:border-none print:p-0">
+            <div id="trial-balance-print-area" className="report-rtl bg-white border-2 border-black p-4 print:border-none print:p-0 max-w-[1400px] w-full mx-auto" dir="rtl">
               {/* Document Header */}
               <div className="relative mb-2">
                 <div className="text-right text-xs font-mono font-bold text-gray-800 pr-1">
@@ -1448,26 +1502,34 @@ export default function Reports() {
                 </h1>
               </div>
 
-              {/* RTL 5-Column Table */}
+              {/* Table Container with max height and sticky header on screen */}
+              <div className="overflow-y-auto max-h-[calc(100vh-270px)] border border-black print:overflow-visible print:max-h-none print:border-none">
               {(() => {
                 let srCounter = 1;
                 return (
-                  <table className="w-full border-collapse border border-black text-black text-xs sm:text-sm" dir="rtl">
-                    <thead>
+                  <table className="w-full border-collapse border border-black text-black text-xs sm:text-sm table-fixed" dir="rtl">
+                    <colgroup>
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '48%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                    </colgroup>
+                    <thead className="sticky top-0 bg-white z-10 border-b-2 border-black shadow-sm">
                       <tr className="bg-white border-b-2 border-black">
-                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs w-[60px] font-urdu">
+                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           نمبر شمار
                         </th>
-                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs w-[80px] font-urdu">
+                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           کوڈ
                         </th>
                         <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           نام پارٹی
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs w-[120px] font-urdu" dir="ltr">
+                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
                           بنام
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs w-[120px] font-urdu" dir="ltr">
+                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
                           جمع
                         </th>
                       </tr>
@@ -1681,6 +1743,8 @@ export default function Reports() {
                         </td>
                       </tr>
 
+                    </tbody>
+                    <tfoot className="sticky bottom-0 bg-[#DFDFDF] font-bold border-t-2 border-black z-10 shadow-sm">
                       {/* Grand Total Row */}
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
@@ -1695,10 +1759,11 @@ export default function Reports() {
                           {fmt(tbGrandTotalJama)}
                         </td>
                       </tr>
-                    </tbody>
+                    </tfoot>
                   </table>
                 );
               })()}
+              </div>
 
               <div className="text-center font-mono text-sm text-gray-700 py-3">
                 Page 1 of 1
@@ -1971,7 +2036,8 @@ export default function Reports() {
             {/* Printable Traditional Two-Block Sheet (Assets vs Liabilities) */}
             <div
               id="pl-statement-print-area"
-              className="bg-white border-2 border-black p-4 sm:p-6 max-w-xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0 print:max-w-none text-black"
+              className="report-rtl bg-white border-2 border-black p-4 sm:p-6 max-w-xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0 print:max-w-none text-black max-h-[calc(100vh-250px)] overflow-y-auto print:max-h-none print:overflow-visible"
+              dir="rtl"
             >
               {/* BLOCK 1: Assets (Debit / Benaam) */}
               <div className="mb-4">

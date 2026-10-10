@@ -621,72 +621,79 @@ export default function Journal() {
         isOpen={!!viewingVoucher}
         onClose={() => setViewingVoucher(null)}
         title={`Journal Voucher — ${viewingVoucher?.no || ''}`}
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingVoucher && (
-          <div className="space-y-4 text-base font-sans">
-            <div className="flex justify-between border-b-2 border-black pb-2 bg-[#EBE9ED] p-3">
-              <div>
-                <span className="font-bold text-black">Voucher No: </span>
-                <span className="font-mono font-black text-black">{viewingVoucher.no}</span>
-                {viewingVoucher.editCount > 0 && (
-                  <span className="ml-2 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 font-bold">
-                    Edited ({viewingVoucher.editCount})
-                  </span>
-                )}
+          <div className="space-y-4">
+            <div className="report-rtl print-area bg-white p-4 border border-black space-y-4 text-base font-sans" dir="rtl">
+              <div className="flex justify-between items-center border-b-2 border-black pb-2 bg-[#EBE9ED] p-3">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-black">واؤچر نمبر: </span>
+                  <span className="font-mono font-black text-black" dir="ltr">{viewingVoucher.no}</span>
+                  {viewingVoucher.editCount > 0 && (
+                    <span className="ms-2 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 font-bold">
+                      Edited ({viewingVoucher.editCount})
+                    </span>
+                  )}
+                  <span className="font-bold text-black ms-4">تاریخ: </span>
+                  <span className="font-bold text-black" dir="ltr">{formatDate(viewingVoucher.date)}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-black">رقم کل: </span>
+                  <span className="font-mono font-black text-[#1a6b2e]" dir="ltr">{fmt(viewingVoucher.totalAmount)}</span>
+                </div>
               </div>
-              <div>
-                <span className="font-bold text-black">Date: </span>
-                <span className="font-bold text-black">{formatDate(viewingVoucher.date)}</span>
-              </div>
-              <div>
-                <span className="font-bold text-black">Amount: </span>
-                <span className="font-mono font-black text-[#1a6b2e]">{fmt(viewingVoucher.totalAmount)}</span>
-              </div>
-            </div>
 
-            <div>
-              <span className="font-bold text-black">Narration / Particulars: </span>
-              <span className="font-semibold text-gray-900">{viewingVoucher.narration || '-'}</span>
-            </div>
+              <div>
+                <span className="font-bold text-black">تفصیل / Narration: </span>
+                <span className="font-semibold text-gray-900">{viewingVoucher.narration || '-'}</span>
+              </div>
 
-            <table className="w-full border-collapse border border-black text-base">
-              <thead>
-                <tr className="bg-[#DFDFDF] border-b-2 border-black text-black font-bold text-center">
-                  <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Account</th>
-                  <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Particulars</th>
-                  <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Debit (بنام)</th>
-                  <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Credit (جمع)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {viewingVoucher.lines?.map((l, i) => (
-                  <tr key={i} className="border-b border-black">
-                    <td className="border border-black px-3 py-2.5 font-bold text-black text-start">{l.accountName}</td>
-                    <td className="border border-black px-3 py-2.5 text-gray-800 text-start">{l.detail || '-'}</td>
-                    <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-red-700 tabular-nums" dir="ltr">
-                      {l.debit ? fmt(l.debit) : '-'}
+              <table className="w-full border-collapse border border-black text-base" dir="rtl" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '35%' }} />
+                  <col style={{ width: '35%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '15%' }} />
+                </colgroup>
+                <thead>
+                  <tr className="bg-[#DFDFDF] border-b-2 border-black text-black font-bold text-center">
+                    <th className="border border-black px-3 py-2.5 text-start text-base font-bold">کھاتہ (Account)</th>
+                    <th className="border border-black px-3 py-2.5 text-start text-base font-bold">تفصیل (Particulars)</th>
+                    <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Debit (بنام)</th>
+                    <th className="border border-black px-3 py-2.5 text-left w-36 text-base font-bold" dir="ltr">Credit (جمع)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewingVoucher.lines?.map((l, i) => (
+                    <tr key={i} className="border-b border-black">
+                      <td className="border border-black px-3 py-2.5 font-bold text-black text-start">{l.accountName}</td>
+                      <td className="border border-black px-3 py-2.5 text-gray-800 text-start">{l.detail || '-'}</td>
+                      <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-red-700 tabular-nums" dir="ltr">
+                        {l.debit ? fmt(l.debit) : '-'}
+                      </td>
+                      <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-[#1a6b2e] tabular-nums" dir="ltr">
+                        {l.credit ? fmt(l.credit) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[#DFDFDF] font-bold">
+                    <td colSpan={2} className="border border-black px-3 py-2.5 text-end font-black text-base">ٹوٹل (Total)</td>
+                    <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-red-700 text-[17px] tabular-nums" dir="ltr">
+                      {fmt(viewingVoucher.totalAmount)}
                     </td>
-                    <td className="border border-black px-3 py-2.5 font-mono font-bold text-left text-[#1a6b2e] tabular-nums" dir="ltr">
-                      {l.credit ? fmt(l.credit) : '-'}
+                    <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-[#1a6b2e] text-[17px] tabular-nums" dir="ltr">
+                      {fmt(viewingVoucher.totalAmount)}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-[#DFDFDF] font-bold">
-                  <td colSpan={2} className="border border-black px-3 py-2.5 text-end font-black text-base">Total</td>
-                  <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-red-700 text-[17px] tabular-nums" dir="ltr">
-                    {fmt(viewingVoucher.totalAmount)}
-                  </td>
-                  <td className="border border-black px-3 py-2.5 font-mono font-black text-left text-[#1a6b2e] text-[17px] tabular-nums" dir="ltr">
-                    {fmt(viewingVoucher.totalAmount)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                </tfoot>
+              </table>
+            </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-black">
+            <div className="flex justify-between items-center pt-2 border-t border-black no-print" dir="ltr">
               <Button variant="primary" icon={Printer} onClick={safePrint}>
                 Print Voucher Slip
               </Button>

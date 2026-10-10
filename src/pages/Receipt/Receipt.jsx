@@ -112,7 +112,8 @@ export default function Receipt() {
         isOpen={!!viewingReceipt}
         onClose={() => setViewingReceipt(null)}
         title={`Receipt Voucher - ${viewingReceipt?.no}`}
-        maxWidth="max-w-4xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingReceipt && (
           <PrintDocument

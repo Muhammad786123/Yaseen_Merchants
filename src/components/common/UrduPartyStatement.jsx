@@ -190,7 +190,8 @@ export default function UrduPartyStatement({
   return (
     <div
       id="urdu-statement-print-area"
-      className={`bg-white ${className}`}
+      dir="rtl"
+      className={`report-rtl bg-white ${className}`}
       style={{
         width: '100%',
         maxWidth: '100%',

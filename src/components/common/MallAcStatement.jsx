@@ -114,7 +114,8 @@ export default function MallAcStatement({
   return (
     <div
       id="mallac-print-area"
-      className={`print-area bg-white ${className}`}
+      dir="rtl"
+      className={`print-area report-rtl bg-white ${className}`}
       style={{
         display: 'none', // Hidden on screen, overridden to block in @media print
         boxSizing: 'border-box',

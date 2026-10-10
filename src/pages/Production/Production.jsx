@@ -131,7 +131,8 @@ export default function Production() {
         isOpen={!!viewingProduction}
         onClose={() => setViewingProduction(null)}
         title={`Production Run Slip - ${viewingProduction?.no}`}
-        maxWidth="max-w-4xl"
+        maxWidth="max-w-[96vw]"
+        isPrintPreview={true}
       >
         {viewingProduction && (
           <PrintDocument

@@ -466,17 +466,6 @@ export default function Settings() {
           <Database className="w-3.5 h-3.5" />
           Data Backup &amp; Restore
         </button>
-        <button
-          onClick={() => handleTabChange('preferences')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
-            activeTab === 'preferences'
-              ? 'bg-[#1E3A5F] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-[#F5F4F0]'
-          }`}
-        >
-          <Sliders className="w-3.5 h-3.5" />
-          Preferences
-        </button>
       </div>
 
       {/* ── COMPANY PROFILE TAB ────────────────────────────────────────────── */}
@@ -1327,91 +1316,6 @@ export default function Settings() {
               </div>
             </div>
           </Modal>
-        </div>
-      )}
-
-      {/* ── PREFERENCES TAB ─────────────────────────────────────────────────── */}
-      {activeTab === 'preferences' && (
-        <div className="space-y-6 max-w-2xl">
-          <Card className="p-6 space-y-6">
-            <div className="border-b border-[#E0DBD3] pb-4">
-              <h3 className="text-base font-bold text-[#1E3A5F]">Display &amp; Layout Direction</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Configure your preferred application reading direction. Setting is automatically preserved in your browser.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block text-xs font-bold text-gray-900">
-                Layout Direction
-              </label>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Left-to-Right (Default) */}
-                <div
-                  onClick={() => {
-                    setDirection('ltr');
-                    showToast('Layout direction updated to Left-to-Right (Normal layout)');
-                  }}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                    direction === 'ltr'
-                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
-                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#1E3A5F]">Left-to-Right (Default)</span>
-                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      direction === 'ltr' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
-                    }`}>
-                      {direction === 'ltr' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed font-semibold">
-                    Normal Straight Layout (English)
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Sidebar on left, normal straight reading orientation across entire software.
-                  </p>
-                </div>
-
-                {/* Right-to-Left */}
-                <div
-                  onClick={() => {
-                    setDirection('rtl');
-                    showToast('Layout direction updated to Right-to-Left (Urdu layout)');
-                  }}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                    direction === 'rtl'
-                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
-                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#1E3A5F]">Right-to-Left (Urdu Layout)</span>
-                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      direction === 'rtl' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
-                    }`}>
-                      {direction === 'rtl' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed font-urdu text-base">
-                    دائیں سے بائیں (اردو طرز)
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Sidebar on right, software flipped to Right-to-Left flow.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Tip:</strong> All amounts, ledger values, dates, and accounting calculations remain strictly 100% identical in both layout modes.
-                </span>
-              </div>
-            </div>
-          </Card>
         </div>
       )}
     </div>

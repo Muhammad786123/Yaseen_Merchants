@@ -171,7 +171,7 @@ export default function Dashboard() {
               className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
             >
               <span>View All</span>
-              <ArrowRight className="w-3 h-3 rtl:rotate-180" />
+              <ArrowRight className="w-3 h-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -235,7 +235,7 @@ export default function Dashboard() {
               className="text-xs font-bold text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
             >
               <span>View All</span>
-              <ArrowRight className="w-3 h-3 rtl:rotate-180" />
+              <ArrowRight className="w-3 h-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
