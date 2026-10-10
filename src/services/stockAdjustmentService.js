@@ -14,7 +14,6 @@ export const stockAdjustmentService = {
 
   /**
    * Adds a manual stock adjustment record (pure inventory adjustment).
-   * Critically: does NOT touch Party A/C, Cash Book, or Mall A/C.
    */
   async add(adjData) {
     const id = adjData.id || 'adj_' + Date.now();
@@ -43,17 +42,54 @@ export const stockAdjustmentService = {
       amount,
       reason: adjData.reason || adjData.note || 'Manual Stock Adjustment',
       note: adjData.reason || adjData.note || 'Manual Stock Adjustment',
-      createdAt: new Date().toISOString(),
+      createdAt: adjData.createdAt || new Date().toISOString(),
+      updatedAt: null,
+      editCount: 0,
     };
 
     if (db.stockAdjustments) {
       await db.stockAdjustments.add(record);
     }
 
-    // Automatically recalculate and sync stock status entries
     await syncStockEntriesToDb();
-
     return record;
+  },
+
+  /**
+   * Updates an existing manual stock adjustment record.
+   */
+  async update(id, adjData) {
+    if (!db.stockAdjustments) return null;
+    const existing = await db.stockAdjustments.get(id);
+    if (!existing) throw new Error('Stock adjustment not found: ' + id);
+
+    const isReduce = adjData.type === 'REDUCE' || Number(adjData.qty) < 0;
+    const qty = Math.abs(Number(adjData.qty !== undefined ? adjData.qty : existing.qty));
+    const rate = Number(adjData.rate !== undefined ? adjData.rate : existing.rate);
+    const amount = qty * rate;
+
+    const updated = {
+      ...existing,
+      date: adjData.date || existing.date,
+      type: isReduce ? 'REDUCE' : 'ADD',
+      adjustmentType: adjData.adjustmentType || existing.adjustmentType,
+      itemId: adjData.itemId || existing.itemId,
+      itemName: adjData.itemName || existing.itemName,
+      quality: adjData.quality || existing.quality,
+      warehouseId: adjData.warehouseId || existing.warehouseId,
+      warehouseName: adjData.warehouseName || existing.warehouseName,
+      qty,
+      rate,
+      amount,
+      reason: adjData.reason || adjData.note || existing.reason,
+      note: adjData.reason || adjData.note || existing.note,
+      updatedAt: new Date().toISOString(),
+      editCount: (Number(existing.editCount) || 0) + 1,
+    };
+
+    await db.stockAdjustments.put(updated);
+    await syncStockEntriesToDb();
+    return updated;
   },
 
   async delete(id) {

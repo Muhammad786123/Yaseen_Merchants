@@ -39,6 +39,7 @@ export const capitalService = {
       type: entryData.type || 'Add', // 'Add' or 'Withdraw'
       amount: Number(entryData.amount || 0),
       description: entryData.description || 'Owner Capital Investment',
+      linkedTransactionId: entryData.linkedTransactionId || null,
     };
 
     if (db.capitalEntries) {

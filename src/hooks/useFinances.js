@@ -21,6 +21,7 @@ export function useFinances() {
     addPayment: paymentService.add,
     deletePayment: paymentService.delete,
     addExpense: expenseService.add,
+    updateExpense: expenseService.update,
     deleteExpense: expenseService.delete,
     addAccount: accountService.add,
   };

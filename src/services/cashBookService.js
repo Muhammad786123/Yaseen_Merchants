@@ -49,6 +49,16 @@ export const cashBookService = {
       });
     }
 
+    // Update Party balance if manual entry (not linked to another voucher)
+    if (newEntry.partyId && !newEntry.linkedTransactionId) {
+      const party = await db.parties.get(newEntry.partyId);
+      if (party) {
+        await db.parties.update(party.id, {
+          balance: Number(party.balance || 0) - debit + credit,
+        });
+      }
+    }
+
     return newEntry;
   },
 
@@ -160,18 +170,6 @@ export const cashBookService = {
    */
   async giveCashToParty({ date, partyId, partyName, amount, description }) {
     const numAmount = Number(amount || 0);
-
-    // 1. Update Party Balance
-    if (partyId) {
-      const party = await db.parties.get(partyId);
-      if (party) {
-        await db.parties.update(party.id, {
-          balance: Number(party.balance || 0) - numAmount,
-        });
-      }
-    }
-
-    // 2. Record in Cash Book
     return await this.addEntry({
       date,
       type: 'CashGiven',
@@ -189,18 +187,6 @@ export const cashBookService = {
    */
   async receiveCashFromParty({ date, partyId, partyName, amount, description }) {
     const numAmount = Number(amount || 0);
-
-    // 1. Update Party Balance (only Party A/C touched, nothing else)
-    if (partyId) {
-      const party = await db.parties.get(partyId);
-      if (party) {
-        await db.parties.update(party.id, {
-          balance: Number(party.balance || 0) + numAmount,
-        });
-      }
-    }
-
-    // 2. Record in Cash Book
     return await this.addEntry({
       date,
       type: 'CashReceived',
@@ -209,6 +195,160 @@ export const cashBookService = {
       debit: 0,
       credit: numAmount,
       description: description || `Cash received from ${partyName}`,
+    });
+  },
+
+  /**
+   * Update manual Cash Book entry:
+   * (1) Checks if linked to another voucher; if so, rejects direct edit.
+   * (2) Reverses old entry's effect on Cash account balance (balance + debit - credit).
+   *     If linked to party, reverses party balance (given: balance + amount; received: balance - amount).
+   *     If linked to bank, reverses bank balance.
+   * (3) Applies new entry's effect on Cash, Party, and Bank balances.
+   * (4) Updates record preserving id, createdAt, setting updatedAt and editCount.
+   */
+  async update(id, data) {
+    const existing = await db.cashBookEntries.get(id);
+    if (!existing) throw new Error('Cash Book entry not found: ' + id);
+
+    if (existing.linkedTransactionId) {
+      throw new Error('This entry was created by another voucher and cannot be edited directly. Please edit the original voucher.');
+    }
+
+    const newDebit = Number(data.debit || 0);
+    const newCredit = Number(data.credit || 0);
+
+    const updated = {
+      ...existing,
+      date: data.date || existing.date,
+      partyId: data.partyId !== undefined ? data.partyId : existing.partyId,
+      partyName: data.partyName !== undefined ? data.partyName : existing.partyName,
+      bankAccountId: data.bankAccountId !== undefined ? data.bankAccountId : existing.bankAccountId,
+      bankAccountName: data.bankAccountName !== undefined ? data.bankAccountName : existing.bankAccountName,
+      debit: newDebit,
+      credit: newCredit,
+      description: data.description !== undefined ? data.description : existing.description,
+      type: data.type || existing.type,
+      updatedAt: new Date().toISOString(),
+      editCount: (Number(existing.editCount) || 0) + 1,
+    };
+
+    await db.transaction('rw', [db.cashBookEntries, db.parties, db.accounts], async () => {
+      // 1. Reverse old Cash account effect
+      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
+      if (cashAcc) {
+        await db.accounts.update(cashAcc.id, {
+          balance: Number(cashAcc.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
+        });
+      }
+
+      // 2. Reverse old Party effect (if any)
+      if (existing.partyId) {
+        const oldParty = await db.parties.get(existing.partyId);
+        if (oldParty) {
+          // Cash Given (debit): balance was reduced, so add back. Cash Received (credit): balance was increased, so subtract.
+          await db.parties.update(oldParty.id, {
+            balance: Number(oldParty.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
+          });
+        }
+      }
+
+      // 3. Reverse old Bank effect (if any)
+      if (existing.bankAccountId || existing.bankAccountName) {
+        const oldBank =
+          (existing.bankAccountId ? await db.accounts.get(existing.bankAccountId) : null) ||
+          (existing.bankAccountName ? await db.accounts.where({ name: existing.bankAccountName }).first() : null);
+        if (oldBank) {
+          await db.accounts.update(oldBank.id, {
+            balance: Number(oldBank.balance || 0) - Number(existing.debit || 0) + Number(existing.credit || 0),
+          });
+        }
+      }
+
+      // 4. Apply new Cash account effect
+      const refreshedCash = await db.accounts.where({ name: 'Cash' }).first();
+      if (refreshedCash) {
+        await db.accounts.update(refreshedCash.id, {
+          balance: Number(refreshedCash.balance || 0) - newDebit + newCredit,
+        });
+      }
+
+      // 5. Apply new Party effect (if any)
+      if (updated.partyId) {
+        const newParty = await db.parties.get(updated.partyId);
+        if (newParty) {
+          await db.parties.update(newParty.id, {
+            balance: Number(newParty.balance || 0) - newDebit + newCredit,
+          });
+        }
+      }
+
+      // 6. Apply new Bank effect (if any)
+      if (updated.bankAccountId || updated.bankAccountName) {
+        const newBank =
+          (updated.bankAccountId ? await db.accounts.get(updated.bankAccountId) : null) ||
+          (updated.bankAccountName ? await db.accounts.where({ name: updated.bankAccountName }).first() : null);
+        if (newBank) {
+          await db.accounts.update(newBank.id, {
+            balance: Number(newBank.balance || 0) + newDebit - newCredit,
+          });
+        }
+      }
+
+      // 7. Update cashBookEntries table
+      await db.cashBookEntries.put(updated);
+    });
+
+    return updated;
+  },
+
+  /**
+   * Delete manual Cash Book entry:
+   * (1) Rejects if linked to another voucher.
+   * (2) Reverses effect on Cash account, Party, and Bank balances.
+   * (3) Deletes record.
+   */
+  async delete(id) {
+    const existing = await db.cashBookEntries.get(id);
+    if (!existing) return;
+
+    if (existing.linkedTransactionId) {
+      throw new Error('This entry was created by another voucher and cannot be deleted directly. Please delete from the original voucher.');
+    }
+
+    await db.transaction('rw', [db.cashBookEntries, db.parties, db.accounts], async () => {
+      // 1. Reverse Cash account effect
+      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
+      if (cashAcc) {
+        await db.accounts.update(cashAcc.id, {
+          balance: Number(cashAcc.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
+        });
+      }
+
+      // 2. Reverse Party effect
+      if (existing.partyId) {
+        const party = await db.parties.get(existing.partyId);
+        if (party) {
+          await db.parties.update(party.id, {
+            balance: Number(party.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
+          });
+        }
+      }
+
+      // 3. Reverse Bank effect
+      if (existing.bankAccountId || existing.bankAccountName) {
+        const bank =
+          (existing.bankAccountId ? await db.accounts.get(existing.bankAccountId) : null) ||
+          (existing.bankAccountName ? await db.accounts.where({ name: existing.bankAccountName }).first() : null);
+        if (bank) {
+          await db.accounts.update(bank.id, {
+            balance: Number(bank.balance || 0) - Number(existing.debit || 0) + Number(existing.credit || 0),
+          });
+        }
+      }
+
+      // 4. Delete record
+      await db.cashBookEntries.delete(id);
     });
   },
 };

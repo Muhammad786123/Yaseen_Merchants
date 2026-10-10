@@ -47,26 +47,26 @@ input[type="text"], input:not([type]), textarea {
 .urdu-text,
 .urdu-label {
   font-family: var(--font-urdu) !important;
-  line-height: 2 !important;
+  line-height: 1.4 !important;
   letter-spacing: normal !important;
   text-transform: none !important;
   overflow: visible !important;
 }
 
-/* Nastaleeq Table and Row Spacing: no clipping, rows grow freely */
+/* Nastaleeq Table and Row Spacing: proportional and clean */
 table td:has(.font-urdu),
 table th:has(.font-urdu),
 table td.font-urdu,
 table th.font-urdu {
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
   overflow: visible !important;
   height: auto !important;
 }
 
 tr:has(.font-urdu) {
   height: auto !important;
-  min-height: 28px !important;
+  min-height: 22px !important;
 }
 
 /* Clear 0 vs 8 numeric styling with slashed zero */
@@ -79,7 +79,6 @@ tr:has(.font-urdu) {
   direction: ltr !important;
   unicode-bidi: isolate !important;
   text-align: left !important;
-  font-size: 22px;
 }
 
 .num-total {
@@ -91,16 +90,15 @@ tr:has(.font-urdu) {
   direction: ltr !important;
   unicode-bidi: isolate !important;
   text-align: left !important;
-  font-size: 24px !important;
 }
 
 @media print {
   .num {
-    font-size: 14pt !important;
+    font-size: 11pt !important;
     color: #000 !important;
   }
   .num-total {
-    font-size: 15pt !important;
+    font-size: 12pt !important;
     font-weight: 700 !important;
     color: #000 !important;
   }
@@ -112,8 +110,8 @@ tr:has(.font-urdu) {
 .urdu-statement-row,
 .statement-row,
 table.classic-ledger-view-table tr {
-  min-height: 40px !important;
-  height: auto !important;
+  min-height: 24px;
+  height: auto;
 }
 
 .classic-ledger-table td,
@@ -122,7 +120,7 @@ table.classic-ledger-view-table tr {
 .mallac-grid-table th,
 table.classic-ledger-view-table td,
 table.classic-ledger-view-table th {
-  padding: 6px 10px !important;
+  padding: 3px 6px !important;
   border: 1px solid #000 !important;
 }
 
@@ -132,7 +130,7 @@ table.classic-ledger-view-table th {
   .urdu-statement-row,
   .statement-row,
   table.classic-ledger-view-table tr {
-    min-height: 9mm !important;
+    min-height: 6mm !important;
   }
   .classic-ledger-table td,
   .classic-ledger-table th,
@@ -140,7 +138,7 @@ table.classic-ledger-view-table th {
   .mallac-grid-table th,
   table.classic-ledger-view-table td,
   table.classic-ledger-view-table th {
-    padding: 4px 6px !important;
+    padding: 2px 4px !important;
     border: 1px solid #000 !important;
   }
 }

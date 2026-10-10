@@ -93,6 +93,10 @@ db.version(6).stores({
   journalEntries: 'id, no, date, refNo, createdAt',
 });
 
+db.version(7).stores({
+  capitalEntries: 'id, date, type, linkedTransactionId',
+});
+
 /**
  * Clear all transactional, inventory, ledger, and party tables and reset database to clean state.
  * Preserves system configuration: Settings/Company Profile, Document Numbering, and Users.

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import Modal from '../../components/ui/Modal.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
 import Input from '../../components/ui/Input.jsx';
 import Select from '../../components/ui/Select.jsx';
@@ -13,8 +14,7 @@ import { useParties } from '../../hooks/useParties.js';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { db } from '../../db/database.js';
-import { cashBookService } from '../../services/cashBookService.js';
-import { capitalService } from '../../services/capitalService.js';
+import { journalService } from '../../services/journalService.js';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
 import {
@@ -22,10 +22,12 @@ import {
   Plus,
   Trash2,
   Eye,
+  Pencil,
   Printer,
   CheckCircle2,
   AlertCircle,
   RotateCcw,
+  X,
 } from 'lucide-react';
 
 const EXPENSE_CATEGORIES = [
@@ -66,31 +68,36 @@ export default function Journal() {
   const [savedVouchers, setSavedVouchers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewingVoucher, setViewingVoucher] = useState(null);
+  const [editingVoucher, setEditingVoucher] = useState(null);
+  const [deletingVoucher, setDeletingVoucher] = useState(null);
 
   // Bank accounts
   const bankAccounts = accounts.filter((a) => !a.name.toLowerCase().includes('cash'));
 
-  // Load next voucher number from db
-  useEffect(() => {
-    async function loadVouchers() {
-      try {
-        if (!db.journalEntries) return;
-        const all = await db.journalEntries.toArray();
-        setSavedVouchers(all.reverse());
-        const maxNo = all.reduce((max, v) => {
-          const num = parseInt(String(v.no).replace(/\D/g, ''), 10);
-          return !isNaN(num) && num > max ? num : max;
-        }, 0);
-        setVoucherNo(maxNo > 0 ? maxNo + 1 : 1);
-      } catch (err) {
-        console.error('Failed to load journal vouchers:', err);
-      }
+  // Load vouchers from db
+  const reloadVouchers = async () => {
+    try {
+      if (!db.journalEntries) return;
+      const all = await db.journalEntries.toArray();
+      setSavedVouchers(all.reverse());
+      const maxNo = all.reduce((max, v) => {
+        const num = parseInt(String(v.no).replace(/\D/g, ''), 10);
+        return !isNaN(num) && num > max ? num : max;
+      }, 0);
+      setVoucherNo(maxNo > 0 ? maxNo + 1 : 1);
+    } catch (err) {
+      console.error('Failed to load journal vouchers:', err);
     }
-    loadVouchers();
+  };
+
+  useEffect(() => {
+    reloadVouchers();
   }, []);
 
   // Format voucher reference as JV-0001, JV-0002...
-  const jvRef = `JV-${String(voucherNo).padStart(4, '0')}`;
+  const jvRef = editingVoucher
+    ? editingVoucher.no
+    : `JV-${String(voucherNo).padStart(4, '0')}`;
 
   // Account selection change
   const handleAccountSelect = (index, value) => {
@@ -152,9 +159,34 @@ export default function Journal() {
   };
 
   const handleReset = () => {
+    setEditingVoucher(null);
     setDate(getTodayStr());
     setNarration('');
     setLines([createEmptyLine(0), createEmptyLine(1)]);
+    reloadVouchers();
+  };
+
+  const handleStartEdit = (v) => {
+    setEditingVoucher(v);
+    setDate(v.date || getTodayStr());
+    setNarration(v.narration || '');
+    if (v.lines && v.lines.length >= 2) {
+      setLines(
+        v.lines.map((l, i) => ({
+          id: `jv_line_${i}_${Date.now()}`,
+          accountType: l.accountType || 'party',
+          accountId: l.accountId || '',
+          accountName: l.accountName || '',
+          detail: l.detail || '',
+          debit: l.debit || '',
+          credit: l.credit || '',
+        }))
+      );
+    } else {
+      setLines([createEmptyLine(0), createEmptyLine(1)]);
+    }
+    // Scroll to top of form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Live totals
@@ -163,7 +195,7 @@ export default function Journal() {
   const difference = Math.abs(totalDebit - totalCredit);
   const isBalanced = totalDebit > 0 && difference === 0;
 
-  // Save Journal Voucher
+  // Save / Update Journal Voucher
   const handleSave = async () => {
     const validLines = lines.filter(
       (l) => l.accountName && (Number(l.debit) > 0 || Number(l.credit) > 0)
@@ -181,95 +213,47 @@ export default function Journal() {
       return;
     }
 
-    const newEntry = {
-      id: 'jv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      no: jvRef,
-      refNo: jvRef,
-      date,
-      narration: narration.trim() || 'Journal Transaction',
-      totalAmount: totalDebit,
-      lines: validLines.map((l) => ({
-        accountType: l.accountType,
-        accountId: l.accountId,
-        accountName: l.accountName,
-        detail: l.detail,
-        debit: Number(l.debit) || 0,
-        credit: Number(l.credit) || 0,
-      })),
-      createdAt: new Date().toISOString(),
-    };
-
     try {
-      await db.transaction(
-        'rw',
-        [db.journalEntries, db.parties, db.accounts, db.cashBookEntries, db.capitalEntries],
-        async () => {
-          await db.journalEntries.add(newEntry);
+      if (editingVoucher) {
+        await journalService.update(editingVoucher.id, {
+          date,
+          narration: narration.trim() || 'Journal Transaction',
+          lines: validLines,
+        });
+        showToast(`Journal Voucher ${editingVoucher.no} updated successfully!`);
+      } else {
+        await journalService.add({
+          no: jvRef,
+          date,
+          narration: narration.trim() || 'Journal Transaction',
+          lines: validLines,
+        });
+        showToast(`Journal Voucher ${jvRef} posted successfully!`);
+      }
 
-          // Post updates to accounts/parties
-          for (const line of validLines) {
-            const deb = Number(line.debit) || 0;
-            const cred = Number(line.credit) || 0;
-
-            if (line.accountType === 'party') {
-              const party = await db.parties.get(line.accountId);
-              if (party) {
-                const currentBal = Number(party.balance || 0);
-                // App convention: party.balance > 0 = payable (we owe), < 0 = receivable.
-                // Credit increases what we owe; Debit reduces it or creates a receivable.
-                await db.parties.update(party.id, { balance: currentBal - deb + cred });
-              }
-            } else if (line.accountType === 'capital') {
-              // Capital: Credit -> capitalService.addEntry({ type: 'Add', amount: cred, date, description: 'JV ' + jvRef }); Debit -> type: 'Withdraw'
-              if (cred > 0) {
-                await capitalService.addEntry({
-                  type: 'Add',
-                  amount: cred,
-                  date,
-                  description: `JV ${jvRef}${line.detail ? ' - ' + line.detail : ''}`,
-                });
-              }
-              if (deb > 0) {
-                await capitalService.addEntry({
-                  type: 'Withdraw',
-                  amount: deb,
-                  date,
-                  description: `JV ${jvRef}${line.detail ? ' - ' + line.detail : ''}`,
-                });
-              }
-            } else if (line.accountType === 'cash') {
-              // Cash: a Debit to Cash means cash received, which is Cash Book Credit/Jamma;
-              // a Credit to Cash is Cash Book Debit/Benaam.
-              // Post through existing cashBookService.addEntry so it appears in the Cash Book
-              // and the balance changes exactly once.
-              await cashBookService.addEntry({
-                date,
-                type: 'Journal',
-                debit: cred,
-                credit: deb,
-                description: `JV ${jvRef}${line.detail ? ' - ' + line.detail : (narration ? ' - ' + narration : '')}`,
-                linkedTransactionId: newEntry.id,
-              });
-            } else if (line.accountType === 'bank') {
-              // Bank: unchanged (Debit increases the bank balance)
-              const bank = (await db.accounts.get(line.accountId)) || (await db.accounts.where({ name: line.accountName }).first());
-              if (bank) {
-                const currentBal = Number(bank.balance || 0);
-                await db.accounts.update(bank.id, { balance: currentBal + deb - cred });
-              }
-            }
-            // Mall A/C and Expense lines: stored in journalEntries; included in Mall A/C balance dynamically.
-          }
-        }
-      );
-
-      showToast(`Journal Voucher ${jvRef} posted successfully!`);
-      setVoucherNo((prev) => prev + 1);
-      setSavedVouchers((prev) => [newEntry, ...prev]);
       handleReset();
     } catch (err) {
       console.error('Error saving JV:', err);
-      alert('Failed to save journal voucher. Please check console for details.');
+      alert('Failed to save journal voucher: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  // Delete Journal Voucher
+  const handleConfirmDelete = async () => {
+    if (!deletingVoucher) return;
+    try {
+      await journalService.delete(deletingVoucher.id);
+      showToast(`Journal Voucher ${deletingVoucher.no} deleted and all effects reversed!`);
+      setDeletingVoucher(null);
+      if (editingVoucher?.id === deletingVoucher.id) {
+        handleReset();
+      } else {
+        await reloadVouchers();
+      }
+    } catch (err) {
+      console.error('Failed to delete JV:', err);
+      alert('Failed to delete journal voucher: ' + (err.message || 'Unknown error'));
+      setDeletingVoucher(null);
     }
   };
 
@@ -308,8 +292,33 @@ export default function Journal() {
         }
       />
 
-      {/* ── Main Journal Voucher Entry Box (Classic PERBALACC Bordered Style) ── */}
-      <div className="border-2 border-black bg-white rounded-none p-4 shadow-none">
+      {/* ── Main Journal Voucher Entry Box ── */}
+      <div className={`border-2 ${editingVoucher ? 'border-amber-600 ring-2 ring-amber-300' : 'border-black'} bg-white rounded-none p-4 shadow-none transition-all`}>
+        {/* Editing Banner */}
+        {editingVoucher && (
+          <div className="mb-3 p-2.5 bg-amber-50 border-2 border-amber-600 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-amber-700" />
+              <div>
+                <span className="font-bold text-amber-900 text-sm">
+                  Editing Voucher: <span className="font-mono font-black">{editingVoucher.no}</span>
+                </span>
+                <span className="text-xs text-amber-800 ml-2">
+                  (Changes will reverse previous postings and re-apply updated amounts automatically)
+                </span>
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={X}
+              onClick={handleReset}
+            >
+              Cancel Edit
+            </Button>
+          </div>
+        )}
+
         {/* Top Info Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pb-3 mb-3 border-b-2 border-black bg-[#EBE9ED] p-3">
           <div className="sm:col-span-3">
@@ -320,7 +329,7 @@ export default function Journal() {
               type="text"
               readOnly
               value={jvRef}
-              className="w-full bg-white border border-black px-2.5 py-1.5 font-mono font-bold text-black text-xs outline-none"
+              className={`w-full bg-white border ${editingVoucher ? 'border-amber-600 bg-amber-50 text-amber-900 font-black' : 'border-black text-black'} px-2.5 py-1.5 font-mono font-bold text-xs outline-none`}
             />
           </div>
 
@@ -343,7 +352,7 @@ export default function Journal() {
           </div>
         </div>
 
-        {/* Multi-row Transaction Grid (Exact Classic Bordered Table) */}
+        {/* Multi-row Transaction Grid */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse border border-black text-base bg-white">
             <thead>
@@ -358,94 +367,97 @@ export default function Journal() {
             </thead>
             <tbody>
               {lines.map((line, idx) => (
-                <tr key={line.id} className="hover:bg-gray-50 border-b border-black">
-                  <td className="border border-black px-2.5 py-2 text-center font-mono font-bold text-gray-700 text-base">
+                <tr key={line.id} className="border-b border-black hover:bg-gray-50">
+                  <td className="border border-black px-2 py-2 text-center font-bold text-gray-700 text-sm">
                     {idx + 1}
                   </td>
 
                   {/* Account Selector */}
-                  <td className="border border-black p-0">
+                  <td className="border border-black p-1">
                     <select
                       value={line.accountId ? `${line.accountType}:${line.accountId}` : ''}
                       onChange={(e) => handleAccountSelect(idx, e.target.value)}
-                      className="w-full px-2.5 py-2 text-base outline-none bg-transparent font-bold text-black"
+                      className="w-full border border-black p-1.5 text-xs bg-white font-semibold text-start outline-none"
                     >
-                      <option value="">-- Select Account --</option>
-                      <optgroup label="Parties (Suppliers / Customers)">
-                        {parties.map((p) => (
-                          <option key={`party:${p.id}`} value={`party:${p.id}`}>
-                            {p.code || p.id} - {p.name} ({p.type})
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Bank Accounts">
-                        {bankAccounts.map((b) => (
-                          <option key={`bank:${b.id}`} value={`bank:${b.id}`}>
-                            {b.code || b.id} - {b.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Cash & Trading Accounts">
+                      <option value="">-- Choose Account (کھاتہ) --</option>
+
+                      <optgroup label="Core System Accounts">
                         <option value="cash:cash">Cash in Hand (Physical Cash)</option>
                         <option value="mall:mall">Mall A/C (Goods / Inventory)</option>
-                        <option value="capital:capital">Capital Account</option>
+                        <option value="capital:capital">Capital Account (سرمایہ)</option>
                       </optgroup>
-                      <optgroup label="Expense Heads">
-                        {EXPENSE_CATEGORIES.map((exp) => (
-                          <option key={`expense:${exp}`} value={`expense:${exp}`}>
-                            {exp}
+
+                      <optgroup label="Bank Accounts">
+                        {bankAccounts.map((b) => (
+                          <option key={b.id} value={`bank:${b.id}`}>
+                            {b.name} ({b.code || 'Bank'})
+                          </option>
+                        ))}
+                      </optgroup>
+
+                      <optgroup label="Parties (کھاتہ دار / Customers & Suppliers)">
+                        {parties.map((p) => (
+                          <option key={p.id} value={`party:${p.id}`}>
+                            {p.code ? `[${p.code}] ` : ''}{p.name} ({p.type})
+                          </option>
+                        ))}
+                      </optgroup>
+
+                      <optgroup label="Operating Expenses (اخراجات)">
+                        {EXPENSE_CATEGORIES.map((cat) => (
+                          <option key={cat} value={`expense:${cat}`}>
+                            Expense — {cat}
                           </option>
                         ))}
                       </optgroup>
                     </select>
                   </td>
 
-                  {/* Particulars */}
-                  <td className="border border-black p-0">
+                  {/* Detail */}
+                  <td className="border border-black p-1">
                     <input
                       type="text"
                       value={line.detail}
                       onChange={(e) => handleFieldChange(idx, 'detail', e.target.value)}
-                      placeholder="Transaction details for this line..."
-                      dir="auto"
-                      className="w-full px-2.5 py-2 text-base outline-none bg-transparent text-gray-900 text-start"
+                      placeholder="Line narration / bill reference..."
+                      className="w-full border border-gray-400 p-1.5 text-xs outline-none focus:border-black"
                     />
                   </td>
 
                   {/* Debit */}
-                  <td className="border border-black p-0" dir="ltr">
+                  <td className="border border-black p-1" dir="ltr">
                     <input
                       type="number"
                       min="0"
+                      step="any"
                       value={line.debit}
                       onChange={(e) => handleFieldChange(idx, 'debit', e.target.value)}
                       placeholder="0"
-                      dir="ltr"
-                      className="w-full px-2.5 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-red-700 tabular-nums"
+                      className="w-full border border-gray-400 p-1.5 text-xs font-mono font-bold text-left text-red-700 outline-none focus:border-black tabular-nums"
                     />
                   </td>
 
                   {/* Credit */}
-                  <td className="border border-black p-0" dir="ltr">
+                  <td className="border border-black p-1" dir="ltr">
                     <input
                       type="number"
                       min="0"
+                      step="any"
                       value={line.credit}
                       onChange={(e) => handleFieldChange(idx, 'credit', e.target.value)}
                       placeholder="0"
-                      dir="ltr"
-                      className="w-full px-2.5 py-2 text-base font-mono font-bold text-left outline-none bg-transparent text-[#1a6b2e] tabular-nums"
+                      className="w-full border border-gray-400 p-1.5 text-xs font-mono font-bold text-left text-[#1a6b2e] outline-none focus:border-black tabular-nums"
                     />
                   </td>
 
-                  {/* Delete button */}
-                  <td className="border border-black p-0 text-center">
+                  {/* Delete Row Button */}
+                  <td className="border border-black p-1 text-center">
                     <button
                       type="button"
                       onClick={() => handleRemoveLine(idx)}
                       disabled={lines.length <= 2}
-                      className="p-1 text-red-600 hover:text-red-900 disabled:opacity-30 cursor-pointer"
-                      title="Delete line"
+                      className="text-red-600 hover:text-red-900 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Remove row"
                     >
                       <Trash2 className="w-4 h-4 mx-auto" />
                     </button>
@@ -454,16 +466,15 @@ export default function Journal() {
               ))}
             </tbody>
             <tfoot>
-              {/* Total Row */}
-              <tr className="bg-[#DFDFDF] font-bold">
-                <td colSpan={3} className="border border-black px-3.5 py-2.5 text-end uppercase text-black font-black text-base">
-                  Total (میزان)
+              <tr className="bg-[#DFDFDF] border-t-2 border-black font-bold">
+                <td colSpan={3} className="border border-black px-3.5 py-2.5 text-end font-bold text-base">
+                  Voucher Total (میزان):
                 </td>
-                <td className="border border-black px-3.5 py-2.5 text-left font-mono text-red-800 text-[17px] font-black tabular-nums" dir="ltr">
-                  {totalDebit ? totalDebit.toLocaleString('en-PK') : '0'}
+                <td className="border border-black px-3.5 py-2.5 font-mono font-bold text-left text-red-700 text-base tabular-nums" dir="ltr">
+                  {fmt(totalDebit)}
                 </td>
-                <td className="border border-black px-3.5 py-2.5 text-left font-mono text-[#1a6b2e] text-[17px] font-black tabular-nums" dir="ltr">
-                  {totalCredit ? totalCredit.toLocaleString('en-PK') : '0'}
+                <td className="border border-black px-3.5 py-2.5 font-mono font-bold text-left text-[#1a6b2e] text-base tabular-nums" dir="ltr">
+                  {fmt(totalCredit)}
                 </td>
                 <td className="border border-black"></td>
               </tr>
@@ -504,19 +515,19 @@ export default function Journal() {
               onClick={handleSave}
               disabled={!isBalanced}
             >
-              Post Journal Voucher
+              {editingVoucher ? 'Update Voucher' : 'Post Journal Voucher'}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Recorded Journal Vouchers History (PERBALACC Classic Table) ── */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#EBE9ED] p-2.5 border-2 border-black">
+      {/* ── Saved Journal Vouchers History Table ── */}
+      <div className="border-2 border-black bg-white rounded-none p-4 shadow-none">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 mb-3 border-b-2 border-black">
           <SearchInput
             value={searchTerm}
             onChange={setSearchTerm}
-            placeholder="Search journal vouchers by JV #, narration, or account..."
+            placeholder="Search by JV #, narration, or account..."
             className="w-full sm:w-96"
           />
           <div className="text-sm font-bold text-black">
@@ -531,9 +542,28 @@ export default function Journal() {
           {filteredVouchers.map((v) => (
             <TR key={v.id}>
               <TD mono className="font-bold text-black">
-                {v.no}
+                <div className="flex items-center gap-1.5">
+                  <span>{v.no}</span>
+                  {v.editCount > 0 && (
+                    <span
+                      className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 text-[10px] font-bold rounded-sm"
+                      title={`Edited ${v.editCount} time(s). Last edited: ${v.updatedAt ? formatDate(v.updatedAt) : 'Recently'}`}
+                    >
+                      Edited
+                    </span>
+                  )}
+                </div>
               </TD>
-              <TD>{formatDate(v.date)}</TD>
+              <TD>
+                <div>
+                  <span>{formatDate(v.date)}</span>
+                  {v.updatedAt && (
+                    <div className="text-[10px] text-gray-500">
+                      Rev: {formatDate(v.updatedAt)}
+                    </div>
+                  )}
+                </div>
+              </TD>
               <TD className="font-bold text-black">{v.narration}</TD>
               <TD className="text-sm text-gray-800">
                 {v.lines?.map((l) => l.accountName).filter(Boolean).slice(0, 3).join(', ')}
@@ -551,6 +581,33 @@ export default function Journal() {
                     title="View Voucher Slip"
                   >
                     <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(v)}
+                    className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                    title="Edit Voucher"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingVoucher(v);
+                      setTimeout(() => safePrint(), 100);
+                    }}
+                    className="p-1 border border-black bg-white hover:bg-blue-50 text-blue-700 cursor-pointer"
+                    title="Print Slip"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingVoucher(v)}
+                    className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                    title="Delete Voucher"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </TD>
@@ -572,6 +629,11 @@ export default function Journal() {
               <div>
                 <span className="font-bold text-black">Voucher No: </span>
                 <span className="font-mono font-black text-black">{viewingVoucher.no}</span>
+                {viewingVoucher.editCount > 0 && (
+                  <span className="ml-2 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 font-bold">
+                    Edited ({viewingVoucher.editCount})
+                  </span>
+                )}
               </div>
               <div>
                 <span className="font-bold text-black">Date: </span>
@@ -635,6 +697,16 @@ export default function Journal() {
           </div>
         )}
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingVoucher}
+        title="Delete Journal Voucher"
+        message="This will reverse all its effects on parties, cash, bank and stock."
+        confirmLabel="Delete Voucher"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeletingVoucher(null)}
+      />
     </div>
   );
 }

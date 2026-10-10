@@ -112,7 +112,7 @@ export default function Payment() {
         isOpen={!!viewingPayment}
         onClose={() => setViewingPayment(null)}
         title={`Payment Voucher - ${viewingPayment?.no}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {viewingPayment && (
           <PrintDocument

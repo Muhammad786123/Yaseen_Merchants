@@ -14,10 +14,10 @@ import { useQualities } from '../../hooks/useQualities.js';
 import { useStock } from '../../hooks/useStock.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2, Eye } from 'lucide-react';
+import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
 
 export default function Issue() {
-  const { issues, addIssue, deleteIssue } = useIssues();
+  const { issues, addIssue, updateIssue, deleteIssue } = useIssues();
   const { warehouses } = useWarehouses();
   const { items } = useItems();
   const { qualities } = useQualities();
@@ -26,6 +26,7 @@ export default function Issue() {
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingIssue, setEditingIssue] = useState(null);
   const [viewingIssue, setViewingIssue] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -63,8 +64,29 @@ export default function Issue() {
       >
         {filteredIssues.map((iss) => (
           <TR key={iss.id}>
-            <TD mono className="font-bold text-black">{iss.no}</TD>
-            <TD>{formatDate(iss.date)}</TD>
+            <TD mono className="font-bold text-black">
+              <div className="flex items-center gap-1.5">
+                <span>{iss.no}</span>
+                {iss.editCount > 0 && (
+                  <span
+                    className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 text-[10px] font-bold rounded-sm"
+                    title={`Edited ${iss.editCount} time(s). Last edited: ${iss.updatedAt ? formatDate(iss.updatedAt) : 'Recently'}`}
+                  >
+                    Edited
+                  </span>
+                )}
+              </div>
+            </TD>
+            <TD>
+              <div>
+                <span>{formatDate(iss.date)}</span>
+                {iss.updatedAt && (
+                  <div className="text-[10px] text-gray-500">
+                    Rev: {formatDate(iss.updatedAt)}
+                  </div>
+                )}
+              </div>
+            </TD>
             <TD className="font-bold text-black">{iss.fromWarehouse}</TD>
             <TD>
               <div className="text-base text-gray-800 space-y-1">
@@ -96,6 +118,13 @@ export default function Issue() {
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  onClick={() => setEditingIssue(iss)}
+                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  title="Edit Material Issue"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
                   onClick={() => setDeletingId(iss.id)}
                   className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Issue"
@@ -113,7 +142,7 @@ export default function Issue() {
         isOpen={!!viewingIssue}
         onClose={() => setViewingIssue(null)}
         title={`Material Issue Slip - ${viewingIssue?.no}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {viewingIssue && (
           <PrintDocument
@@ -192,10 +221,14 @@ export default function Issue() {
         )}
       </Modal>
 
+      {/* Add / Edit Modal */}
       <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Record New Material Issue"
+        isOpen={isAddModalOpen || !!editingIssue}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingIssue(null);
+        }}
+        title={editingIssue ? `Editing Material Issue — ${editingIssue.no}` : 'Record New Material Issue'}
         maxWidth="max-w-4xl"
       >
         <IssueForm
@@ -203,22 +236,33 @@ export default function Issue() {
           items={items}
           qualities={qualities}
           stockEntries={stockEntries}
+          initialData={editingIssue}
           onSubmit={async (data) => {
-            await addIssue(data);
-            showToast('Material issue recorded successfully!');
-            setIsAddModalOpen(false);
+            if (editingIssue) {
+              await updateIssue(editingIssue.id, data);
+              showToast(`Material issue ${editingIssue.no} updated successfully!`);
+              setEditingIssue(null);
+            } else {
+              await addIssue(data);
+              showToast('Material issue recorded successfully!');
+              setIsAddModalOpen(false);
+            }
           }}
-          onCancel={() => setIsAddModalOpen(false)}
+          onCancel={() => {
+            setIsAddModalOpen(false);
+            setEditingIssue(null);
+          }}
         />
       </Modal>
 
       <ConfirmDialog
         isOpen={!!deletingId}
         title="Delete Material Issue"
-        message="Are you sure you want to delete this issue slip?"
+        message="This will reverse all its effects on parties, cash, bank and stock."
+        confirmLabel="Delete Issue"
         onConfirm={async () => {
           await deleteIssue(deletingId);
-          showToast('Material issue deleted!');
+          showToast('Material issue deleted and stock reversed!');
           setDeletingId(null);
         }}
         onCancel={() => setDeletingId(null)}

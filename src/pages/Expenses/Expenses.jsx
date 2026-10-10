@@ -10,14 +10,15 @@ import ExpenseForm from '../../components/forms/ExpenseForm.jsx';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 
 export default function Expenses() {
-  const { expenses, accounts, addExpense, deleteExpense } = useFinances();
+  const { expenses, accounts, addExpense, updateExpense, deleteExpense } = useFinances();
   const { showToast } = useApp();
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const filtered = expenses.filter(
@@ -58,7 +59,14 @@ export default function Expenses() {
       >
         {filtered.map((e) => (
           <TR key={e.id}>
-            <TD>{formatDate(e.date)}</TD>
+            <TD>
+              {formatDate(e.date)}
+              {e.editCount > 0 && (
+                <div className="text-[10px] text-amber-700 font-medium">
+                  Edited ({e.updatedAt ? new Date(e.updatedAt).toLocaleDateString() : 'Yes'})
+                </div>
+              )}
+            </TD>
             <TD className="font-bold text-black">{e.description}</TD>
             <TD>
               <Badge variant="purple">{e.category}</Badge>
@@ -66,7 +74,14 @@ export default function Expenses() {
             <TD>{e.account}</TD>
             <TD mono right className="font-bold text-red-700">{fmt(e.amount)}</TD>
             <TD>
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={() => setEditingExpense(e)}
+                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  title="Edit Expense"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => setDeletingId(e.id)}
                   className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
@@ -81,25 +96,38 @@ export default function Expenses() {
       </Table>
 
       <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Record New Operating Expense"
+        isOpen={isAddModalOpen || !!editingExpense}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingExpense(null);
+        }}
+        title={editingExpense ? "Edit Operating Expense" : "Record New Operating Expense"}
       >
         <ExpenseForm
           accounts={accounts}
+          initialData={editingExpense}
           onSubmit={async (data) => {
-            await addExpense(data);
-            showToast('Expense recorded!');
+            if (editingExpense) {
+              await updateExpense(editingExpense.id, data);
+              showToast('Expense updated successfully!');
+            } else {
+              await addExpense(data);
+              showToast('Expense recorded!');
+            }
             setIsAddModalOpen(false);
+            setEditingExpense(null);
           }}
-          onCancel={() => setIsAddModalOpen(false)}
+          onCancel={() => {
+            setIsAddModalOpen(false);
+            setEditingExpense(null);
+          }}
         />
       </Modal>
 
       <ConfirmDialog
         isOpen={!!deletingId}
         title="Delete Expense Record"
-        message="Are you sure you want to delete this expense record?"
+        message="Are you sure you want to delete this expense record? This will reverse all its effects on parties, cash, bank and stock."
         onConfirm={async () => {
           await deleteExpense(deletingId);
           showToast('Expense deleted!');

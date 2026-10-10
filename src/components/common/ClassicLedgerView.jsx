@@ -111,98 +111,98 @@ export default function ClassicLedgerView({
         }}
       >
         {/* Header Block */}
-        <div className="mb-4 space-y-2 border-b border-black pb-3">
+        <div className="mb-2 space-y-1.5 border-b border-black pb-2">
           {/* Top Line: Timestamp, Title, Account Badge */}
           <div className="flex items-center justify-between">
             {/* Top-left: Live timestamp */}
-            <div className="text-sm num text-gray-700 w-1/4" dir="ltr">
+            <div className="text-xs num text-gray-700 w-1/4" dir="ltr">
               {timestamp}
             </div>
 
             {/* Center: STATEMENT OF ACCOUNT */}
             <div className="text-center w-2/4">
-              <h2 className="text-[26px] font-bold text-[#1a6b2e] tracking-wider font-urdu leading-normal">
+              <h2 className="text-lg font-bold text-[#1a6b2e] tracking-wider font-urdu leading-tight">
                 اسٹیٹمنٹ آف اکاؤنٹ
               </h2>
-              <h1 className="text-xs font-black text-gray-700 tracking-wider uppercase">
+              <h1 className="text-[10px] font-black text-gray-600 tracking-wider uppercase">
                 STATEMENT OF ACCOUNT
               </h1>
             </div>
 
             {/* Top-right: Yellow Badge */}
             <div className="flex items-center justify-end gap-2 w-1/4">
-              <div className="bg-[#FFEB3B] border border-black px-3 py-1 text-sm font-bold text-red-900 shadow-xs font-urdu">
+              <div className="bg-[#FFEB3B] border border-black px-2.5 py-0.5 text-xs font-bold text-red-900 shadow-xs font-urdu">
                 {badgeText}
               </div>
             </div>
           </div>
 
-          {/* Dedicated Account / Party Name Box (40px bold on screen, 24pt bold in print, centered inside a bordered box at top) */}
-          <div className="text-center py-2.5 px-4 border-2 border-black my-2 bg-white shadow-xs">
-            {/* Urdu Name first (40px screen / 24pt print) */}
+          {/* Dedicated Account / Party Name Box */}
+          <div className="text-center py-1.5 px-3 border-2 border-black my-1.5 bg-white shadow-xs">
+            {/* Urdu Name */}
             <div
-              className="text-[40px] print:text-[24pt] font-bold text-black font-urdu leading-normal tracking-wide"
+              className="text-2xl print:text-xl font-bold text-black font-urdu leading-normal tracking-wide"
               dir="rtl"
             >
               {displayUrduName || displayEnglishName || accountName || 'کھاتہ'}
             </div>
 
-            {/* English Name below at 22px */}
+            {/* English Name below */}
             {displayEnglishName && displayEnglishName !== displayUrduName && (
-              <div className="text-[22px] print:text-[14pt] font-bold text-gray-800 tracking-wide mt-0.5">
+              <div className="text-sm print:text-xs font-bold text-gray-800 tracking-wide mt-0.5">
                 {displayEnglishName}
               </div>
             )}
 
-            {/* Party Code and Phone below at 18px */}
-            <div className="flex items-center justify-center gap-6 text-[18px] print:text-[12pt] font-bold text-gray-800 mt-1">
+            {/* Party Code and Phone below */}
+            <div className="flex items-center justify-center gap-6 text-xs print:text-[10px] font-bold text-gray-700 mt-0.5">
               {acCode && (
                 <span>
-                  کوڈ (Code): <span className="num font-bold text-[18px] print:text-[12pt]">{acCode}</span>
+                  کوڈ (Code): <span className="num font-bold text-xs">{acCode}</span>
                 </span>
               )}
               {phone && (
                 <span>
-                  فون (Phone): <span className="num font-bold text-[18px] print:text-[12pt]">{phone}</span>
+                  فون (Phone): <span className="num font-bold text-xs">{phone}</span>
                 </span>
               )}
             </div>
           </div>
 
           {/* Line: A/C Code, Period Date Range Filter */}
-          <div className="flex flex-wrap items-center justify-between text-base pt-1 gap-2">
+          <div className="flex flex-wrap items-center justify-between text-xs pt-0.5 gap-2">
             <div className="font-bold flex items-center gap-2">
-              <span className="font-urdu text-[18px]">کوڈ:</span>
-              <span className="num font-extrabold bg-gray-100 px-2.5 py-0.5 border border-black/40 text-[18px]">{acCode}</span>
+              <span className="font-urdu text-sm">کوڈ:</span>
+              <span className="num font-extrabold bg-gray-100 px-2 py-0.5 border border-black/40 text-xs">{acCode}</span>
             </div>
 
-            <div className="flex items-center gap-2 font-medium text-base">
-              <span className="font-urdu font-bold text-[18px]">مدت از:</span>
+            <div className="flex items-center gap-2 font-medium text-xs">
+              <span className="font-urdu font-bold text-sm">مدت از:</span>
               {/* Screen editable date inputs */}
               <div className="print:hidden flex items-center gap-1.5">
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom && setDateFrom(e.target.value)}
-                  className="border border-black px-2 py-1 num text-base bg-white outline-none cursor-pointer"
+                  className="border border-black px-1.5 py-0.5 num text-xs bg-white outline-none cursor-pointer"
                   title="Filter start date"
                 />
-                <span className="font-urdu font-bold text-[18px]">تا:</span>
+                <span className="font-urdu font-bold text-sm">تا:</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo && setDateTo(e.target.value)}
-                  className="border border-black px-2 py-1 num text-base bg-white outline-none cursor-pointer"
+                  className="border border-black px-1.5 py-0.5 num text-xs bg-white outline-none cursor-pointer"
                   title="Filter end date"
                 />
               </div>
-              {/* Print view boxed dates matching reference format e.g. 01-MAR-22 To 03-OCT-26 */}
+              {/* Print view boxed dates */}
               <div className="hidden print:inline-flex items-center gap-1.5">
-                <span className="border border-black px-2.5 py-0.5 num text-base font-bold">
+                <span className="border border-black px-2 py-0.5 num text-xs font-bold">
                   {dateFrom ? fmtDateUpper(dateFrom) : filteredRows[0]?.date ? fmtDateUpper(filteredRows[0].date) : 'START'}
                 </span>
-                <span className="font-urdu font-bold text-[18px]">تا</span>
-                <span className="border border-black px-2.5 py-0.5 num text-base font-bold">
+                <span className="font-urdu font-bold text-xs">تا</span>
+                <span className="border border-black px-2 py-0.5 num text-xs font-bold">
                   {dateTo ? fmtDateUpper(dateTo) : fmtDateUpper(new Date())}
                 </span>
               </div>
@@ -210,10 +210,10 @@ export default function ClassicLedgerView({
           </div>
 
           {/* Opening Balance Line (سابقہ بیلنس) */}
-          <div className="flex items-center justify-between text-base pt-1">
-            <div className="flex items-center gap-3">
-              <span className="font-urdu font-bold text-[22px] print:text-[14pt]" dir="rtl">سابقہ بیلنس (Opening Balance):</span>
-              <span className="num font-bold text-[22px] print:text-[14pt]">
+          <div className="flex items-center justify-between text-xs pt-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-urdu font-bold text-sm" dir="rtl">سابقہ بیلنس (Opening Balance):</span>
+              <span className="num font-bold text-sm">
                 {openingBalance
                   ? mode === 'currency'
                     ? `${fmtNum(Math.abs(openingBalance))}${openingBalance > 0 ? ' Cr' : openingBalance < 0 ? ' Dr' : ''}`
@@ -222,16 +222,15 @@ export default function ClassicLedgerView({
               </span>
             </div>
             {filteredRows.length > 0 && (
-              <span className="text-sm text-gray-500 font-sans">
+              <span className="text-xs text-gray-500 font-sans">
                 Showing {filteredRows.length} entries
               </span>
             )}
           </div>
         </div>
-
         {/* ── Main Ledger Grid (PERBALACC Exact Bordered Table) ── */}
         <table
-          className="classic-ledger-table w-full border-collapse text-base text-black"
+          className="classic-ledger-table w-full border-collapse text-xs sm:text-sm text-black"
           dir="rtl"
           style={{
             borderCollapse: 'collapse',
@@ -258,16 +257,16 @@ export default function ClassicLedgerView({
 
           <thead>
             <tr className="bg-white text-center font-bold">
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>تاریخ</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 8px', textAlign: 'start' }}>تفصیل</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>واؤچر نمبر</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>نگ</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>کلو</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>ریٹ</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>بنام</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>جمع</th>
-              <th className="font-urdu font-bold text-[22px] print:text-[14pt]" style={{ border: BORDER_STYLE, padding: '6px 4px' }}>بیلنس</th>
-              <th className="font-urdu font-bold text-[18px] print:text-[12pt]" style={{ border: BORDER_STYLE, padding: '6px 2px' }}></th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>تاریخ</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 6px', textAlign: 'start' }}>تفصیل</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>واؤچر نمبر</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>نگ</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>کلو</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>ریٹ</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>بنام</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>جمع</th>
+              <th className="font-urdu font-bold text-sm print:text-xs" style={{ border: BORDER_STYLE, padding: '4px 3px' }}>بیلنس</th>
+              <th className="font-urdu font-bold text-xs print:text-[10px]" style={{ border: BORDER_STYLE, padding: '4px 2px' }}></th>
             </tr>
           </thead>
 
@@ -276,7 +275,7 @@ export default function ClassicLedgerView({
               <tr>
                 <td
                   colSpan={10}
-                  className="py-8 text-center text-gray-500 font-urdu text-[20px] print:text-[13pt]"
+                  className="py-6 text-center text-gray-500 font-urdu text-sm print:text-xs"
                   style={{ border: BORDER_STYLE }}
                 >
                   اس مدت میں کوئی لین دین درج نہیں ہے۔ (No transaction history)
@@ -303,15 +302,15 @@ export default function ClassicLedgerView({
                     className={`${onRowClick ? 'cursor-pointer hover:bg-yellow-50/50' : ''}`}
                     style={{
                       backgroundColor: idx % 2 === 1 ? '#FAFAFA' : '#FFFFFF',
-                      minHeight: '40px',
+                      minHeight: '26px',
                     }}
                   >
                     {/* 1. تاریخ (Date) */}
                     <td
-                      className="num text-center"
+                      className="num text-center text-xs"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         whiteSpace: 'nowrap',
                         direction: 'ltr',
                       }}
@@ -321,10 +320,10 @@ export default function ClassicLedgerView({
 
                     {/* 2. تفصیل (Detail) */}
                     <td
-                      className="font-urdu text-[20px] print:text-[13pt] leading-relaxed"
+                      className="font-urdu text-sm print:text-xs leading-normal"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 10px',
+                        padding: '2px 6px',
                         textAlign: 'start',
                         wordBreak: 'break-word',
                       }}
@@ -334,10 +333,10 @@ export default function ClassicLedgerView({
 
                     {/* 3. واؤچر نمبر (Voucher / Bill No) */}
                     <td
-                      className="num text-center"
+                      className="num text-center text-xs"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 6px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -346,10 +345,10 @@ export default function ClassicLedgerView({
 
                     {/* 4. نگ (Quantity / Nug) */}
                     <td
-                      className="num text-start"
+                      className="num text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -358,10 +357,10 @@ export default function ClassicLedgerView({
 
                     {/* 5. کلو (Weight / KG) */}
                     <td
-                      className="num text-start"
+                      className="num text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -370,10 +369,10 @@ export default function ClassicLedgerView({
 
                     {/* 6. ریٹ (Rate) */}
                     <td
-                      className="num text-start"
+                      className="num text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -382,10 +381,10 @@ export default function ClassicLedgerView({
 
                     {/* 7. بنام (Debit) */}
                     <td
-                      className="num text-start"
+                      className="num text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -394,10 +393,10 @@ export default function ClassicLedgerView({
 
                     {/* 8. جمع (Credit) */}
                     <td
-                      className="num text-start"
+                      className="num text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -406,10 +405,10 @@ export default function ClassicLedgerView({
 
                     {/* 9. بیلنس (Balance) */}
                     <td
-                      className="num-total text-start"
+                      className="num-total text-start text-xs sm:text-sm"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 8px',
+                        padding: '2px 4px',
                         direction: 'ltr',
                       }}
                     >
@@ -420,10 +419,10 @@ export default function ClassicLedgerView({
 
                     {/* 10. Marker column (جمع or بنام) */}
                     <td
-                      className="font-urdu font-bold text-[18px] print:text-[12pt] text-center"
+                      className="font-urdu font-bold text-xs print:text-[10px] text-center"
                       style={{
                         border: BORDER_STYLE,
-                        padding: '6px 2px',
+                        padding: '2px 2px',
                         color: rowMarker === 'جمع' ? '#000000' : '#b71c1c',
                       }}
                     >
@@ -438,16 +437,16 @@ export default function ClassicLedgerView({
           {/* Total Footer Row */}
           <tfoot>
             <tr className="bg-white font-bold text-center" style={{ borderTop: '2px solid #000' }}>
-              <td colSpan={3} style={{ border: BORDER_STYLE, padding: '8px 10px', textAlign: 'start' }}>
-                <span className="font-urdu font-bold text-[22px] print:text-[14pt]">میزان کل (ٹوٹل)</span>
+              <td colSpan={3} style={{ border: BORDER_STYLE, padding: '4px 6px', textAlign: 'start' }}>
+                <span className="font-urdu font-bold text-sm print:text-xs">میزان کل (ٹوٹل)</span>
               </td>
 
               {/* Total Qty (نگ) */}
               <td
-                className="num-total text-start"
+                className="num-total text-start text-xs sm:text-sm"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '6px 8px',
+                  padding: '3px 4px',
                   direction: 'ltr',
                 }}
               >
@@ -456,10 +455,10 @@ export default function ClassicLedgerView({
 
               {/* Total Weight (کلو) */}
               <td
-                className="num-total text-start"
+                className="num-total text-start text-xs sm:text-sm"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '6px 8px',
+                  padding: '3px 4px',
                   direction: 'ltr',
                 }}
               >
@@ -467,14 +466,14 @@ export default function ClassicLedgerView({
               </td>
 
               {/* Empty rate column */}
-              <td style={{ border: BORDER_STYLE, padding: '6px 4px' }}></td>
+              <td style={{ border: BORDER_STYLE, padding: '3px 4px' }}></td>
 
               {/* Total Debit (بنام) */}
               <td
-                className="num-total text-start"
+                className="num-total text-start text-xs sm:text-sm"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '6px 8px',
+                  padding: '3px 4px',
                   direction: 'ltr',
                   color: '#b71c1c',
                 }}
@@ -484,10 +483,10 @@ export default function ClassicLedgerView({
 
               {/* Total Credit (جمع) */}
               <td
-                className="num-total text-start"
+                className="num-total text-start text-xs sm:text-sm"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '6px 8px',
+                  padding: '3px 4px',
                   direction: 'ltr',
                 }}
               >
@@ -496,10 +495,10 @@ export default function ClassicLedgerView({
 
               {/* Total Balance (بیلنس) */}
               <td
-                className="num-total text-start"
+                className="num-total text-start text-xs sm:text-sm"
                 style={{
                   border: BORDER_STYLE,
-                  padding: '6px 8px',
+                  padding: '3px 4px',
                   direction: 'ltr',
                 }}
               >
@@ -508,7 +507,7 @@ export default function ClassicLedgerView({
               </td>
 
               {/* Marker column */}
-              <td style={{ border: BORDER_STYLE, padding: '6px 2px' }}></td>
+              <td style={{ border: BORDER_STYLE, padding: '3px 2px' }}></td>
             </tr>
           </tfoot>
         </table>

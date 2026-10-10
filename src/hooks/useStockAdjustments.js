@@ -12,6 +12,7 @@ export function useStockAdjustments() {
     stockAdjustments,
     loading: stockAdjustments === undefined,
     addStockAdjustment: stockAdjustmentService.add,
+    updateStockAdjustment: stockAdjustmentService.update,
     deleteStockAdjustment: stockAdjustmentService.delete,
   };
 }

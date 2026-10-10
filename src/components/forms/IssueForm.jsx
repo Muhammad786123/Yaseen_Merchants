@@ -12,28 +12,41 @@ export default function IssueForm({
   items = [],
   qualities: qualitiesProp = [],
   stockEntries = [],
+  initialData = null,
   onSubmit,
   onCancel,
 }) {
   const { qualities: loadedQualities } = useQualities();
   const qualities = qualitiesProp.length > 0 ? qualitiesProp : loadedQualities;
 
-  const [date, setDate] = useState(getTodayStr());
-  const [fromWarehouse, setFromWarehouse] = useState(warehouses[0]?.name || 'Raw Material Store');
+  const [date, setDate] = useState(initialData?.date || getTodayStr());
+  const [fromWarehouse, setFromWarehouse] = useState(initialData?.fromWarehouse || warehouses[0]?.name || 'Raw Material Store');
 
   const defaultQuality = qualities[0]?.name || 'Cotton A';
   const defaultItemId = items[0]?.id || '';
 
-  const [lines, setLines] = useState([
-    {
-      id: 'line_' + Date.now(),
-      itemId: defaultItemId,
-      quality: defaultQuality,
-      unit: 'KG',
-      nugs: 1,
-      issueQtyInput: 100,
-    },
-  ]);
+  const [lines, setLines] = useState(() => {
+    if (initialData?.items && initialData.items.length > 0) {
+      return initialData.items.map((it, idx) => ({
+        id: `line_${idx}_${Date.now()}`,
+        itemId: it.itemId || defaultItemId,
+        quality: it.quality || defaultQuality,
+        unit: it.unit || 'KG',
+        nugs: it.nugs || 1,
+        issueQtyInput: it.issueQty !== undefined ? it.issueQty : (it.qty !== undefined ? it.qty : 100),
+      }));
+    }
+    return [
+      {
+        id: 'line_' + Date.now(),
+        itemId: defaultItemId,
+        quality: defaultQuality,
+        unit: 'KG',
+        nugs: 1,
+        issueQtyInput: 100,
+      },
+    ];
+  });
 
   const [errors, setErrors] = useState({});
 
@@ -359,7 +372,7 @@ export default function IssueForm({
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={hasErrors || totalQty <= 0}>
-          Issue Material ({lines.length} items)
+          {initialData ? `Update Material Issue (${lines.length} items)` : `Issue Material (${lines.length} items)`}
         </Button>
       </div>
     </form>

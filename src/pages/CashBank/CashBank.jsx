@@ -203,7 +203,7 @@ export default function CashBank() {
         isOpen={!!selectedAccount}
         onClose={() => setSelectedAccount(null)}
         title={`Account Ledger - ${selectedAccount?.name}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-5xl"
       >
         {selectedAccount && (
           <div className="space-y-4">

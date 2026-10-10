@@ -136,15 +136,15 @@ export default function SalePurchaseLedger() {
       </div>
 
       {/* ── Centered Bordered Party / Account Name Box ── */}
-      <div className="border-2 border-black p-4 text-center bg-white shadow-sm rounded-none my-4">
-        <div className="font-urdu font-bold text-[40px] print:text-[24pt] text-black leading-tight" dir="rtl">
+      <div className="border-2 border-black p-2 text-center bg-white shadow-sm rounded-none my-2">
+        <div className="font-urdu font-bold text-2xl print:text-xl text-black leading-tight" dir="rtl">
           مال کھاتہ (سیلز اینڈ پرچیز)
         </div>
-        <div className="font-bold text-[22px] print:text-[14pt] text-black mt-1" dir="ltr">
+        <div className="font-bold text-sm print:text-xs text-black mt-0.5" dir="ltr">
           Mall Account (Sale & Purchase Ledger)
         </div>
-        <div className="text-[18px] print:text-[12pt] font-semibold text-gray-800 mt-1 flex items-center justify-center gap-6" dir="rtl">
-          <span>کوڈ: <strong className="num text-[18px] print:text-[12pt]">99010 (MALL-AC)</strong></span>
+        <div className="text-xs print:text-[10px] font-semibold text-gray-800 mt-0.5 flex items-center justify-center gap-6" dir="rtl">
+          <span>کوڈ: <strong className="num text-xs">99010 (MALL-AC)</strong></span>
         </div>
       </div>
 

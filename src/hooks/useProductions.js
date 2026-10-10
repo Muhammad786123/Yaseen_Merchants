@@ -7,6 +7,7 @@ export function useProductions() {
   return {
     productions,
     addProduction: productionService.add,
+    updateProduction: productionService.update,
     deleteProduction: productionService.delete,
   };
 }

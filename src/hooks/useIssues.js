@@ -7,6 +7,7 @@ export function useIssues() {
   return {
     issues,
     addIssue: issueService.add,
+    updateIssue: issueService.update,
     deleteIssue: issueService.delete,
   };
 }

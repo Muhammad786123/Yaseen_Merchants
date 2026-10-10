@@ -11,14 +11,15 @@ import ProductionForm from '../../components/forms/ProductionForm.jsx';
 import { useProductions } from '../../hooks/useProductions.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2, Eye } from 'lucide-react';
+import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
 
 export default function Production() {
-  const { productions, addProduction, deleteProduction } = useProductions();
+  const { productions, addProduction, updateProduction, deleteProduction } = useProductions();
   const { showToast } = useApp();
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingProduction, setEditingProduction] = useState(null);
   const [viewingProduction, setViewingProduction] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -64,8 +65,29 @@ export default function Production() {
       >
         {filtered.map((prd) => (
           <TR key={prd.id}>
-            <TD mono className="font-bold text-[#1E3A5F]">{prd.no}</TD>
-            <TD>{formatDate(prd.date)}</TD>
+            <TD mono className="font-bold text-[#1E3A5F]">
+              <div className="flex items-center gap-1.5">
+                <span>{prd.no}</span>
+                {prd.editCount > 0 && (
+                  <span
+                    className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 text-[10px] font-bold rounded-sm"
+                    title={`Edited ${prd.editCount} time(s). Last edited: ${prd.updatedAt ? formatDate(prd.updatedAt) : 'Recently'}`}
+                  >
+                    Edited
+                  </span>
+                )}
+              </div>
+            </TD>
+            <TD>
+              <div>
+                <span>{formatDate(prd.date)}</span>
+                {prd.updatedAt && (
+                  <div className="text-[10px] text-gray-500">
+                    Rev: {formatDate(prd.updatedAt)}
+                  </div>
+                )}
+              </div>
+            </TD>
             <TD className="font-semibold text-gray-900">{prd.product}</TD>
             <TD mono right>{prd.totalInput}</TD>
             <TD mono right className="text-emerald-600 font-bold">{prd.outputQty}</TD>
@@ -79,14 +101,21 @@ export default function Production() {
               <div className="flex items-center justify-end gap-1">
                 <button
                   onClick={() => setViewingProduction(prd)}
-                  className="p-1.5 hover:bg-blue-50 rounded text-blue-600"
+                  className="p-1.5 hover:bg-blue-50 rounded text-blue-600 cursor-pointer"
                   title="View & Print Production Slip"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
                 <button
+                  onClick={() => setEditingProduction(prd)}
+                  className="p-1.5 hover:bg-amber-50 rounded text-amber-700 cursor-pointer"
+                  title="Edit Production Entry"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
                   onClick={() => setDeletingId(prd.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500"
+                  className="p-1.5 hover:bg-red-50 rounded text-red-500 cursor-pointer"
                   title="Delete Entry"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -102,7 +131,7 @@ export default function Production() {
         isOpen={!!viewingProduction}
         onClose={() => setViewingProduction(null)}
         title={`Production Run Slip - ${viewingProduction?.no}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {viewingProduction && (
           <PrintDocument
@@ -161,24 +190,37 @@ export default function Production() {
       </Modal>
 
       <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Record Production Output"
+        isOpen={isAddModalOpen || !!editingProduction}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingProduction(null);
+        }}
+        title={editingProduction ? `Edit Production #${editingProduction.no}` : "Record Production Output"}
       >
         <ProductionForm
+          initialData={editingProduction}
           onSubmit={async (data) => {
-            await addProduction(data);
-            showToast('Production entry saved successfully!');
+            if (editingProduction) {
+              await updateProduction(editingProduction.id, data);
+              showToast('Production entry updated successfully!');
+            } else {
+              await addProduction(data);
+              showToast('Production entry saved successfully!');
+            }
             setIsAddModalOpen(false);
+            setEditingProduction(null);
           }}
-          onCancel={() => setIsAddModalOpen(false)}
+          onCancel={() => {
+            setIsAddModalOpen(false);
+            setEditingProduction(null);
+          }}
         />
       </Modal>
 
       <ConfirmDialog
         isOpen={!!deletingId}
         title="Delete Production Record"
-        message="Are you sure you want to delete this production record?"
+        message="Are you sure you want to delete this production record? This will reverse all its effects on parties, cash, bank and stock."
         onConfirm={async () => {
           await deleteProduction(deletingId);
           showToast('Production entry deleted!');

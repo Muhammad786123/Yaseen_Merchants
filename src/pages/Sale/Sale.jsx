@@ -14,10 +14,10 @@ import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useItems } from '../../hooks/useItems.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2, Eye } from 'lucide-react';
+import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
 
 export default function Sale() {
-  const { sales, addSale, deleteSale } = useSales();
+  const { sales, addSale, updateSale, deleteSale } = useSales();
   const { parties } = useParties();
   const { warehouses } = useWarehouses();
   const { items } = useItems();
@@ -25,6 +25,7 @@ export default function Sale() {
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState(null);
   const [viewingSale, setViewingSale] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -77,9 +78,28 @@ export default function Sale() {
         {filteredSales.map((s) => (
           <TR key={s.id}>
             <TD mono className="font-bold text-black">
-              {s.no}
+              <div className="flex items-center gap-1.5">
+                <span>{s.no}</span>
+                {s.editCount > 0 && (
+                  <span
+                    className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 text-[10px] font-bold rounded-sm"
+                    title={`Edited ${s.editCount} time(s). Last edited: ${s.updatedAt ? formatDate(s.updatedAt) : 'Recently'}`}
+                  >
+                    Edited
+                  </span>
+                )}
+              </div>
             </TD>
-            <TD>{formatDate(s.date)}</TD>
+            <TD>
+              <div>
+                <span>{formatDate(s.date)}</span>
+                {s.updatedAt && (
+                  <div className="text-[10px] text-gray-500">
+                    Rev: {formatDate(s.updatedAt)}
+                  </div>
+                )}
+              </div>
+            </TD>
             <TD className="font-bold text-black">{s.customerName}</TD>
             <TD>{s.warehouseName}</TD>
             <TD>
@@ -106,14 +126,21 @@ export default function Sale() {
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => setViewingSale(s)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="View Details"
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  onClick={() => setEditingSale(s)}
+                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  title="Edit Sale Invoice"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
                   onClick={() => setDeletingId(s.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Invoice"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -124,23 +151,36 @@ export default function Sale() {
         ))}
       </Table>
 
-      {/* Add Modal */}
+      {/* Add / Edit Modal */}
       <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Record New Sale Invoice"
+        isOpen={isAddModalOpen || !!editingSale}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingSale(null);
+        }}
+        title={editingSale ? `Editing Sale Invoice — ${editingSale.no}` : 'Record New Sale Invoice'}
         maxWidth="max-w-3xl"
       >
         <SaleForm
           customers={customers}
           warehouses={warehouses}
           items={items}
+          initialData={editingSale}
           onSubmit={async (data) => {
-            await addSale(data);
-            showToast('Sale invoice recorded successfully!');
-            setIsAddModalOpen(false);
+            if (editingSale) {
+              await updateSale(editingSale.id, data);
+              showToast(`Sale invoice ${editingSale.no} updated successfully!`);
+              setEditingSale(null);
+            } else {
+              await addSale(data);
+              showToast('Sale invoice recorded successfully!');
+              setIsAddModalOpen(false);
+            }
           }}
-          onCancel={() => setIsAddModalOpen(false)}
+          onCancel={() => {
+            setIsAddModalOpen(false);
+            setEditingSale(null);
+          }}
         />
       </Modal>
 
@@ -149,7 +189,7 @@ export default function Sale() {
         isOpen={!!viewingSale}
         onClose={() => setViewingSale(null)}
         title={`Sale Invoice - ${viewingSale?.no}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {viewingSale && (
           <PrintDocument
@@ -227,10 +267,11 @@ export default function Sale() {
       <ConfirmDialog
         isOpen={!!deletingId}
         title="Delete Sale Invoice"
-        message="Are you sure you want to delete this sale invoice?"
+        message="This will reverse all its effects on parties, cash, bank and stock."
+        confirmLabel="Delete Invoice"
         onConfirm={async () => {
           await deleteSale(deletingId);
-          showToast('Sale invoice deleted!');
+          showToast('Sale invoice deleted and effects reversed!');
           setDeletingId(null);
         }}
         onCancel={() => setDeletingId(null)}

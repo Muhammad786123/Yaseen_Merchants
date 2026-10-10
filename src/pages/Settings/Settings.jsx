@@ -1347,7 +1347,35 @@ export default function Settings() {
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Right-to-Left (Default) */}
+                {/* Left-to-Right (Default) */}
+                <div
+                  onClick={() => {
+                    setDirection('ltr');
+                    showToast('Layout direction updated to Left-to-Right (Normal layout)');
+                  }}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    direction === 'ltr'
+                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
+                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-[#1E3A5F]">Left-to-Right (Default)</span>
+                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      direction === 'ltr' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
+                    }`}>
+                      {direction === 'ltr' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed font-semibold">
+                    Normal Straight Layout (English)
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sidebar on left, normal straight reading orientation across entire software.
+                  </p>
+                </div>
+
+                {/* Right-to-Left */}
                 <div
                   onClick={() => {
                     setDirection('rtl');
@@ -1360,7 +1388,7 @@ export default function Settings() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#1E3A5F]">Right-to-Left (Default)</span>
+                    <span className="font-bold text-sm text-[#1E3A5F]">Right-to-Left (Urdu Layout)</span>
                     <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
                       direction === 'rtl' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
                     }`}>
@@ -1371,35 +1399,7 @@ export default function Settings() {
                     دائیں سے بائیں (اردو طرز)
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Sidebar on right, reports, ledgers &amp; vouchers formatted in native Urdu accounting flow.
-                  </p>
-                </div>
-
-                {/* Left-to-Right */}
-                <div
-                  onClick={() => {
-                    setDirection('ltr');
-                    showToast('Layout direction updated to Left-to-Right (English layout)');
-                  }}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                    direction === 'ltr'
-                      ? 'border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm'
-                      : 'border-[#E0DBD3] bg-white hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#1E3A5F]">Left-to-Right</span>
-                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      direction === 'ltr' ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'
-                    }`}>
-                      {direction === 'ltr' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed font-semibold">
-                    Left-to-Right (English Layout)
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Sidebar on left, standard Western reading orientation.
+                    Sidebar on right, software flipped to Right-to-Left flow.
                   </p>
                 </div>
               </div>

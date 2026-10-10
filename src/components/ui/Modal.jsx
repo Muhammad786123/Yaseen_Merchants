@@ -39,7 +39,7 @@ export default function Modal({ title, children, isOpen = true, onClose, maxWidt
 
       {/* Modal Dialog with Classic Bordered Box Styling */}
       <div
-        className={`modal-dialog relative bg-white rounded-none border-2 border-black shadow-2xl w-full ${maxWidth} max-h-[92vh] flex flex-col overflow-hidden z-10 my-auto`}
+        className={`modal-dialog relative bg-white rounded-none border-2 border-black shadow-2xl w-full ${maxWidth} max-h-[96vh] flex flex-col overflow-hidden z-10 my-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -55,7 +55,7 @@ export default function Modal({ title, children, isOpen = true, onClose, maxWidt
         </div>
 
         {/* Content */}
-        <div className="modal-content p-4 sm:p-5 overflow-y-auto flex-1 font-sans text-start">
+        <div className="modal-content p-3 sm:p-4 overflow-y-auto flex-1 font-sans text-start">
           {children}
         </div>
       </div>

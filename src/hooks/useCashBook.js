@@ -36,5 +36,7 @@ export function useCashBook() {
     withdrawFromBank: cashBookService.withdrawFromBank.bind(cashBookService),
     giveCashToParty: cashBookService.giveCashToParty.bind(cashBookService),
     receiveCashFromParty: cashBookService.receiveCashFromParty.bind(cashBookService),
+    updateEntry: cashBookService.update.bind(cashBookService),
+    deleteEntry: cashBookService.delete.bind(cashBookService),
   };
 }

@@ -211,7 +211,7 @@ export default function Parties() {
         isOpen={!!viewingParty}
         onClose={() => setViewingParty(null)}
         title={`Party Details - ${viewingParty?.name}`}
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-6xl"
       >
         {viewingParty && (
           <PartyDetails party={viewingParty} onClose={() => setViewingParty(null)} />

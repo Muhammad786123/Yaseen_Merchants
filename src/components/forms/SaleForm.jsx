@@ -12,35 +12,47 @@ export default function SaleForm({
   items = [],
   qualities = [],
   accounts = [],
+  initialData = null,
   onSubmit,
   onCancel,
 }) {
-  const [date, setDate] = useState(getTodayStr());
-  const [customerId, setCustomerId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
-  const [receivedAccount, setReceivedAccount] = useState('Cash');
-  const [lineItems, setLineItems] = useState([
-    {
-      type: 'stock',
-      itemId: items[0]?.id || '',
-      itemName: items[0]?.name || '',
-      quality: items[0]?.quality || 'Cotton A',
-      unitType: 'Nug',
-      nugs: 1,
-      nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
-      qty: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
-      rate: '',
-      amount: 0,
-      serviceDescription: '',
-    },
-  ]);
-  const [received, setReceived] = useState(0);
+  const [date, setDate] = useState(initialData?.date || getTodayStr());
+  const [customerId, setCustomerId] = useState(initialData?.customerId || '');
+  const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
+  const [receivedAccount, setReceivedAccount] = useState(initialData?.receivedAccount || 'Cash');
+  const [lineItems, setLineItems] = useState(() => {
+    if (initialData?.items && initialData.items.length > 0) {
+      return initialData.items.map((it) => ({
+        ...it,
+        type: it.type || 'stock',
+        unitType: it.unitType || 'Nug',
+      }));
+    }
+    return [
+      {
+        type: 'stock',
+        itemId: items[0]?.id || '',
+        itemName: items[0]?.name || '',
+        quality: items[0]?.quality || 'Cotton A',
+        unitType: 'Nug',
+        nugs: 1,
+        nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
+        qty: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
+        rate: '',
+        amount: 0,
+        serviceDescription: '',
+      },
+    ];
+  });
+  const [received, setReceived] = useState(initialData?.received !== undefined ? initialData.received : 0);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (customers.length > 0 && !customerId) setCustomerId(customers[0].id);
-    if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
-  }, [customers, warehouses]);
+    if (!initialData) {
+      if (customers.length > 0 && !customerId) setCustomerId(customers[0].id);
+      if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
+    }
+  }, [customers, warehouses, initialData]);
 
   const total = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const balance = total - Number(received || 0);
@@ -155,7 +167,7 @@ export default function SaleForm({
           Cancel
         </Button>
         <Button type="submit" variant="primary">
-          Save Sale Invoice
+          {initialData ? 'Update Sale Invoice' : 'Save Sale Invoice'}
         </Button>
       </div>
     </form>

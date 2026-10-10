@@ -11,6 +11,8 @@ import { useApp } from '../../context/AppContext.jsx';
 import { db } from '../../db/database.js';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import { cashBookService } from '../../services/cashBookService.js';
 import {
   Save,
   PlusCircle,
@@ -19,6 +21,9 @@ import {
   CheckCircle2,
   Power,
   Printer,
+  Pencil,
+  Trash2,
+  Lock,
 } from 'lucide-react';
 
 const DENOMINATIONS = [5000, 1000, 500, 100, 50, 20, 10, 5];
@@ -62,6 +67,16 @@ export default function CashBook() {
   // Search modal state
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [voucherFilter, setVoucherFilter] = useState('');
+
+  // Edit / Delete individual entry state
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [deletingEntryId, setDeletingEntryId] = useState(null);
+  const [editDate, setEditDate] = useState('');
+  const [editPartyId, setEditPartyId] = useState('');
+  const [editBankId, setEditBankId] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDebit, setEditDebit] = useState(0);
+  const [editCredit, setEditCredit] = useState(0);
 
   // Auto-generate next Cash Book Number starting fresh from 0001
   useEffect(() => {
@@ -788,7 +803,7 @@ export default function CashBook() {
           isOpen={isSearchModalOpen}
           onClose={() => setIsSearchModalOpen(false)}
           title="Search Cash Book Records"
-          maxWidth="max-w-3xl"
+          maxWidth="max-w-4xl"
         >
           <div className="space-y-4">
             <SearchInput
@@ -799,7 +814,7 @@ export default function CashBook() {
 
             <div className="max-h-96 overflow-y-auto">
               <Table
-                headers={['CB #', 'Date', 'Party / Account', 'Description', 'Debit (Out)', 'Credit (In)']}
+                headers={['CB #', 'Date', 'Party / Account', 'Description', 'Debit (Out)', 'Credit (In)', 'Actions']}
                 emptyText="No matching cash book entries."
               >
                 {cashBookEntries
@@ -815,7 +830,17 @@ export default function CashBook() {
                   .map((e) => (
                     <TR key={e.id}>
                       <TD mono className="font-bold text-black">
-                        {e.cashBookNo ? `#${e.cashBookNo}` : e.refNo || '-'}
+                        <div className="flex items-center gap-1.5">
+                          <span>{e.cashBookNo ? `#${e.cashBookNo}` : e.refNo || '-'}</span>
+                          {e.editCount > 0 && (
+                            <span
+                              className="px-1 py-0.2 bg-amber-100 text-amber-800 border border-amber-400 text-[9px] font-bold rounded-sm"
+                              title={`Edited ${e.editCount} time(s). Last edited: ${e.updatedAt ? formatDate(e.updatedAt) : 'Recently'}`}
+                            >
+                              Edited
+                            </span>
+                          )}
+                        </div>
                       </TD>
                       <TD>{formatDate(e.date)}</TD>
                       <TD className="font-semibold">{e.partyName || e.bankAccountName || '-'}</TD>
@@ -826,12 +851,205 @@ export default function CashBook() {
                       <TD mono right className="text-emerald-800 font-bold">
                         {e.credit ? fmt(e.credit) : '-'}
                       </TD>
+                      <TD>
+                        {e.linkedTransactionId ? (
+                          <div className="flex items-center justify-end">
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 border border-gray-300 text-xs rounded cursor-not-allowed"
+                              title="Created by another voucher (Purchase, Sale, Journal, Expense, Issue). Edit from the original voucher."
+                            >
+                              <Lock className="w-3 h-3 text-gray-500" />
+                              <span className="text-[10px] font-medium">Edit from original voucher</span>
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingEntry(e);
+                                setEditDate(e.date || getTodayStr());
+                                setEditPartyId(e.partyId || '');
+                                setEditBankId(e.bankAccountId || '');
+                                setEditDescription(e.description || '');
+                                setEditDebit(e.debit || 0);
+                                setEditCredit(e.credit || 0);
+                              }}
+                              className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                              title="Edit Manual Cash Entry"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingEntryId(e.id)}
+                              className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                              title="Delete Manual Cash Entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </TD>
                     </TR>
                   ))}
               </Table>
             </div>
           </div>
         </Modal>
+
+        {/* Edit Manual Cash Book Entry Modal */}
+        <Modal
+          isOpen={!!editingEntry}
+          onClose={() => setEditingEntry(null)}
+          title={`Edit Cash Book Entry — ${editingEntry?.cashBookNo ? '#' + editingEntry.cashBookNo : editingEntry?.refNo || ''}`}
+          maxWidth="max-w-md"
+        >
+          {editingEntry && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const partyObj = parties.find((p) => p.id === editPartyId);
+                  const bankObj = bankAccounts.find((b) => b.id === editBankId);
+                  await cashBookService.update(editingEntry.id, {
+                    date: editDate,
+                    partyId: editPartyId || null,
+                    partyName: partyObj ? partyObj.name : null,
+                    bankAccountId: editBankId || null,
+                    bankAccountName: bankObj ? bankObj.name : null,
+                    description: editDescription,
+                    debit: Number(editDebit || 0),
+                    credit: Number(editCredit || 0),
+                  });
+                  showToast('Cash Book entry updated and balances recalculated successfully!');
+                  setEditingEntry(null);
+                } catch (err) {
+                  alert(err.message || 'Failed to update Cash Book entry');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-gray-900 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full border border-black p-2 text-sm bg-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-900 mb-1">Party (Optional)</label>
+                <select
+                  value={editPartyId}
+                  onChange={(e) => {
+                    setEditPartyId(e.target.value);
+                    if (e.target.value) setEditBankId('');
+                  }}
+                  className="w-full border border-black p-2 text-sm bg-white"
+                >
+                  <option value="">-- No Party --</option>
+                  {parties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-900 mb-1">Bank (Optional)</label>
+                <select
+                  value={editBankId}
+                  onChange={(e) => {
+                    setEditBankId(e.target.value);
+                    if (e.target.value) setEditPartyId('');
+                  }}
+                  className="w-full border border-black p-2 text-sm bg-white"
+                >
+                  <option value="">-- No Bank Account --</option>
+                  {bankAccounts.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-900 mb-1">Description / Particulars</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full border border-black p-2 text-sm bg-white"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-red-700 mb-1">Debit / Cash Out (Rs.)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editDebit}
+                    onChange={(e) => setEditDebit(e.target.value)}
+                    className="w-full border border-black p-2 text-sm font-mono font-bold text-red-700 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-emerald-800 mb-1">Credit / Cash In (Rs.)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editCredit}
+                    onChange={(e) => setEditCredit(e.target.value)}
+                    className="w-full border border-black p-2 text-sm font-mono font-bold text-emerald-800 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-black">
+                <button
+                  type="button"
+                  onClick={() => setEditingEntry(null)}
+                  className="px-3 py-1.5 border border-black bg-white hover:bg-gray-100 text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 border border-black bg-[#1a6b2e] hover:bg-[#155724] text-white text-xs font-bold"
+                >
+                  Update Entry
+                </button>
+              </div>
+            </form>
+          )}
+        </Modal>
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={!!deletingEntryId}
+          title="Delete Cash Book Entry"
+          message="This will reverse all its effects on parties, cash, bank and stock."
+          confirmLabel="Delete Entry"
+          onConfirm={async () => {
+            try {
+              await cashBookService.delete(deletingEntryId);
+              showToast('Cash Book entry deleted and effects reversed!');
+              setDeletingEntryId(null);
+            } catch (err) {
+              alert(err.message || 'Failed to delete entry');
+              setDeletingEntryId(null);
+            }
+          }}
+          onCancel={() => setDeletingEntryId(null)}
+        />
       </div>
     </div>
   );

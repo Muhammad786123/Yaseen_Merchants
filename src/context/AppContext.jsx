@@ -6,13 +6,19 @@ export function AppProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [direction, setDirectionState] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('layout_direction') || 'rtl';
+      const stored = localStorage.getItem('layout_direction');
+      if (stored === 'rtl') {
+        // Reset previously forced RTL so software reverts to normal LTR
+        localStorage.setItem('layout_direction', 'ltr');
+        return 'ltr';
+      }
+      return stored || 'ltr';
     }
-    return 'rtl';
+    return 'ltr';
   });
 
   const setDirection = (newDir) => {
-    const val = newDir === 'ltr' ? 'ltr' : 'rtl';
+    const val = newDir === 'rtl' ? 'rtl' : 'ltr';
     setDirectionState(val);
     try {
       localStorage.setItem('layout_direction', val);

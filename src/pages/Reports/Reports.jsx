@@ -1452,22 +1452,22 @@ export default function Reports() {
               {(() => {
                 let srCounter = 1;
                 return (
-                  <table className="w-full border-collapse border border-black text-black text-base" dir="rtl">
+                  <table className="w-full border-collapse border border-black text-black text-xs sm:text-sm" dir="rtl">
                     <thead>
                       <tr className="bg-white border-b-2 border-black">
-                        <th className="border border-black px-2 py-1 text-center font-bold text-[22px] print:text-[14pt] w-[80px] font-urdu">
+                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs w-[60px] font-urdu">
                           نمبر شمار
                         </th>
-                        <th className="border border-black px-2 py-1 text-center font-bold text-[22px] print:text-[14pt] w-[95px] font-urdu">
+                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs w-[80px] font-urdu">
                           کوڈ
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] font-urdu">
+                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           نام پارٹی
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] w-[140px] font-urdu" dir="ltr">
+                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs w-[120px] font-urdu" dir="ltr">
                           بنام
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-[22px] print:text-[14pt] w-[140px] font-urdu" dir="ltr">
+                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs w-[120px] font-urdu" dir="ltr">
                           جمع
                         </th>
                       </tr>
@@ -1475,7 +1475,7 @@ export default function Reports() {
                     <tbody>
                       {/* 1. پارٹیز (Parties) */}
                       <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                           پارٹیز
                         </td>
                       </tr>
@@ -1487,20 +1487,20 @@ export default function Reports() {
                         const hasUrdu = Boolean(p.urduName || p.nameUrdu);
                         const displayName = p.urduName || p.nameUrdu || p.name;
                         return (
-                          <tr key={p.id} className="hover:bg-gray-50 min-h-[40px] overflow-visible">
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          <tr key={p.id} className="hover:bg-gray-50 overflow-visible">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               {sr}
                             </td>
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               {p.code || p.id}
                             </td>
-                            <td className={`border border-black px-3 py-1 text-start ${hasUrdu ? 'font-urdu font-bold text-[20px] print:text-[13pt]' : 'font-semibold text-base'}`}>
+                            <td className={`border border-black px-3 py-0.5 text-start ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`}>
                               {displayName}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {deb > 0 ? fmt(deb) : ''}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {cred > 0 ? fmt(cred) : ''}
                             </td>
                           </tr>
@@ -1509,57 +1509,57 @@ export default function Reports() {
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
                         <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbPartiesDebit > 0 ? fmt(tbPartiesDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbPartiesCredit > 0 ? fmt(tbPartiesCredit) : ''}
                         </td>
                       </tr>
 
                       {/* 2. کیش (Cash) */}
                       <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                           کیش
                         </td>
                       </tr>
-                      <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
-                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                      <tr className="hover:bg-gray-50 overflow-visible">
+                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                           {srCounter++}
                         </td>
-                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                           99020
                         </td>
-                        <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                        <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
                           کیش بک
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                           {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                           {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
                         </td>
                       </tr>
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
                         <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
                         </td>
                       </tr>
 
                       {/* 3. بینک (Banks) */}
                       <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                           بینک
                         </td>
                       </tr>
@@ -1570,20 +1570,20 @@ export default function Reports() {
                         const displayName = b.urduName || b.nameUrdu || b.name;
                         const hasUrdu = Boolean(b.urduName || b.nameUrdu);
                         return (
-                          <tr key={b.id} className="hover:bg-gray-50 min-h-[40px] overflow-visible">
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          <tr key={b.id} className="hover:bg-gray-50 overflow-visible">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               {srCounter++}
                             </td>
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               {b.code || b.id || '99021'}
                             </td>
-                            <td className={`border border-black px-3 py-1 text-start ${hasUrdu ? 'font-urdu font-bold text-[20px] print:text-[13pt]' : 'font-semibold text-base'}`}>
+                            <td className={`border border-black px-3 py-0.5 text-start ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`}>
                               {displayName}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {deb > 0 ? fmt(deb) : ''}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {cred > 0 ? fmt(cred) : ''}
                             </td>
                           </tr>
@@ -1592,13 +1592,13 @@ export default function Reports() {
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
                         <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbBanksDebit > 0 ? fmt(tbBanksDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbBanksCredit > 0 ? fmt(tbBanksCredit) : ''}
                         </td>
                       </tr>
@@ -1607,37 +1607,37 @@ export default function Reports() {
                       {capitalBalance !== 0 && (
                         <>
                           <tr className="bg-white">
-                            <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                            <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                               کیپٹل
                             </td>
                           </tr>
-                          <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                          <tr className="hover:bg-gray-50 overflow-visible">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               {srCounter++}
                             </td>
-                            <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                               99030
                             </td>
-                            <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                            <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
                               راس المال / Capital
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                               {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
                             </td>
                           </tr>
                           <tr className="bg-[#DFDFDF] font-bold">
                             <td className="border border-black"></td>
                             <td className="border border-black"></td>
-                            <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                            <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                               ٹوٹل
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                               {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
                             </td>
-                            <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                            <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                               {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
                             </td>
                           </tr>
@@ -1646,37 +1646,37 @@ export default function Reports() {
 
                       {/* 5. سیلز اینڈ پرچیز (Sale & Purchase / Mall A/C) */}
                       <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-[24px] print:text-[16pt] py-1 text-[#0000FF] font-urdu">
+                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                           سیلز اینڈ پرچیز
                         </td>
                       </tr>
-                      <tr className="hover:bg-gray-50 min-h-[40px] overflow-visible">
-                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                      <tr className="hover:bg-gray-50 overflow-visible">
+                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                           {srCounter++}
                         </td>
-                        <td className="border border-black px-2 py-1 text-center num text-base" dir="ltr">
+                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
                           99010
                         </td>
-                        <td className="border border-black px-3 py-1 text-start font-urdu font-bold text-[20px] print:text-[13pt]">
+                        <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
                           مال کھاتہ 1 ...... Mall A/C
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                           {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
                           {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
                         </td>
                       </tr>
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
                         <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-[22px] print:text-[14pt] font-bold">
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
                           {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
                         </td>
                       </tr>
@@ -1685,13 +1685,13 @@ export default function Reports() {
                       <tr className="bg-[#DFDFDF] font-bold">
                         <td className="border border-black"></td>
                         <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-[24px] print:text-[16pt] font-bold">
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-red-700" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-red-700" dir="ltr">
                           {fmt(tbGrandTotalBenaam)}
                         </td>
-                        <td className="border border-black px-3 py-1 text-start num-total text-red-700" dir="ltr">
+                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-red-700" dir="ltr">
                           {fmt(tbGrandTotalJama)}
                         </td>
                       </tr>
@@ -1971,104 +1971,104 @@ export default function Reports() {
             {/* Printable Traditional Two-Block Sheet (Assets vs Liabilities) */}
             <div
               id="pl-statement-print-area"
-              className="bg-white border-2 border-black p-8 max-w-2xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0 print:max-w-none text-black"
+              className="bg-white border-2 border-black p-4 sm:p-6 max-w-xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0 print:max-w-none text-black"
             >
               {/* BLOCK 1: Assets (Debit / Benaam) */}
-              <div className="mb-6">
-                <h2 className="text-[#d946ef] font-bold text-center mb-6 tracking-wide">
-                  <span className="font-urdu block text-[32px] leading-relaxed text-[#d946ef]">اثاثہ جات</span>
-                  <span className="text-[16px] uppercase text-[#d946ef]">Assets (Debit / Benaam)</span>
+              <div className="mb-4">
+                <h2 className="text-[#d946ef] font-bold text-center mb-3 tracking-wide">
+                  <span className="font-urdu block text-xl leading-relaxed text-[#d946ef]">اثاثہ جات</span>
+                  <span className="text-xs uppercase text-[#d946ef]">Assets (Debit / Benaam)</span>
                 </h2>
-                <div className="space-y-3.5">
+                <div className="space-y-2">
                   {/* 1. Cash in Hand */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         روکڑ
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Cash in Hand
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(cashInHand)}
                     </span>
                   </div>
 
                   {/* 2. Receivable */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         وصولیاں
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Receivable
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(totalReceivables)}
                     </span>
                   </div>
 
                   {/* 3. Expenditure */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         اخراجات
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Expenditure
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       0
                     </span>
                   </div>
 
                   {/* Spacer between Expenditure and Stock */}
-                  <div className="h-4"></div>
+                  <div className="h-1"></div>
 
                   {/* 4. Stock (Value) */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         سٹاک
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Stock (Value)
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(stockValuation)}
                     </span>
                   </div>
 
                   {/* 5. Bank */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         بینک
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Bank
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(totalBankBalances)}
                     </span>
                   </div>
 
                   {/* Total (Debit/Benaam) */}
-                  <div className="flex items-baseline justify-between pt-4">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[24px] font-bold text-blue-700">
+                  <div className="flex items-baseline justify-between pt-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-lg font-bold text-blue-700">
                         ٹوٹل
                       </span>
-                      <span className="text-[17px] font-bold text-blue-700">
+                      <span className="text-xs font-bold text-blue-700">
                         Total (Debit/Benaam)
                       </span>
                     </div>
-                    <span className="text-start num-total text-[24px] print:text-[15pt] text-blue-700 w-44 border-t-2 border-black pt-1" dir="ltr">
+                    <span className="text-start num-total text-base print:text-sm text-blue-700 w-40 border-t-2 border-black pt-0.5" dir="ltr">
                       {fmt(plAssetsTotal)}
                     </span>
                   </div>
@@ -2076,68 +2076,68 @@ export default function Reports() {
               </div>
 
               {/* BLOCK 2: Liabilities (Credit / Jama) */}
-              <div className="mb-6 pt-4">
-                <h2 className="text-[#d946ef] font-bold text-center mb-6 tracking-wide">
-                  <span className="font-urdu block text-[32px] leading-relaxed text-[#d946ef]">واجبات و ذمہ داریاں</span>
-                  <span className="text-[16px] uppercase text-[#d946ef]">Liabilities (Credit / Jama)</span>
+              <div className="mb-4 pt-2">
+                <h2 className="text-[#d946ef] font-bold text-center mb-3 tracking-wide">
+                  <span className="font-urdu block text-xl leading-relaxed text-[#d946ef]">واجبات و ذمہ داریاں</span>
+                  <span className="text-xs uppercase text-[#d946ef]">Liabilities (Credit / Jama)</span>
                 </h2>
-                <div className="space-y-3.5">
+                <div className="space-y-2">
                   {/* 1. Capital */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         راس
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Capital
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(capitalBalance)}
                     </span>
                   </div>
 
                   {/* 2. Payable */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         ادائیگیاں
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Payable
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {fmt(totalPayables)}
                     </span>
                   </div>
 
                   {/* 3. Gross Profit */}
                   <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[22px] font-bold text-black">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-base font-bold text-black">
                         نفع
                       </span>
-                      <span className="text-[15px] font-bold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700">
                         Gross Profit
                       </span>
                     </div>
-                    <span className="text-start num text-[22px] print:text-[14pt] text-black w-44 border-b border-gray-400 pb-0.5" dir="ltr">
+                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
                       {grossProfit < 0 ? `(${fmt(Math.abs(grossProfit))})` : fmt(grossProfit)}
                     </span>
                   </div>
 
                   {/* Total (Credit/Jamma) */}
-                  <div className="flex items-baseline justify-between pt-4">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="font-urdu text-[24px] font-bold text-blue-700">
+                  <div className="flex items-baseline justify-between pt-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-urdu text-lg font-bold text-blue-700">
                         ٹوٹل
                       </span>
-                      <span className="text-[17px] font-bold text-blue-700">
-                        Total (Credit/Jamma)
+                      <span className="text-xs font-bold text-blue-700">
+                        Total (Credit/Jama)
                       </span>
                     </div>
-                    <span className="text-start num-total text-[24px] print:text-[15pt] text-blue-700 w-44 border-t-2 border-black pt-1" dir="ltr">
+                    <span className="text-start num-total text-base print:text-sm text-blue-700 w-40 border-t-2 border-black pt-0.5" dir="ltr">
                       {fmt(plLiabilitiesTotal)}
                     </span>
                   </div>

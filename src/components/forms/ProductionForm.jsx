@@ -5,12 +5,12 @@ import Button from '../ui/Button.jsx';
 import DatePicker from '../ui/DatePicker.jsx';
 import { getTodayStr } from '../../utils/formatters.js';
 
-export default function ProductionForm({ onSubmit, onCancel }) {
-  const [date, setDate] = useState(getTodayStr());
-  const [product, setProduct] = useState('Processed Cotton');
-  const [totalInput, setTotalInput] = useState(300);
-  const [outputQty, setOutputQty] = useState(265);
-  const [wasteQty, setWasteQty] = useState(35);
+export default function ProductionForm({ initialData = null, onSubmit, onCancel }) {
+  const [date, setDate] = useState(initialData?.date || getTodayStr());
+  const [product, setProduct] = useState(initialData?.product || 'Processed Cotton');
+  const [totalInput, setTotalInput] = useState(initialData?.totalInput !== undefined ? initialData.totalInput : 300);
+  const [outputQty, setOutputQty] = useState(initialData?.outputQty !== undefined ? initialData.outputQty : 265);
+  const [wasteQty, setWasteQty] = useState(initialData?.wasteQty !== undefined ? initialData.wasteQty : 35);
 
   const yieldPct =
     totalInput > 0 ? ((Number(outputQty) / Number(totalInput)) * 100).toFixed(1) : 0;
@@ -86,7 +86,7 @@ export default function ProductionForm({ onSubmit, onCancel }) {
           Cancel
         </Button>
         <Button type="submit" variant="primary">
-          Record Production Entry
+          {initialData ? 'Update Production Entry' : 'Record Production Entry'}
         </Button>
       </div>
     </form>

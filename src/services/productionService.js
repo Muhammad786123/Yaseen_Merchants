@@ -6,6 +6,10 @@ export const productionService = {
     return await db.productions.reverse().toArray();
   },
 
+  async getById(id) {
+    return await db.productions.get(id);
+  },
+
   async add(prdData) {
     const id = prdData.id || 'prd_' + Date.now();
     const count = await db.productions.count();
@@ -26,37 +30,67 @@ export const productionService = {
       outputQty,
       wasteQty,
       yieldPct,
+      createdAt: prdData.createdAt || new Date().toISOString(),
+      updatedAt: null,
+      editCount: 0,
     };
 
-    await db.productions.add(newPrd);
-
-    // Update finished goods stock entry for output product matching (product + quality + Finished Goods Store)
-    const allStock = await db.stockEntries.toArray();
-    const targetProduct = prdData.product || 'Processed Cotton';
-    const quality = prdData.quality || 'Cotton A';
-
-    const existingStock = allStock.find(
-      (s) =>
-        s.itemName === targetProduct &&
-        s.category === 'Finished Product'
-    );
-
-    if (existingStock) {
-      const newQty = Number(existingStock.qty || 0) + outputQty;
-      const newValue = newQty * Number(existingStock.avgRate || 115);
-      await db.stockEntries.update(existingStock.id, {
-        qty: newQty,
-        value: newValue,
-      });
-    }
+    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+      await db.productions.add(newPrd);
+    });
 
     await syncStockEntriesToDb();
     return newPrd;
   },
 
-  async delete(id) {
-    const res = await db.productions.delete(id);
+  /**
+   * Atomic Update for Production Record:
+   * (1) Replaces production record preserving id, no, createdAt
+   * (2) syncStockEntriesToDb automatically recalculates finished product stock
+   */
+  async update(id, prdData) {
+    const existing = await db.productions.get(id);
+    if (!existing) throw new Error('Production record not found: ' + id);
+
+    const totalInput = Number(prdData.totalInput !== undefined ? prdData.totalInput : existing.totalInput);
+    const outputQty = Number(prdData.outputQty !== undefined ? prdData.outputQty : existing.outputQty);
+    const wasteQty = Number(prdData.wasteQty !== undefined ? prdData.wasteQty : existing.wasteQty);
+    const yieldPct = totalInput > 0 ? Number(((outputQty / totalInput) * 100).toFixed(1)) : 0;
+
+    const updatedPrd = {
+      ...existing,
+      date: prdData.date || existing.date,
+      product: prdData.product || existing.product,
+      inputs: prdData.inputs || existing.inputs,
+      totalInput,
+      outputQty,
+      wasteQty,
+      yieldPct,
+      updatedAt: new Date().toISOString(),
+      editCount: (Number(existing.editCount) || 0) + 1,
+    };
+
+    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+      await db.productions.put(updatedPrd);
+    });
+
     await syncStockEntriesToDb();
-    return res;
+    return updatedPrd;
+  },
+
+  /**
+   * Atomic Delete for Production Record:
+   * (1) Remove record
+   * (2) syncStockEntriesToDb automatically removes finished goods stock
+   */
+  async delete(id) {
+    const existing = await db.productions.get(id);
+    if (!existing) return;
+
+    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+      await db.productions.delete(id);
+    });
+
+    await syncStockEntriesToDb();
   },
 };

@@ -5,12 +5,12 @@ import Button from '../ui/Button.jsx';
 import DatePicker from '../ui/DatePicker.jsx';
 import { getTodayStr } from '../../utils/formatters.js';
 
-export default function ExpenseForm({ accounts = [], onSubmit, onCancel }) {
-  const [date, setDate] = useState(getTodayStr());
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Labour');
-  const [amount, setAmount] = useState(5000);
-  const [account, setAccount] = useState('Cash');
+export default function ExpenseForm({ accounts = [], initialData = null, onSubmit, onCancel }) {
+  const [date, setDate] = useState(initialData?.date || getTodayStr());
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [category, setCategory] = useState(initialData?.category || 'Labour');
+  const [amount, setAmount] = useState(initialData?.amount ?? 5000);
+  const [account, setAccount] = useState(initialData?.account || 'Cash');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -78,7 +78,7 @@ export default function ExpenseForm({ accounts = [], onSubmit, onCancel }) {
           Cancel
         </Button>
         <Button type="submit" variant="primary">
-          Record Expense
+          {initialData ? 'Update Expense' : 'Record Expense'}
         </Button>
       </div>
     </form>

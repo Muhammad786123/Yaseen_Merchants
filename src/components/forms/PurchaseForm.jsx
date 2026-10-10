@@ -12,35 +12,47 @@ export default function PurchaseForm({
   items = [],
   qualities = [],
   accounts = [],
+  initialData = null,
   onSubmit,
   onCancel,
 }) {
-  const [date, setDate] = useState(getTodayStr());
-  const [supplierId, setSupplierId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
-  const [paymentAccount, setPaymentAccount] = useState('Cash');
-  const [lineItems, setLineItems] = useState([
-    {
-      type: 'stock',
-      itemId: items[0]?.id || '',
-      itemName: items[0]?.name || '',
-      quality: items[0]?.quality || 'Cotton A',
-      unitType: 'KG',
-      nugs: 0,
-      nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
-      qty: 100,
-      rate: '',
-      amount: 0,
-      serviceDescription: '',
-    },
-  ]);
-  const [paid, setPaid] = useState(0);
+  const [date, setDate] = useState(initialData?.date || getTodayStr());
+  const [supplierId, setSupplierId] = useState(initialData?.supplierId || '');
+  const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
+  const [paymentAccount, setPaymentAccount] = useState(initialData?.paymentAccount || 'Cash');
+  const [lineItems, setLineItems] = useState(() => {
+    if (initialData?.items && initialData.items.length > 0) {
+      return initialData.items.map((it) => ({
+        ...it,
+        type: it.type || 'stock',
+        unitType: it.unitType || 'KG',
+      }));
+    }
+    return [
+      {
+        type: 'stock',
+        itemId: items[0]?.id || '',
+        itemName: items[0]?.name || '',
+        quality: items[0]?.quality || 'Cotton A',
+        unitType: 'KG',
+        nugs: 0,
+        nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
+        qty: 100,
+        rate: '',
+        amount: 0,
+        serviceDescription: '',
+      },
+    ];
+  });
+  const [paid, setPaid] = useState(initialData?.paid !== undefined ? initialData.paid : 0);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (suppliers.length > 0 && !supplierId) setSupplierId(suppliers[0].id);
-    if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
-  }, [suppliers, warehouses]);
+    if (!initialData) {
+      if (suppliers.length > 0 && !supplierId) setSupplierId(suppliers[0].id);
+      if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
+    }
+  }, [suppliers, warehouses, initialData]);
 
   const total = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const balance = total - Number(paid || 0);
@@ -155,7 +167,7 @@ export default function PurchaseForm({
           Cancel
         </Button>
         <Button type="submit" variant="primary">
-          Save Purchase Invoice
+          {initialData ? 'Update Purchase Invoice' : 'Save Purchase Invoice'}
         </Button>
       </div>
     </form>

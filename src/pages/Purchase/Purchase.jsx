@@ -14,10 +14,10 @@ import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useItems } from '../../hooks/useItems.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2, Eye } from 'lucide-react';
+import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
 
 export default function Purchase() {
-  const { purchases, addPurchase, deletePurchase } = usePurchases();
+  const { purchases, addPurchase, updatePurchase, deletePurchase } = usePurchases();
   const { parties } = useParties();
   const { warehouses } = useWarehouses();
   const { items } = useItems();
@@ -25,6 +25,7 @@ export default function Purchase() {
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState(null);
   const [viewingPurchase, setViewingPurchase] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -77,9 +78,28 @@ export default function Purchase() {
         {filteredPurchases.map((p) => (
           <TR key={p.id}>
             <TD mono className="font-bold text-black">
-              {p.no}
+              <div className="flex items-center gap-1.5">
+                <span>{p.no}</span>
+                {p.editCount > 0 && (
+                  <span
+                    className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-400 text-[10px] font-bold rounded-sm"
+                    title={`Edited ${p.editCount} time(s). Last edited: ${p.updatedAt ? formatDate(p.updatedAt) : 'Recently'}`}
+                  >
+                    Edited
+                  </span>
+                )}
+              </div>
             </TD>
-            <TD>{formatDate(p.date)}</TD>
+            <TD>
+              <div>
+                <span>{formatDate(p.date)}</span>
+                {p.updatedAt && (
+                  <div className="text-[10px] text-gray-500">
+                    Rev: {formatDate(p.updatedAt)}
+                  </div>
+                )}
+              </div>
+            </TD>
             <TD className="font-bold text-black">{p.supplierName}</TD>
             <TD>{p.warehouseName}</TD>
             <TD>
@@ -106,14 +126,21 @@ export default function Purchase() {
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => setViewingPurchase(p)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
+                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="View Details"
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  onClick={() => setEditingPurchase(p)}
+                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  title="Edit Purchase Invoice"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
                   onClick={() => setDeletingId(p.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
+                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Invoice"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -124,23 +151,36 @@ export default function Purchase() {
         ))}
       </Table>
 
-      {/* Add Modal */}
+      {/* Add / Edit Modal */}
       <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title="Record New Purchase Invoice"
+        isOpen={isAddModalOpen || !!editingPurchase}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setEditingPurchase(null);
+        }}
+        title={editingPurchase ? `Editing Purchase Invoice — ${editingPurchase.no}` : 'Record New Purchase Invoice'}
         maxWidth="max-w-3xl"
       >
         <PurchaseForm
           suppliers={suppliers}
           warehouses={warehouses}
           items={items}
+          initialData={editingPurchase}
           onSubmit={async (data) => {
-            await addPurchase(data);
-            showToast('Purchase invoice recorded successfully!');
-            setIsAddModalOpen(false);
+            if (editingPurchase) {
+              await updatePurchase(editingPurchase.id, data);
+              showToast(`Purchase invoice ${editingPurchase.no} updated successfully!`);
+              setEditingPurchase(null);
+            } else {
+              await addPurchase(data);
+              showToast('Purchase invoice recorded successfully!');
+              setIsAddModalOpen(false);
+            }
           }}
-          onCancel={() => setIsAddModalOpen(false)}
+          onCancel={() => {
+            setIsAddModalOpen(false);
+            setEditingPurchase(null);
+          }}
         />
       </Modal>
 
@@ -149,7 +189,7 @@ export default function Purchase() {
         isOpen={!!viewingPurchase}
         onClose={() => setViewingPurchase(null)}
         title={`Purchase Invoice - ${viewingPurchase?.no}`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {viewingPurchase && (
           <PrintDocument
@@ -227,10 +267,11 @@ export default function Purchase() {
       <ConfirmDialog
         isOpen={!!deletingId}
         title="Delete Purchase Invoice"
-        message="Are you sure you want to delete this purchase invoice?"
+        message="This will reverse all its effects on parties, cash, bank and stock."
+        confirmLabel="Delete Invoice"
         onConfirm={async () => {
           await deletePurchase(deletingId);
-          showToast('Purchase invoice deleted!');
+          showToast('Purchase invoice deleted and effects reversed!');
           setDeletingId(null);
         }}
         onCancel={() => setDeletingId(null)}

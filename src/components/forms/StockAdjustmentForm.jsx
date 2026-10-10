@@ -216,7 +216,7 @@ export default function StockAdjustmentForm({
           Cancel
         </Button>
         <Button variant="primary" type="submit">
-          Record Stock Addition
+          {initialData ? 'Update Stock Addition' : 'Record Stock Addition'}
         </Button>
       </div>
     </form>
