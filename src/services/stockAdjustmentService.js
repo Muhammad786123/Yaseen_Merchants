@@ -34,7 +34,7 @@ export const stockAdjustmentService = {
       adjustmentType: adjData.adjustmentType || (isReduce ? 'Stock Reduction' : 'Opening Balance'),
       itemId: adjData.itemId,
       itemName: adjData.itemName,
-      quality: adjData.quality || 'Cotton A',
+      quality: adjData.quality || '',
       warehouseId: adjData.warehouseId,
       warehouseName: adjData.warehouseName,
       qty,

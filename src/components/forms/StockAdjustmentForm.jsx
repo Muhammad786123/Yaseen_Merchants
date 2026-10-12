@@ -24,7 +24,7 @@ export default function StockAdjustmentForm({
   );
   const [itemId, setItemId] = useState(initialData?.itemId || items[0]?.id || '');
   const [quality, setQuality] = useState(
-    initialData?.quality || qualities[0]?.name || 'Cotton A'
+    initialData?.quality || qualities[0]?.name || ''
   );
   const [warehouseId, setWarehouseId] = useState(
     initialData?.warehouseId || warehouses[0]?.id || ''

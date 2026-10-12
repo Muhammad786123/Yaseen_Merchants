@@ -1,4 +1,13 @@
 import { db } from '../db/database.js';
+import { partyService } from './partyService.js';
+import { cashService } from './cashService.js';
+
+export function deriveMallHead(accountName = '', code = '') {
+  const str = (String(accountName || '') + ' ' + String(code || '')).toLowerCase();
+  if (str.includes('99011') || str.includes('sale') || str.includes('سیل')) return 'Sale';
+  if (str.includes('99012') || str.includes('purchase') || str.includes('پرچیز')) return 'Purchase';
+  return 'Mall';
+}
 
 export const cashBookService = {
   async getAll() {
@@ -10,7 +19,7 @@ export const cashBookService = {
     const calculated = entries.map((entry) => {
       const debit = Number(entry.debit || 0);
       const credit = Number(entry.credit || 0);
-      running = running - debit + credit;
+      running = running + credit - debit;
       return {
         ...entry,
         balance: running,
@@ -20,60 +29,403 @@ export const cashBookService = {
     return calculated.reverse();
   },
 
+  /**
+   * Applies a list of cash book lines to Party, Bank, and Cash accounts.
+   * CONVENTION:
+   *  - Party: Debit (cash given) => party.balance = balance - debit
+   *           Credit (cash received) => party.balance = balance + credit
+   *  - Bank:  Debit (deposited) => bank.balance = balance + debit
+   *           Credit (withdrawn) => bank.balance = balance - credit
+   *  - Cash:  balance = balance + totalCredit - totalDebit
+   */
+  async applyBookLines(lines) {
+    let totalCredit = 0;
+    let totalDebit = 0;
+
+    for (const line of lines) {
+      const deb = Number(line.debit || 0);
+      const cred = Number(line.credit || 0);
+      totalCredit += cred;
+      totalDebit += deb;
+
+      // 1. Party line
+      if (line.partyId) {
+        const party = await db.parties.get(line.partyId);
+        if (party) {
+          await db.parties.update(party.id, {
+            balance: Number(party.balance || 0) - deb + cred,
+          });
+        }
+      }
+
+      // 2. Bank line
+      const bankId = line.bankAccountId;
+      const bankName = line.bankAccountName;
+      if (bankId || bankName) {
+        const bank = bankId
+          ? await db.accounts.get(bankId)
+          : await db.accounts.where({ name: bankName }).first();
+        if (bank) {
+          await db.accounts.update(bank.id, {
+            balance: Number(bank.balance || 0) + deb - cred,
+          });
+        }
+      }
+    }
+
+    // 3. Cash account
+    const allAccs = await db.accounts.toArray();
+    const cashAcc = allAccs.find(
+      (a) => a.name === 'Cash' || a.accountType === 'Cash' || a.type === 'Cash' || a.name?.toLowerCase().includes('cash')
+    );
+    if (cashAcc) {
+      await db.accounts.update(cashAcc.id, {
+        balance: Number(cashAcc.balance || 0) + totalCredit - totalDebit,
+      });
+    }
+  },
+
+  /**
+   * Reverses a list of cash book lines from Party, Bank, and Cash accounts.
+   * REVERSAL CONVENTION:
+   *  - Party: balance = balance + debit - credit
+   *  - Bank:  balance = balance - debit + credit
+   *  - Cash:  balance = balance - totalCredit + totalDebit
+   */
+  async reverseBookLines(lines) {
+    let totalCredit = 0;
+    let totalDebit = 0;
+
+    for (const line of lines) {
+      const deb = Number(line.debit || 0);
+      const cred = Number(line.credit || 0);
+      totalCredit += cred;
+      totalDebit += deb;
+
+      // 1. Party line reversal
+      if (line.partyId) {
+        const party = await db.parties.get(line.partyId);
+        if (party) {
+          await db.parties.update(party.id, {
+            balance: Number(party.balance || 0) + deb - cred,
+          });
+        }
+      }
+
+      // 2. Bank line reversal
+      const bankId = line.bankAccountId;
+      const bankName = line.bankAccountName;
+      if (bankId || bankName) {
+        const bank = bankId
+          ? await db.accounts.get(bankId)
+          : await db.accounts.where({ name: bankName }).first();
+        if (bank) {
+          await db.accounts.update(bank.id, {
+            balance: Number(bank.balance || 0) - deb + cred,
+          });
+        }
+      }
+    }
+
+    // 3. Cash account reversal
+    const allAccs = await db.accounts.toArray();
+    const cashAcc = allAccs.find(
+      (a) => a.name === 'Cash' || a.accountType === 'Cash' || a.type === 'Cash' || a.name?.toLowerCase().includes('cash')
+    );
+    if (cashAcc) {
+      await db.accounts.update(cashAcc.id, {
+        balance: Number(cashAcc.balance || 0) - totalCredit + totalDebit,
+      });
+    }
+  },
+
+  /**
+   * Save a brand new numbered Cash Book.
+   */
+  async saveBook({ cashBookNo, date, denominations, rows }) {
+    const bookNoNum = Number(cashBookNo);
+    const validRows = rows.filter(
+      (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
+    );
+
+    if (validRows.length === 0) {
+      throw new Error('Please fill in at least one row with an Account and Amount.');
+    }
+
+    const entriesToInsert = validRows.map((r, idx) => {
+      const deb = Number(r.debit) || 0;
+      const cred = Number(r.credit) || 0;
+      const isMall = r.accountType === 'mall';
+      const mallHead = isMall ? (r.head || deriveMallHead(r.accountName, r.accountNo || r.accountId)) : null;
+
+      return {
+        id: 'cb_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).substr(2, 4),
+        date: date || new Date().toISOString().split('T')[0],
+        cashBookNo: bookNoNum,
+        partyId: r.accountType === 'party' ? (r.accountId || null) : null,
+        partyName: r.accountType === 'party' ? (r.accountName || null) : null,
+        bankAccountId: r.accountType === 'bank' ? (r.accountId || null) : null,
+        bankAccountName: r.accountType === 'bank' ? (r.accountName || null) : null,
+        accountId: isMall ? null : (r.accountType === 'general' ? (r.accountId || null) : null),
+        accountName: r.accountName || (isMall ? (mallHead === 'Sale' ? 'Sale A/C - سیل' : mallHead === 'Purchase' ? 'Purchase A/C - پرچیز' : 'Mall A/C - مال کھاتہ') : null),
+        accountType: isMall ? 'mall' : (r.accountType || 'general'),
+        head: mallHead,
+        debit: deb,
+        credit: cred,
+        description: r.detail || `Manual Cash Book No ${bookNoNum}`,
+        type: isMall
+          ? (cred > 0 ? 'CashReceived' : 'CashGiven')
+          : (r.accountType === 'bank'
+            ? (deb > 0 ? 'Deposit' : 'Withdrawal')
+            : (cred > 0 ? 'CashReceived' : 'CashGiven')),
+        refNo: `CB-${String(bookNoNum).padStart(4, '0')}`,
+        createdAt: new Date().toISOString(),
+      };
+    });
+
+    const tables = [db.cashBookEntries, db.cashBookSheets, db.accounts, db.parties].filter(Boolean);
+    await db.transaction('rw', tables, async () => {
+      await db.cashBookEntries.bulkAdd(entriesToInsert);
+      if (db.cashBookSheets) {
+        await db.cashBookSheets.put({
+          cashBookNo: bookNoNum,
+          date: date || new Date().toISOString().split('T')[0],
+          denominations: denominations || {},
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      await this.applyBookLines(entriesToInsert);
+    });
+
+    await partyService.recalculateAllBalances();
+    await this.recalculateCashBalance();
+
+    return { success: true, count: entriesToInsert.length };
+  },
+
+  /**
+   * Update an existing numbered Cash Book in one atomic transaction:
+   * (a) Reverse old lines
+   * (b) Delete old lines
+   * (c) Insert new lines
+   * (d) Apply new lines
+   */
+  async updateBook({ cashBookNo, date, denominations, rows }) {
+    const bookNoNum = Number(cashBookNo);
+    const validRows = rows.filter(
+      (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
+    );
+
+    if (validRows.length === 0) {
+      throw new Error('Please fill in at least one row with an Account and Amount.');
+    }
+
+    const entriesToInsert = validRows.map((r, idx) => {
+      const deb = Number(r.debit) || 0;
+      const cred = Number(r.credit) || 0;
+      const isMall = r.accountType === 'mall';
+      const mallHead = isMall ? (r.head || deriveMallHead(r.accountName, r.accountNo || r.accountId)) : null;
+
+      return {
+        id: 'cb_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).substr(2, 4),
+        date: date || new Date().toISOString().split('T')[0],
+        cashBookNo: bookNoNum,
+        partyId: r.accountType === 'party' ? (r.accountId || null) : null,
+        partyName: r.accountType === 'party' ? (r.accountName || null) : null,
+        bankAccountId: r.accountType === 'bank' ? (r.accountId || null) : null,
+        bankAccountName: r.accountType === 'bank' ? (r.accountName || null) : null,
+        accountId: isMall ? null : (r.accountType === 'general' ? (r.accountId || null) : null),
+        accountName: r.accountName || (isMall ? (mallHead === 'Sale' ? 'Sale A/C - سیل' : mallHead === 'Purchase' ? 'Purchase A/C - پرچیز' : 'Mall A/C - مال کھاتہ') : null),
+        accountType: isMall ? 'mall' : (r.accountType || 'general'),
+        head: mallHead,
+        debit: deb,
+        credit: cred,
+        description: r.detail || `Manual Cash Book No ${bookNoNum}`,
+        type: isMall
+          ? (cred > 0 ? 'CashReceived' : 'CashGiven')
+          : (r.accountType === 'bank'
+            ? (deb > 0 ? 'Deposit' : 'Withdrawal')
+            : (cred > 0 ? 'CashReceived' : 'CashGiven')),
+        refNo: `CB-${String(bookNoNum).padStart(4, '0')}`,
+        createdAt: new Date().toISOString(),
+      };
+    });
+
+    const tables = [db.cashBookEntries, db.cashBookSheets, db.accounts, db.parties].filter(Boolean);
+    await db.transaction('rw', tables, async () => {
+      // 1. Find all old entries for this book
+      const all = await db.cashBookEntries.toArray();
+      const oldEntries = all.filter((e) => Number(e.cashBookNo) === bookNoNum);
+
+      // 2. Reverse every old line
+      await this.reverseBookLines(oldEntries);
+
+      // 3. Delete old entries
+      const oldIds = oldEntries.map((e) => e.id);
+      if (oldIds.length > 0) {
+        await db.cashBookEntries.bulkDelete(oldIds);
+      }
+
+      // 4. Insert new entries
+      if (entriesToInsert.length > 0) {
+        await db.cashBookEntries.bulkAdd(entriesToInsert);
+      }
+
+      // 5. Update sheet
+      if (db.cashBookSheets) {
+        await db.cashBookSheets.put({
+          cashBookNo: bookNoNum,
+          date: date || new Date().toISOString().split('T')[0],
+          denominations: denominations || {},
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      // 6. Apply new lines
+      await this.applyBookLines(entriesToInsert);
+    });
+
+    await partyService.recalculateAllBalances();
+    await this.recalculateCashBalance();
+
+    return { success: true, count: entriesToInsert.length };
+  },
+
+  /**
+   * Delete an entire numbered Cash Book:
+   * (a) Reverse all effects
+   * (b) Remove all rows of this book
+   * (c) Remove sheet
+   */
+  async deleteBook(cashBookNo) {
+    const bookNoNum = Number(cashBookNo);
+
+    const tables = [db.cashBookEntries, db.cashBookSheets, db.accounts, db.parties].filter(Boolean);
+    await db.transaction('rw', tables, async () => {
+      const all = await db.cashBookEntries.toArray();
+      const oldEntries = all.filter((e) => Number(e.cashBookNo) === bookNoNum);
+
+      // 1. Reverse every line
+      await this.reverseBookLines(oldEntries);
+
+      // 2. Delete old entries
+      const oldIds = oldEntries.map((e) => e.id);
+      if (oldIds.length > 0) {
+        await db.cashBookEntries.bulkDelete(oldIds);
+      }
+
+      // 3. Delete sheet
+      if (db.cashBookSheets) {
+        await db.cashBookSheets.delete(bookNoNum);
+      }
+    });
+
+    await partyService.recalculateAllBalances();
+    await this.recalculateCashBalance();
+
+    return { success: true };
+  },
+
+  /**
+   * Get sheet, rows and existence of a book by cashBookNo.
+   */
+  async getBook(cashBookNo) {
+    const bookNoNum = Number(cashBookNo);
+    const sheet = db.cashBookSheets ? await db.cashBookSheets.get(bookNoNum) : null;
+    const all = await db.cashBookEntries.toArray();
+    const entries = all
+      .filter((e) => Number(e.cashBookNo) === bookNoNum)
+      .sort((a, b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
+
+    return {
+      sheet: sheet || null,
+      entries,
+      exists: !!sheet || entries.length > 0,
+    };
+  },
+
+  /**
+   * Get all unique sorted existing book numbers.
+   */
+  async getAllBookNumbers() {
+    const sheetKeys = db.cashBookSheets ? await db.cashBookSheets.toCollection().primaryKeys() : [];
+    const entries = await db.cashBookEntries.toArray();
+    const entryNos = entries
+      .map((e) => parseInt(e.cashBookNo, 10))
+      .filter((n) => !isNaN(n) && n > 0);
+    const sheetNos = sheetKeys
+      .map((k) => parseInt(k, 10))
+      .filter((n) => !isNaN(n) && n > 0);
+
+    const uniqueNos = [...new Set([...entryNos, ...sheetNos])].sort((a, b) => a - b);
+    return uniqueNos;
+  },
+
+  /**
+   * Next available book number: max existing number + 1, starting at 1.
+   */
+  async getNextBookNo() {
+    const numbers = await this.getAllBookNumbers();
+    const maxNo = numbers.length > 0 ? Math.max(...numbers) : 0;
+    return maxNo + 1;
+  },
+
+  /**
+   * Rebuilds physical Cash account balance from openingBalance + sum(credit - debit) over all cashBookEntries.
+   */
+  async recalculateCashBalance() {
+    return await cashService.recalculateCashBalance();
+  },
+
   async addEntry(entryData) {
     const id = entryData.id || 'cb_' + Date.now() + Math.random().toString(36).substr(2, 4);
     const debit = Number(entryData.debit || 0);
     const credit = Number(entryData.credit || 0);
 
+    const isMall = entryData.accountType === 'mall';
+    const mallHead = isMall ? (entryData.head || deriveMallHead(entryData.accountName)) : null;
+
     const newEntry = {
       id,
       date: entryData.date || new Date().toISOString().split('T')[0],
-      type: entryData.type || 'General',
+      type: entryData.type || (isMall ? (credit > 0 ? 'CashReceived' : 'CashGiven') : 'General'),
       partyId: entryData.partyId || null,
       partyName: entryData.partyName || null,
       bankAccountId: entryData.bankAccountId || null,
       bankAccountName: entryData.bankAccountName || null,
+      accountId: entryData.accountId || null,
+      accountName: entryData.accountName || null,
+      accountType: isMall ? 'mall' : (entryData.accountType || 'general'),
+      head: mallHead,
       debit,
       credit,
       description: entryData.description || '',
       linkedTransactionId: entryData.linkedTransactionId || null,
+      lineIndex: entryData.lineIndex !== undefined ? entryData.lineIndex : null,
+      cashBookNo: entryData.cashBookNo ? Number(entryData.cashBookNo) : null,
+      refNo: entryData.refNo || (entryData.cashBookNo ? `CB-${String(entryData.cashBookNo).padStart(4, '0')}` : null),
+      createdAt: entryData.createdAt || new Date().toISOString(),
     };
 
     await db.cashBookEntries.add(newEntry);
 
-    // Update physical Cash account balance in accounts table
-    const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
-    if (cashAcc) {
-      await db.accounts.update(cashAcc.id, {
-        balance: Number(cashAcc.balance || 0) - debit + credit,
-      });
-    }
+    // Apply via shared posting
+    await this.applyBookLines([newEntry]);
 
-    // Update Party balance if manual entry (not linked to another voucher)
-    if (newEntry.partyId && !newEntry.linkedTransactionId) {
-      const party = await db.parties.get(newEntry.partyId);
-      if (party) {
-        await db.parties.update(party.id, {
-          balance: Number(party.balance || 0) - debit + credit,
-        });
-      }
+    if (newEntry.partyId) {
+      await partyService.recalculateAllBalances();
     }
+    await this.recalculateCashBalance();
 
     return newEntry;
   },
 
-  /**
-   * Cash -> Bank Deposit
-   * Physical Cash decreases (Debit in Cash Book), Bank Account balance increases.
-   * Does NOT touch any Party balance.
-   */
   async depositToBank({ date, bankAccountId, bankAccountName, amount, description }) {
     const numAmount = Number(amount || 0);
     const trfId = 'trf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const count = await db.bankTransfers.count();
     const no = `TRF-${String(count + 1).padStart(4, '0')}`;
 
-    // 1. Create single linked Bank Transfer record
     await db.bankTransfers.add({
       id: trfId,
       no,
@@ -85,22 +437,6 @@ export const cashBookService = {
       description: description || `Cash deposited to ${bankAccountName}`,
     });
 
-    // 2. Increase target Bank account balance
-    const targetBank = await db.accounts.get(bankAccountId);
-    if (targetBank) {
-      await db.accounts.update(targetBank.id, {
-        balance: Number(targetBank.balance || 0) + numAmount,
-      });
-    } else {
-      const bankByName = await db.accounts.where({ name: bankAccountName }).first();
-      if (bankByName) {
-        await db.accounts.update(bankByName.id, {
-          balance: Number(bankByName.balance || 0) + numAmount,
-        });
-      }
-    }
-
-    // 3. Create Cash Book entry (Cash Out)
     return await this.addEntry({
       date,
       type: 'Deposit',
@@ -113,18 +449,12 @@ export const cashBookService = {
     });
   },
 
-  /**
-   * Bank -> Cash Withdrawal
-   * Physical Cash increases (Credit in Cash Book), Bank Account balance decreases.
-   * Does NOT touch any Party balance.
-   */
   async withdrawFromBank({ date, bankAccountId, bankAccountName, amount, description }) {
     const numAmount = Number(amount || 0);
     const trfId = 'trf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const count = await db.bankTransfers.count();
     const no = `TRF-${String(count + 1).padStart(4, '0')}`;
 
-    // 1. Create single linked Bank Transfer record
     await db.bankTransfers.add({
       id: trfId,
       no,
@@ -136,22 +466,6 @@ export const cashBookService = {
       description: description || `Cash withdrawn from ${bankAccountName}`,
     });
 
-    // 2. Decrease target Bank account balance
-    const targetBank = await db.accounts.get(bankAccountId);
-    if (targetBank) {
-      await db.accounts.update(targetBank.id, {
-        balance: Math.max(0, Number(targetBank.balance || 0) - numAmount),
-      });
-    } else {
-      const bankByName = await db.accounts.where({ name: bankAccountName }).first();
-      if (bankByName) {
-        await db.accounts.update(bankByName.id, {
-          balance: Math.max(0, Number(bankByName.balance || 0) - numAmount),
-        });
-      }
-    }
-
-    // 3. Create Cash Book entry (Cash In)
     return await this.addEntry({
       date,
       type: 'Withdrawal',
@@ -164,10 +478,6 @@ export const cashBookService = {
     });
   },
 
-  /**
-   * Cash Given to Party (Advance, Loan, or Payment)
-   * Physical Cash decreases (Debit in Cash Book), Party balance changes.
-   */
   async giveCashToParty({ date, partyId, partyName, amount, description }) {
     const numAmount = Number(amount || 0);
     return await this.addEntry({
@@ -181,10 +491,6 @@ export const cashBookService = {
     });
   },
 
-  /**
-   * Cash Received from Party (Receipt or Refund)
-   * Physical Cash increases (Credit in Cash Book), Party balance changes.
-   */
   async receiveCashFromParty({ date, partyId, partyName, amount, description }) {
     const numAmount = Number(amount || 0);
     return await this.addEntry({
@@ -198,15 +504,6 @@ export const cashBookService = {
     });
   },
 
-  /**
-   * Update manual Cash Book entry:
-   * (1) Checks if linked to another voucher; if so, rejects direct edit.
-   * (2) Reverses old entry's effect on Cash account balance (balance + debit - credit).
-   *     If linked to party, reverses party balance (given: balance + amount; received: balance - amount).
-   *     If linked to bank, reverses bank balance.
-   * (3) Applies new entry's effect on Cash, Party, and Bank balances.
-   * (4) Updates record preserving id, createdAt, setting updatedAt and editCount.
-   */
   async update(id, data) {
     const existing = await db.cashBookEntries.get(id);
     if (!existing) throw new Error('Cash Book entry not found: ' + id);
@@ -234,80 +531,21 @@ export const cashBookService = {
     };
 
     await db.transaction('rw', [db.cashBookEntries, db.parties, db.accounts], async () => {
-      // 1. Reverse old Cash account effect
-      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
-      if (cashAcc) {
-        await db.accounts.update(cashAcc.id, {
-          balance: Number(cashAcc.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
-        });
-      }
+      // 1. Reverse old
+      await this.reverseBookLines([existing]);
 
-      // 2. Reverse old Party effect (if any)
-      if (existing.partyId) {
-        const oldParty = await db.parties.get(existing.partyId);
-        if (oldParty) {
-          // Cash Given (debit): balance was reduced, so add back. Cash Received (credit): balance was increased, so subtract.
-          await db.parties.update(oldParty.id, {
-            balance: Number(oldParty.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
-          });
-        }
-      }
-
-      // 3. Reverse old Bank effect (if any)
-      if (existing.bankAccountId || existing.bankAccountName) {
-        const oldBank =
-          (existing.bankAccountId ? await db.accounts.get(existing.bankAccountId) : null) ||
-          (existing.bankAccountName ? await db.accounts.where({ name: existing.bankAccountName }).first() : null);
-        if (oldBank) {
-          await db.accounts.update(oldBank.id, {
-            balance: Number(oldBank.balance || 0) - Number(existing.debit || 0) + Number(existing.credit || 0),
-          });
-        }
-      }
-
-      // 4. Apply new Cash account effect
-      const refreshedCash = await db.accounts.where({ name: 'Cash' }).first();
-      if (refreshedCash) {
-        await db.accounts.update(refreshedCash.id, {
-          balance: Number(refreshedCash.balance || 0) - newDebit + newCredit,
-        });
-      }
-
-      // 5. Apply new Party effect (if any)
-      if (updated.partyId) {
-        const newParty = await db.parties.get(updated.partyId);
-        if (newParty) {
-          await db.parties.update(newParty.id, {
-            balance: Number(newParty.balance || 0) - newDebit + newCredit,
-          });
-        }
-      }
-
-      // 6. Apply new Bank effect (if any)
-      if (updated.bankAccountId || updated.bankAccountName) {
-        const newBank =
-          (updated.bankAccountId ? await db.accounts.get(updated.bankAccountId) : null) ||
-          (updated.bankAccountName ? await db.accounts.where({ name: updated.bankAccountName }).first() : null);
-        if (newBank) {
-          await db.accounts.update(newBank.id, {
-            balance: Number(newBank.balance || 0) + newDebit - newCredit,
-          });
-        }
-      }
-
-      // 7. Update cashBookEntries table
+      // 2. Put updated
       await db.cashBookEntries.put(updated);
+
+      // 3. Apply new
+      await this.applyBookLines([updated]);
     });
 
+    await partyService.recalculateAllBalances();
+    await this.recalculateCashBalance();
     return updated;
   },
 
-  /**
-   * Delete manual Cash Book entry:
-   * (1) Rejects if linked to another voucher.
-   * (2) Reverses effect on Cash account, Party, and Bank balances.
-   * (3) Deletes record.
-   */
   async delete(id) {
     const existing = await db.cashBookEntries.get(id);
     if (!existing) return;
@@ -317,38 +555,14 @@ export const cashBookService = {
     }
 
     await db.transaction('rw', [db.cashBookEntries, db.parties, db.accounts], async () => {
-      // 1. Reverse Cash account effect
-      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
-      if (cashAcc) {
-        await db.accounts.update(cashAcc.id, {
-          balance: Number(cashAcc.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
-        });
-      }
+      // 1. Reverse
+      await this.reverseBookLines([existing]);
 
-      // 2. Reverse Party effect
-      if (existing.partyId) {
-        const party = await db.parties.get(existing.partyId);
-        if (party) {
-          await db.parties.update(party.id, {
-            balance: Number(party.balance || 0) + Number(existing.debit || 0) - Number(existing.credit || 0),
-          });
-        }
-      }
-
-      // 3. Reverse Bank effect
-      if (existing.bankAccountId || existing.bankAccountName) {
-        const bank =
-          (existing.bankAccountId ? await db.accounts.get(existing.bankAccountId) : null) ||
-          (existing.bankAccountName ? await db.accounts.where({ name: existing.bankAccountName }).first() : null);
-        if (bank) {
-          await db.accounts.update(bank.id, {
-            balance: Number(bank.balance || 0) - Number(existing.debit || 0) + Number(existing.credit || 0),
-          });
-        }
-      }
-
-      // 4. Delete record
+      // 2. Delete
       await db.cashBookEntries.delete(id);
     });
+
+    await partyService.recalculateAllBalances();
+    await this.recalculateCashBalance();
   },
 };

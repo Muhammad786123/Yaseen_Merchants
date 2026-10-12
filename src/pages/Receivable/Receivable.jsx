@@ -5,7 +5,7 @@ import Badge from '../../components/ui/Badge.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { fmt } from '../../utils/formatters.js';
-import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
 import { TrendingUp } from 'lucide-react';
 
 export default function Receivable() {
@@ -32,18 +32,19 @@ export default function Receivable() {
       </div>
 
       <Table
-        headers={['Party Name', 'Category', 'Party Side', 'City', 'Phone', 'Receivable Amount']}
+        headers={['Code', 'Party Name', 'Category', 'Party Side', 'City', 'Phone', 'Receivable Amount']}
         emptyText="No outstanding receivables."
       >
         {debtors.map((d) => (
           <TR key={d.id}>
+            <TD mono className="font-bold text-gray-700">{d.code || '-'}</TD>
             <TD className="font-bold text-[#1E3A5F]">{d.name}</TD>
             <TD><Badge variant="blue">{d.type}</Badge></TD>
-            <TD><Badge variant="amber">بنام (Naam / Debit)</Badge></TD>
+            <TD><Badge variant="amber">بنام (Benaam / Debit)</Badge></TD>
             <TD>{d.city || '-'}</TD>
             <TD className="num">{d.phone || '-'}</TD>
             <TD right className="num font-bold text-emerald-600">
-              {fmt(Math.abs(d.balance))}
+              {fmt(partySide(d.balance).amount)}
             </TD>
           </TR>
         ))}

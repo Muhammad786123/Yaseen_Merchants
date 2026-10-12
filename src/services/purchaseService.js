@@ -1,5 +1,6 @@
 import { db } from '../db/database.js';
 import { syncStockEntriesToDb } from '../utils/stockUtils.js';
+import { partyService } from './partyService.js';
 
 export const purchaseService = {
   async getAll() {
@@ -290,6 +291,7 @@ export const purchaseService = {
     );
 
     await syncStockEntriesToDb();
+    await partyService.recalculateAllBalances();
     return updatedPurchase;
   },
 
@@ -365,5 +367,6 @@ export const purchaseService = {
     );
 
     await syncStockEntriesToDb();
+    await partyService.recalculateAllBalances();
   },
 };

@@ -22,7 +22,7 @@ export default function IssueForm({
   const [date, setDate] = useState(initialData?.date || getTodayStr());
   const [fromWarehouse, setFromWarehouse] = useState(initialData?.fromWarehouse || warehouses[0]?.name || 'Raw Material Store');
 
-  const defaultQuality = qualities[0]?.name || 'Cotton A';
+  const defaultQuality = qualities[0]?.name || '';
   const defaultItemId = items[0]?.id || '';
 
   const [lines, setLines] = useState(() => {
@@ -155,7 +155,7 @@ export default function IssueForm({
     const payloadItems = computedLines.map((l) => ({
       itemId: l.itemId,
       itemName: l.selectedItem ? l.selectedItem.name : 'Cotton Waste',
-      quality: l.quality || 'Cotton A',
+      quality: l.quality || '',
       unit: l.unit,
       nugs: l.unit === 'Nug' ? Number(l.nugs) : 0,
       issueQty: l.computedQtyKg,

@@ -15,9 +15,11 @@ import { useSales } from '../../hooks/useSales.js';
 import { useStock } from '../../hooks/useStock.js';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
+import { useCashBook } from '../../hooks/useCashBook.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate } from '../../utils/formatters.js';
 import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { calculateCashBalanceFromEntries } from '../../services/cashService.js';
 import {
   TrendingUp,
   TrendingDown,
@@ -41,6 +43,7 @@ export default function Dashboard() {
   const { stockEntries } = useStock();
   const { accounts } = useFinances();
   const { warehouses } = useWarehouses();
+  const { cashBookEntries } = useCashBook();
 
   const [activeModal, setActiveModal] = useState(null); // 'purchase' | 'sale'
 
@@ -50,7 +53,12 @@ export default function Dashboard() {
 
   const { totalReceivable, totalPayable } = splitPartyBalances(parties);
 
-  const totalCashBank = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  // Single source of truth physical cash balance + commercial bank balances
+  const cashBalance = calculateCashBalanceFromEntries(cashBookEntries, accounts);
+  const totalBankBalances = accounts
+    .filter((a) => !a.name.toLowerCase().includes('cash'))
+    .reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalCashBank = cashBalance + totalBankBalances;
 
   const suppliers = parties.filter((p) => p.type === 'Supplier' || p.type === 'Both');
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');

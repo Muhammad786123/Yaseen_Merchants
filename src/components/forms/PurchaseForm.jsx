@@ -33,7 +33,7 @@ export default function PurchaseForm({
         type: 'stock',
         itemId: items[0]?.id || '',
         itemName: items[0]?.name || '',
-        quality: items[0]?.quality || 'Cotton A',
+        quality: items[0]?.quality || '',
         unitType: 'KG',
         nugs: 0,
         nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,

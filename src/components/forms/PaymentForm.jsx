@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
 import Button from '../ui/Button.jsx';
 import DatePicker from '../ui/DatePicker.jsx';
 import { getTodayStr } from '../../utils/formatters.js';
 
-export default function PaymentForm({ parties = [], accounts = [], onSubmit, onCancel }) {
-  const [date, setDate] = useState(getTodayStr());
-  const [partyId, setPartyId] = useState(parties[0]?.id || '');
-  const [amount, setAmount] = useState(15000);
-  const [account, setAccount] = useState('Meezan Bank');
-  const [description, setDescription] = useState('');
+export default function PaymentForm({ parties = [], accounts = [], initialData = null, onSubmit, onCancel }) {
+  const [date, setDate] = useState(() => initialData?.date || getTodayStr());
+  const [partyId, setPartyId] = useState(() => initialData?.partyId || parties[0]?.id || '');
+  const [amount, setAmount] = useState(() => (initialData ? initialData.amount : 15000));
+  const [account, setAccount] = useState(() => initialData?.account || accounts[0]?.name || 'Cash');
+  const [description, setDescription] = useState(() => initialData?.description || '');
+
+  useEffect(() => {
+    if (initialData) {
+      setDate(initialData.date || getTodayStr());
+      setPartyId(initialData.partyId || '');
+      setAmount(initialData.amount || 0);
+      setAccount(initialData.account || 'Cash');
+      setDescription(initialData.description || '');
+    }
+  }, [initialData]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -34,7 +44,7 @@ export default function PaymentForm({ parties = [], accounts = [], onSubmit, onC
           label="Party / Supplier"
           value={partyId}
           onChange={setPartyId}
-          options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.city})` }))}
+          options={parties.map((p) => ({ value: p.id, label: `${p.name} (${p.city || 'City'})` }))}
           required
         />
       </div>
@@ -68,7 +78,7 @@ export default function PaymentForm({ parties = [], accounts = [], onSubmit, onC
           Cancel
         </Button>
         <Button type="submit" variant="primary">
-          Save Payment Entry
+          {initialData ? 'Update Payment' : 'Save Payment Entry'}
         </Button>
       </div>
     </form>

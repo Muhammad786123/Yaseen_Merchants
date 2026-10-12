@@ -23,9 +23,10 @@ export default function SalePurchaseLedger() {
   const { sales } = useSales();
   const { expenses } = useFinances();
   const journalEntries = useLiveQuery(() => (db.journalEntries ? db.journalEntries.toArray() : []), []) || [];
+  const cashBookEntries = useLiveQuery(() => (db.cashBookEntries ? db.cashBookEntries.toArray() : []), []) || [];
 
   const [ledger, setLedger] = useState([]);
-  const [summary, setSummary] = useState({ totalSales: 0, totalPurchases: 0, totalExpenses: 0, jvAdjustments: 0, netBalance: 0 });
+  const [summary, setSummary] = useState({ totalSales: 0, totalPurchases: 0, totalExpenses: 0, jvAdjustments: 0, cashBookAdjustments: 0, netBalance: 0 });
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
@@ -39,7 +40,7 @@ export default function SalePurchaseLedger() {
       setSummary(sum);
     }
     load();
-  }, [purchases, sales, expenses, journalEntries.length]);
+  }, [purchases, sales, expenses, journalEntries.length, cashBookEntries.length]);
 
   const filtered = ledger.filter((item) => {
     const matchSearch =
@@ -50,10 +51,11 @@ export default function SalePurchaseLedger() {
 
     const matchCategory =
       categoryFilter === 'ALL' ||
-      (categoryFilter === 'PURCHASE' && item.category === 'Purchase') ||
-      (categoryFilter === 'SALE' && item.category === 'Sale') ||
+      (categoryFilter === 'PURCHASE' && (item.category === 'Purchase' || item.head === 'Purchase')) ||
+      (categoryFilter === 'SALE' && (item.category === 'Sale' || item.head === 'Sale')) ||
       (categoryFilter === 'EXPENSE' && item.category === 'Expense') ||
-      (categoryFilter === 'JOURNAL' && item.category === 'Journal');
+      (categoryFilter === 'JOURNAL' && item.category === 'Journal') ||
+      (categoryFilter === 'CASHBOOK' && item.category === 'CashBook');
 
     const matchFrom = !dateFrom || item.date >= dateFrom;
     const matchTo = !dateTo || item.date <= dateTo;
@@ -96,6 +98,7 @@ export default function SalePurchaseLedger() {
                 { value: 'SALE', label: 'Sales (Mal Farokht)' },
                 { value: 'EXPENSE', label: 'Operating Expenses' },
                 { value: 'JOURNAL', label: 'Journal Adjustments' },
+                { value: 'CASHBOOK', label: 'Cash Book (Roznamcha)' },
               ]}
             />
           </div>
@@ -216,9 +219,10 @@ export default function SalePurchaseLedger() {
           >
             {filtered.map((r, idx) => {
               let badgeVariant = 'orange';
-              if (r.category === 'Sale') badgeVariant = 'green';
-              else if (r.category === 'Purchase') badgeVariant = 'orange';
+              if (r.category === 'Sale' || r.head === 'Sale') badgeVariant = 'green';
+              else if (r.category === 'Purchase' || r.head === 'Purchase') badgeVariant = 'orange';
               else if (r.category === 'Journal') badgeVariant = 'blue';
+              else if (r.category === 'CashBook') badgeVariant = r.credit > 0 ? 'green' : 'amber';
               else badgeVariant = 'amber';
 
               return (

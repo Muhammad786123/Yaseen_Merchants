@@ -17,7 +17,7 @@ export const issueService = {
 
     const processedItems = (issueData.items || []).map((item) => ({
       ...item,
-      quality: item.quality || 'Cotton A',
+      quality: item.quality || '',
       issueQty: Number(item.issueQty || item.qty || 0),
     }));
 
@@ -54,7 +54,7 @@ export const issueService = {
 
     const processedItems = (issueData.items || []).map((item) => ({
       ...item,
-      quality: item.quality || 'Cotton A',
+      quality: item.quality || '',
       issueQty: Number(item.issueQty || item.qty || 0),
     }));
 

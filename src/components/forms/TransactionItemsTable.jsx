@@ -33,7 +33,7 @@ export default function TransactionItemsTable({
           const defaultItem = items[0];
           currentLine.itemId = defaultItem.id;
           currentLine.itemName = defaultItem.name;
-          currentLine.quality = defaultItem.quality || (qualities[0]?.name || 'Cotton A');
+          currentLine.quality = defaultItem.quality || (qualities[0]?.name || '');
           currentLine.unitType = 'KG';
           currentLine.nugFactor = defaultItem.piecesToKg || defaultItem.nugFactor || 100;
           currentLine.qty = 100;
@@ -47,7 +47,7 @@ export default function TransactionItemsTable({
       const selectedItem = items.find((i) => i.id === value);
       if (selectedItem) {
         currentLine.itemName = selectedItem.name;
-        currentLine.quality = selectedItem.quality || (qualities[0]?.name || 'Cotton A');
+        currentLine.quality = selectedItem.quality || (qualities[0]?.name || '');
         currentLine.nugFactor = selectedItem.piecesToKg || selectedItem.nugFactor || 100;
         // Rate starts empty per Decision 7
         currentLine.rate = '';
@@ -112,7 +112,7 @@ export default function TransactionItemsTable({
       type: 'stock',
       itemId: defaultItem ? defaultItem.id : '',
       itemName: defaultItem ? defaultItem.name : '',
-      quality: defaultItem ? defaultItem.quality : (qualities[0]?.name || 'Cotton A'),
+      quality: defaultItem ? (defaultItem.quality || '') : (qualities[0]?.name || ''),
       unitType: 'KG',
       nugs: 0,
       nugFactor: defaultItem ? (defaultItem.piecesToKg || defaultItem.nugFactor || 100) : 100,

@@ -5,7 +5,7 @@ import Badge from '../../components/ui/Badge.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { fmt } from '../../utils/formatters.js';
-import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
 import { TrendingDown } from 'lucide-react';
 
 export default function Payable() {
@@ -32,18 +32,19 @@ export default function Payable() {
       </div>
 
       <Table
-        headers={['Party Name', 'Category', 'Party Side', 'City', 'Phone', 'Payable Owed']}
+        headers={['Code', 'Party Name', 'Category', 'Party Side', 'City', 'Phone', 'Payable Owed']}
         emptyText="No outstanding payables."
       >
         {creditors.map((c) => (
           <TR key={c.id}>
+            <TD mono className="font-bold text-gray-700">{c.code || '-'}</TD>
             <TD className="font-bold text-[#1E3A5F]">{c.name}</TD>
             <TD><Badge variant="orange">{c.type}</Badge></TD>
             <TD><Badge variant="green">جمع (Jama / Credit)</Badge></TD>
             <TD>{c.city || '-'}</TD>
             <TD className="num">{c.phone || '-'}</TD>
             <TD right className="num font-bold text-red-600">
-              {fmt(c.balance)}
+              {fmt(partySide(c.balance).amount)}
             </TD>
           </TR>
         ))}

@@ -73,21 +73,21 @@ export default function Expenses() {
             </TD>
             <TD>{e.account}</TD>
             <TD mono right className="font-bold text-red-700">{fmt(e.amount)}</TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1">
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => setEditingExpense(e)}
-                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Expense"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(e.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Expense"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>
@@ -101,7 +101,7 @@ export default function Expenses() {
           setIsAddModalOpen(false);
           setEditingExpense(null);
         }}
-        title={editingExpense ? "Edit Operating Expense" : "Record New Operating Expense"}
+        title={editingExpense ? `Editing Expense — ${editingExpense.description || editingExpense.id}` : "Record New Operating Expense"}
       >
         <ExpenseForm
           accounts={accounts}

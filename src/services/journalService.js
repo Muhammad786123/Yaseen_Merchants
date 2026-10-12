@@ -1,7 +1,42 @@
 import { db } from '../db/database.js';
 import { cashBookService } from './cashBookService.js';
 import { capitalService } from './capitalService.js';
+import { partyService } from './partyService.js';
 import { syncStockEntriesToDb } from '../utils/stockUtils.js';
+import { cashService, isJournalCashLine } from './cashService.js';
+
+/**
+ * ONE shared function for updating party balances from Journal lines:
+ * CONVENTION (single source of truth for the whole app):
+ *  party.balance > 0  => we owe the party => CREDIT (Jama), shown "Cr", Payable
+ *  party.balance < 0  => party owes us    => DEBIT (Benaam), shown "Dr", Receivable
+ * Journal party line:
+ *  Posting: Debit => balance = balance - debit. Credit => balance = balance + credit.
+ *  Reversal (edit/delete): balance = balance + debit - credit.
+ *
+ * @param {string} partyId
+ * @param {number} debit
+ * @param {number} credit
+ * @param {boolean} isReversal
+ */
+export async function updatePartyBalanceFromJournal(partyId, debit = 0, credit = 0, isReversal = false) {
+  if (!partyId) return null;
+  const party =
+    (await db.parties.get(partyId)) ||
+    (await db.parties.where({ name: partyId }).first());
+  if (!party) return null;
+
+  const currentBal = Number(party.balance || 0);
+  const deb = Number(debit || 0);
+  const cred = Number(credit || 0);
+  const delta = isReversal ? (deb - cred) : (cred - deb);
+  const newBal = currentBal + delta;
+
+  await db.parties.update(party.id, {
+    balance: newBal,
+  });
+  return newBal;
+}
 
 export const journalService = {
   async getAll() {
@@ -17,37 +52,54 @@ export const journalService = {
   /**
    * Apply accounting effects of a Journal Voucher entry.
    * Sign rules:
-   *  - party balance: balance - debit + credit
+   *  - party balance: balance - debit + credit (via shared updatePartyBalanceFromJournal)
    *  - bank balance: balance + debit - credit
-   *  - cash: via cashBookService.addEntry with debit = JV credit, credit = JV debit, linkedTransactionId = entry.id
+   *  - cash: via cashBookService.addEntry with debit = JV credit, credit = JV debit, linkedTransactionId = entry.id, lineIndex = idx
    *  - capital: via capitalService.addEntry with linkedTransactionId = entry.id
    *  - mall and expense lines: derived dynamically, nothing to post
    */
   async applyPosting(entry) {
-    const validLines = (entry.lines || []).filter(
-      (l) => l.accountName && (Number(l.debit) > 0 || Number(l.credit) > 0)
-    );
+    const lines = entry.lines || [];
+    const cashAcc =
+      (await db.accounts.where({ name: 'Cash' }).first()) ||
+      (await db.accounts.toArray()).find((a) => a.name?.toLowerCase().includes('cash'));
+    const cashAccId = cashAcc?.id;
 
-    for (const line of validLines) {
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx];
       const deb = Number(line.debit) || 0;
       const cred = Number(line.credit) || 0;
-      const type = (line.accountType || '').toLowerCase();
+      if (deb === 0 && cred === 0) continue;
 
-      if (type === 'party') {
-        const party = await db.parties.get(line.accountId);
-        if (party) {
-          const currentBal = Number(party.balance || 0);
-          await db.parties.update(party.id, {
-            balance: currentBal - deb + cred,
-          });
-        }
+      const type = (line.accountType || '').toLowerCase();
+      const isCash = isJournalCashLine(line, cashAccId);
+
+      if (isCash) {
+        // JV Cash Debit (Cash In) -> Cash Book Credit/Jamma; JV Cash Credit (Cash Out) -> Cash Book Debit/Benaam
+        await cashBookService.addEntry({
+          id: 'cb_jv_' + entry.id + '_' + idx,
+          date: entry.date,
+          type: 'Journal',
+          lineIndex: idx,
+          debit: cred,
+          credit: deb,
+          description: `JV ${entry.voucherNo || entry.no || ''}${
+            line.detail ? ' - ' + line.detail : entry.narration ? ' - ' + entry.narration : ''
+          }`,
+          linkedTransactionId: entry.id,
+          createdAt: entry.createdAt || new Date().toISOString(),
+          accountType: 'general',
+          accountName: 'Journal Voucher',
+        });
+      } else if (type === 'party') {
+        await updatePartyBalanceFromJournal(line.accountId || line.accountName, deb, cred, false);
       } else if (type === 'capital') {
         if (cred > 0) {
           await capitalService.addEntry({
             type: 'Add',
             amount: cred,
             date: entry.date,
-            description: `JV ${entry.no}${line.detail ? ' - ' + line.detail : ''}`,
+            description: `JV ${entry.voucherNo || entry.no || ''}${line.detail ? ' - ' + line.detail : ''}`,
             linkedTransactionId: entry.id,
           });
         }
@@ -56,20 +108,10 @@ export const journalService = {
             type: 'Withdraw',
             amount: deb,
             date: entry.date,
-            description: `JV ${entry.no}${line.detail ? ' - ' + line.detail : ''}`,
+            description: `JV ${entry.voucherNo || entry.no || ''}${line.detail ? ' - ' + line.detail : ''}`,
             linkedTransactionId: entry.id,
           });
         }
-      } else if (type === 'cash') {
-        // JV Cash Debit (Cash In) -> Cash Book Credit/Jamma; JV Cash Credit (Cash Out) -> Cash Book Debit/Benaam
-        await cashBookService.addEntry({
-          date: entry.date,
-          type: 'Journal',
-          debit: cred,
-          credit: deb,
-          description: `JV ${entry.no}${line.detail ? ' - ' + line.detail : (entry.narration ? ' - ' + entry.narration : '')}`,
-          linkedTransactionId: entry.id,
-        });
       } else if (type === 'bank') {
         const bank =
           (await db.accounts.get(line.accountId)) ||
@@ -87,31 +129,24 @@ export const journalService = {
   /**
    * Reverse all accounting effects of an existing Journal Voucher entry.
    * Sign rules:
-   *  - party balance: balance + debit - credit
+   *  - party balance: balance + debit - credit (via shared updatePartyBalanceFromJournal)
    *  - bank balance: balance - debit + credit
-   *  - cash: find cashBookEntries with linkedTransactionId = entry.id (fallback: description starts with 'JV ' + entry.no),
-   *          restore Cash account balance (balance + debit - credit of those rows), then delete those rows
-   *  - capital: delete capitalEntries with linkedTransactionId = entry.id (fallback by description)
+   *  - cash: find cashBookEntries with linkedTransactionId = entry.id (fallback: description starts with 'JV ' + entry.no)
+   *          and delete them.
+   *  - capital: delete capitalEntries with linkedTransactionId = entry.id
    */
   async reversePosting(entry) {
-    const validLines = (entry.lines || []).filter(
-      (l) => l.accountName && (Number(l.debit) > 0 || Number(l.credit) > 0)
-    );
+    const lines = entry.lines || [];
 
     // 1. Reverse party and bank balances
-    for (const line of validLines) {
+    for (const line of lines) {
       const deb = Number(line.debit) || 0;
       const cred = Number(line.credit) || 0;
+      if (deb === 0 && cred === 0) continue;
       const type = (line.accountType || '').toLowerCase();
 
       if (type === 'party') {
-        const party = await db.parties.get(line.accountId);
-        if (party) {
-          const currentBal = Number(party.balance || 0);
-          await db.parties.update(party.id, {
-            balance: currentBal + deb - cred,
-          });
-        }
+        await updatePartyBalanceFromJournal(line.accountId || line.accountName, deb, cred, true);
       } else if (type === 'bank') {
         const bank =
           (await db.accounts.get(line.accountId)) ||
@@ -125,35 +160,22 @@ export const journalService = {
       }
     }
 
-    // 2. Reverse linked Cash Book entries and restore Cash account balance
-    let linkedCashEntries = [];
+    // 2. Reverse linked Cash Book entries
     if (db.cashBookEntries) {
+      let linkedCashEntries = [];
       if (entry.id) {
         linkedCashEntries = await db.cashBookEntries
           .where({ linkedTransactionId: entry.id })
           .toArray();
       }
-      if (linkedCashEntries.length === 0 && entry.no) {
-        // Fallback for older records created before linkedTransactionId
-        const prefix = `JV ${entry.no}`;
+      if (linkedCashEntries.length === 0 && (entry.no || entry.voucherNo)) {
+        const prefix = `JV ${entry.voucherNo || entry.no}`;
         const allCb = await db.cashBookEntries.toArray();
         linkedCashEntries = allCb.filter((cb) => cb.description && cb.description.startsWith(prefix));
       }
 
-      if (linkedCashEntries.length > 0) {
-        const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
-        if (cashAcc) {
-          let netAdj = 0;
-          for (const cb of linkedCashEntries) {
-            netAdj += Number(cb.debit || 0) - Number(cb.credit || 0);
-          }
-          await db.accounts.update(cashAcc.id, {
-            balance: Number(cashAcc.balance || 0) + netAdj,
-          });
-        }
-        for (const cb of linkedCashEntries) {
-          await db.cashBookEntries.delete(cb.id);
-        }
+      for (const cb of linkedCashEntries) {
+        await db.cashBookEntries.delete(cb.id);
       }
     }
 
@@ -221,6 +243,9 @@ export const journalService = {
     );
 
     await syncStockEntriesToDb();
+    // Run recalculation automatically so stored party balance can never drift from the ledger
+    await partyService.recalculateAllBalances();
+    await cashService.recalculateCashBalance();
     return newEntry;
   },
 
@@ -250,7 +275,9 @@ export const journalService = {
     const updatedEntry = {
       ...existing,
       date: updatedData.date || existing.date,
-      narration: (updatedData.narration !== undefined ? updatedData.narration : existing.narration).trim() || 'Journal Transaction',
+      narration:
+        (updatedData.narration !== undefined ? updatedData.narration : existing.narration).trim() ||
+        'Journal Transaction',
       totalAmount: totalDebit,
       lines: validLines,
       updatedAt: new Date().toISOString(),
@@ -271,6 +298,9 @@ export const journalService = {
     );
 
     await syncStockEntriesToDb();
+    // Run recalculation automatically so stored party balance can never drift from the ledger
+    await partyService.recalculateAllBalances();
+    await cashService.recalculateCashBalance();
     return updatedEntry;
   },
 
@@ -293,5 +323,8 @@ export const journalService = {
     );
 
     await syncStockEntriesToDb();
+    // Run recalculation automatically so stored party balance can never drift from the ledger
+    await partyService.recalculateAllBalances();
+    await cashService.recalculateCashBalance();
   },
 };

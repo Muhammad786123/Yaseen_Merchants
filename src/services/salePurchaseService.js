@@ -111,6 +111,33 @@ export const salePurchaseService = {
       });
     });
 
+    // 5. Cash Book Mall/Trading accounts (accountType === 'mall')
+    const cashBookEntries = db.cashBookEntries ? await db.cashBookEntries.toArray() : [];
+    cashBookEntries.forEach((cb) => {
+      if (cb.accountType === 'mall') {
+        const deb = Number(cb.debit || 0);
+        const cred = Number(cb.credit || 0);
+        if (deb > 0 || cred > 0) {
+          const head = cb.head || (cb.accountName?.toLowerCase().includes('sale') ? 'Sale' : cb.accountName?.toLowerCase().includes('purchase') ? 'Purchase' : 'Mall');
+          const cbNo = cb.cashBookNo ? `CB-${String(cb.cashBookNo).padStart(4, '0')}` : cb.refNo || 'CB';
+          entries.push({
+            id: cb.id,
+            rawId: cb.id,
+            no: cbNo,
+            cashBookNo: cb.cashBookNo,
+            date: cb.date,
+            type: `Cash Book (${head})`,
+            category: 'CashBook',
+            head: head,
+            partyName: cb.accountName || `Mall A/C (${head})`,
+            description: cb.description || `Cash Book #${cb.cashBookNo || ''}`,
+            debit: deb,
+            credit: cred,
+          });
+        }
+      }
+    });
+
     entries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     let running = 0;
@@ -136,14 +163,18 @@ export const salePurchaseService = {
     const jvAdjustments = ledger
       .filter((l) => l.category === 'Journal')
       .reduce((sum, l) => sum + l.credit - l.debit, 0);
+    const cashBookAdjustments = ledger
+      .filter((l) => l.category === 'CashBook')
+      .reduce((sum, l) => sum + l.credit - l.debit, 0);
 
-    const netBalance = totalSales - (totalPurchases + totalExpenses) + jvAdjustments;
+    const netBalance = totalSales - (totalPurchases + totalExpenses) + jvAdjustments + cashBookAdjustments;
 
     return {
       totalSales,
       totalPurchases,
       totalExpenses,
       jvAdjustments,
+      cashBookAdjustments,
       netBalance,
     };
   },

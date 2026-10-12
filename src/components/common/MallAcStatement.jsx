@@ -310,16 +310,15 @@ export default function MallAcStatement({
 
         <tbody>
           {processedRows.map((row, idx) => {
-            const isSale = row.category === 'Sale';
-            const isPurchase = row.category === 'Purchase';
-            const isStockRow = isSale || isPurchase;
+            const isCredit = Number(row.credit || 0) > 0;
+            const isStockRow = (row.category === 'Sale' || row.category === 'Purchase') && (row.quantity || row.weight);
 
-            // marker: جمع for credit (sale), نام for debit (purchase/expense)
-            const marker = isSale ? 'جمع' : 'نام';
-            const markerColor = isSale ? '#000000' : '#c0392b';
+            // marker: جمع for credit (sale / cash receipt), نام for debit (purchase / expense / cash payment)
+            const marker = isCredit ? 'جمع' : 'نام';
+            const markerColor = isCredit ? '#000000' : '#c0392b';
 
-            // Amount shown: credit for sale, debit for purchase/expense
-            const amount = isSale ? row.credit : row.debit;
+            // Amount shown: credit for jama, debit for benaam
+            const amount = isCredit ? row.credit : row.debit;
 
             // Balance with Cr/Dr indicator
             const balSign = row.runningBal >= 0 ? 'Cr' : 'Dr';

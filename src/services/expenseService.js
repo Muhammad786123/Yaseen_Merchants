@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { cashBookService } from './cashBookService.js';
 
 export const expenseService = {
   async getAll() {
@@ -55,6 +56,8 @@ export const expenseService = {
         }
       }
     });
+
+    await cashBookService.recalculateCashBalance();
 
     return newExpense;
   },
@@ -150,6 +153,8 @@ export const expenseService = {
       await db.expenses.put(updatedExpense);
     });
 
+    await cashBookService.recalculateCashBalance();
+
     return updatedExpense;
   },
 
@@ -199,5 +204,7 @@ export const expenseService = {
 
       await db.expenses.delete(id);
     });
+
+    await cashBookService.recalculateCashBalance();
   },
 };

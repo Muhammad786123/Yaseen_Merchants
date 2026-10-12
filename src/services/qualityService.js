@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { getQualityUsageCount } from '../utils/masterUsageChecker.js';
 
 export const qualityService = {
   async getAll() {
@@ -21,6 +22,12 @@ export const qualityService = {
   },
 
   async delete(id) {
+    const existing = await db.qualities.get(id);
+    if (!existing) return;
+    const count = await getQualityUsageCount(existing.id, existing.name);
+    if (count > 0) {
+      throw new Error(`This record is used in ${count} transactions. Delete or edit those first`);
+    }
     return await db.qualities.delete(id);
   },
 };

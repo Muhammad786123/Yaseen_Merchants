@@ -94,11 +94,6 @@ export default function Issue() {
                   iss.items.map((it, idx) => (
                     <div key={idx} className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-black">{it.itemName}</span>
-                      {it.quality && (
-                        <span className="text-black font-bold bg-[#FFEB3B] border border-black px-2 py-0.5 text-[22px]">
-                          {it.quality}
-                        </span>
-                      )}
                       <span className="text-black font-mono font-bold">({it.issueQty} KG)</span>
                     </div>
                   ))
@@ -108,28 +103,28 @@ export default function Issue() {
               </div>
             </TD>
             <TD mono right className="font-bold text-black">{fmt(iss.totalValue)}</TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1.5">
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => setViewingIssue(iss)}
-                  className="p-1 border border-black bg-white hover:bg-blue-50 text-blue-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-blue-50 text-blue-700 cursor-pointer"
                   title="View & Print Issue Slip"
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setEditingIssue(iss)}
-                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Material Issue"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(iss.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Issue"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>

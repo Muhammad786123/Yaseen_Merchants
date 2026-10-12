@@ -3,8 +3,10 @@ import Input from '../ui/Input.jsx';
 import Select from '../ui/Select.jsx';
 import Button from '../ui/Button.jsx';
 import { isRequired } from '../../utils/validators.js';
+import { db } from '../../db/database.js';
 
 export default function PartyForm({ initialData = null, onSubmit, onCancel }) {
+  const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [type, setType] = useState('Supplier');
   const [phone, setPhone] = useState('');
@@ -14,11 +16,28 @@ export default function PartyForm({ initialData = null, onSubmit, onCancel }) {
 
   useEffect(() => {
     if (initialData) {
+      setCode(initialData.code || '');
       setName(initialData.name || '');
       setType(initialData.type || 'Supplier');
       setPhone(initialData.phone || '');
       setCity(initialData.city || '');
       setOpeningBalance(initialData.openingBalance || 0);
+    } else {
+      // Auto-suggest next readable numeric code
+      if (db.parties) {
+        db.parties.toArray().then((all) => {
+          let maxCode = 10000;
+          all.forEach((p) => {
+            const num = parseInt(p.code, 10);
+            if (!isNaN(num) && num > maxCode) maxCode = num;
+          });
+          setCode(String(maxCode + 1));
+        }).catch(() => {
+          setCode('10001');
+        });
+      } else {
+        setCode('10001');
+      }
     }
   }, [initialData]);
 
@@ -33,6 +52,7 @@ export default function PartyForm({ initialData = null, onSubmit, onCancel }) {
     }
 
     onSubmit({
+      code: code ? String(code).trim() : undefined,
       name,
       type,
       phone,
@@ -43,14 +63,25 @@ export default function PartyForm({ initialData = null, onSubmit, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        label="Party / Business Name"
-        value={name}
-        onChange={setName}
-        placeholder="e.g. Al-Hamd Textile Traders"
-        required
-        error={errors.name}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Input
+          label="Party Code / کوڈ"
+          value={code}
+          onChange={setCode}
+          placeholder="10001"
+          required
+        />
+        <div className="sm:col-span-2">
+          <Input
+            label="Party / Business Name"
+            value={name}
+            onChange={setName}
+            placeholder="e.g. Al-Hamd Textile Traders"
+            required
+            error={errors.name}
+          />
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select

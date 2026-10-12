@@ -97,6 +97,11 @@ db.version(7).stores({
   capitalEntries: 'id, date, type, linkedTransactionId',
 });
 
+db.version(8).stores({
+  cashBookSheets: 'cashBookNo, date',
+  cashBookEntries: 'id, cashBookNo, date, type, partyId, bankAccountId, linkedTransactionId',
+});
+
 /**
  * Clear all transactional, inventory, ledger, and party tables and reset database to clean state.
  * Preserves system configuration: Settings/Company Profile, Document Numbering, and Users.
@@ -116,6 +121,7 @@ export async function clearAllDatabaseData() {
 
     // 2. Ledgers, Cash Book, Banking & Capital
     await db.cashBookEntries.clear();
+    if (db.cashBookSheets) await db.cashBookSheets.clear();
     await db.bankTransfers.clear();
     if (db.capitalEntries) await db.capitalEntries.clear();
 
@@ -189,6 +195,15 @@ export async function initDatabase() {
       await syncStockEntriesToDb();
     } catch (e) {
       console.error('Failed to sync stock entries on init:', e);
+    }
+
+    // Automatically ensure all parties and accounts have readable numeric codes
+    try {
+      const { ensurePartyCodes, ensureAccountCodes } = await import('../services/partyService.js');
+      await ensurePartyCodes();
+      await ensureAccountCodes();
+    } catch (e) {
+      console.error('Failed to ensure party/account codes on init:', e);
     }
   } catch (error) {
     console.error('Failed to initialize database:', error);

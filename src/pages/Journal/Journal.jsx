@@ -573,11 +573,11 @@ export default function Journal() {
                 {fmt(v.totalAmount)}
               </TD>
               <TD>
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-center justify-end gap-1.5 no-print">
                   <button
                     type="button"
                     onClick={() => setViewingVoucher(v)}
-                    className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                    className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                     title="View Voucher Slip"
                   >
                     <Eye className="w-4 h-4" />
@@ -585,7 +585,7 @@ export default function Journal() {
                   <button
                     type="button"
                     onClick={() => handleStartEdit(v)}
-                    className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                    className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                     title="Edit Voucher"
                   >
                     <Pencil className="w-4 h-4" />
@@ -596,7 +596,7 @@ export default function Journal() {
                       setViewingVoucher(v);
                       setTimeout(() => safePrint(), 100);
                     }}
-                    className="p-1 border border-black bg-white hover:bg-blue-50 text-blue-700 cursor-pointer"
+                    className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-blue-50 text-blue-700 cursor-pointer"
                     title="Print Slip"
                   >
                     <Printer className="w-4 h-4" />
@@ -604,7 +604,7 @@ export default function Journal() {
                   <button
                     type="button"
                     onClick={() => setDeletingVoucher(v)}
-                    className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                    className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                     title="Delete Voucher"
                   >
                     <Trash2 className="w-4 h-4" />

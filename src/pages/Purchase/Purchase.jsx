@@ -123,27 +123,30 @@ export default function Purchase() {
               )}
             </TD>
             <TD>
-              <div className="flex items-center justify-end gap-1.5">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
+                  type="button"
                   onClick={() => setViewingPurchase(p)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
-                  title="View Details"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  title="View Purchase Slip"
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setEditingPurchase(p)}
-                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Purchase Invoice"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Pencil className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDeletingId(p.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Invoice"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>

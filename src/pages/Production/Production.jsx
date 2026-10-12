@@ -97,25 +97,25 @@ export default function Production() {
                 {prd.yieldPct}%
               </Badge>
             </TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1">
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => setViewingProduction(prd)}
-                  className="p-1.5 hover:bg-blue-50 rounded text-blue-600 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="View & Print Production Slip"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setEditingProduction(prd)}
-                  className="p-1.5 hover:bg-amber-50 rounded text-amber-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Production Entry"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(prd.id)}
-                  className="p-1.5 hover:bg-red-50 rounded text-red-500 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Entry"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -196,7 +196,7 @@ export default function Production() {
           setIsAddModalOpen(false);
           setEditingProduction(null);
         }}
-        title={editingProduction ? `Edit Production #${editingProduction.no}` : "Record Production Output"}
+        title={editingProduction ? `Editing Production Run — ${editingProduction.no}` : "Record Production Output"}
       >
         <ProductionForm
           initialData={editingProduction}

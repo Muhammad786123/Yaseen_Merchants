@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { getWarehouseUsageCount } from '../utils/masterUsageChecker.js';
 
 export const warehouseService = {
   async getAll() {
@@ -23,6 +24,12 @@ export const warehouseService = {
   },
 
   async delete(id) {
+    const existing = await db.warehouses.get(id);
+    if (!existing) return;
+    const count = await getWarehouseUsageCount(existing.id, existing.name);
+    if (count > 0) {
+      throw new Error(`This record is used in ${count} transactions. Delete or edit those first`);
+    }
     return await db.warehouses.delete(id);
   },
 };

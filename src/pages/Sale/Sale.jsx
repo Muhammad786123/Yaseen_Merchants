@@ -122,28 +122,28 @@ export default function Sale() {
                 <Badge variant="green">Cleared</Badge>
               )}
             </TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1.5">
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => setViewingSale(s)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="View Details"
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setEditingSale(s)}
-                  className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Sale Invoice"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(s.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Invoice"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>

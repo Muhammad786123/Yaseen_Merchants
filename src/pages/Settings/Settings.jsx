@@ -22,6 +22,11 @@ import {
   validateBackupData,
 } from '../../utils/backupService.js';
 import { rebuildBalancesFromVouchers } from '../../utils/balanceRebuildService.js';
+import { partyService } from '../../services/partyService.js';
+import { cashBookService } from '../../services/cashBookService.js';
+import { cashService } from '../../services/cashService.js';
+import { partySide } from '../../utils/partyBalances.js';
+import { fmt } from '../../utils/formatters.js';
 import {
   Plus,
   Save,
@@ -167,6 +172,47 @@ export default function Settings() {
   };
 
   const [isRebuildingBalances, setIsRebuildingBalances] = useState(false);
+  const [recalculateResults, setRecalculateResults] = useState(null);
+
+  const handleRecalculatePartyBalances = async () => {
+    setIsRebuildingBalances(true);
+    try {
+      const changed = await partyService.recalculateAllBalances();
+      setRecalculateResults({
+        runAt: new Date().toLocaleTimeString(),
+        changes: changed,
+      });
+      await loadDbStatsAndBackups();
+      showToast(
+        changed.length > 0
+          ? `Party balances recalculated! ${changed.length} party balances updated.`
+          : 'All party balances are up to date and match their ledgers!'
+      );
+    } catch (err) {
+      console.error('Party balance recalculation failed:', err);
+      showToast('Failed to recalculate party balances: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setIsRebuildingBalances(false);
+    }
+  };
+
+  const handleRecalculateCashBalance = async () => {
+    setIsRebuildingBalances(true);
+    try {
+      const stats = await cashService.repairJournalCashRows();
+      await loadDbStatsAndBackups();
+      showToast(
+        `Cash balance recalculated! Physical Cash balance is ${fmt(stats.currentCashBalance)}.${
+          stats.repairedCount > 0 ? ` (${stats.repairedCount} Journal cash lines repaired)` : ''
+        }`
+      );
+    } catch (err) {
+      console.error('Cash balance recalculation failed:', err);
+      showToast('Failed to recalculate cash balance: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setIsRebuildingBalances(false);
+    }
+  };
 
   const handleRebuildBalances = async () => {
     setIsRebuildingBalances(true);
@@ -458,13 +504,13 @@ export default function Settings() {
         <button
           onClick={() => handleTabChange('backup')}
           className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
-            activeTab === 'backup'
+            activeTab === 'backup' || activeTab === 'data-tools'
               ? 'bg-[#1E3A5F] text-white shadow-xs'
               : 'text-gray-600 hover:bg-[#F5F4F0]'
           }`}
         >
           <Database className="w-3.5 h-3.5" />
-          Data Backup &amp; Restore
+          Data Tools &amp; Backup
         </button>
       </div>
 
@@ -1029,33 +1075,111 @@ export default function Settings() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-[#1E3A5F]">
-                    Journal Voucher Posting &amp; Balance Rebuild
+                    Party Balances &amp; Ledger Recalculation
                   </h3>
                   <p className="text-xs text-gray-600 mt-0.5">
-                    Synchronize party, cash, bank, and capital ledger balances from all recorded vouchers.
+                    Recalculate party balances directly from all vouchers (Purchase, Sale, Receipt, Payment, Cash Book, Journal, Material Issue).
                   </p>
                 </div>
               </div>
 
-              <Button
-                type="button"
-                variant="primary"
-                icon={RefreshCw}
-                disabled={isRebuildingBalances}
-                onClick={handleRebuildBalances}
-                className="bg-[#1E3A5F] hover:bg-[#152843] text-white shrink-0 font-bold cursor-pointer"
-              >
-                {isRebuildingBalances ? 'Rebuilding Balances...' : 'Rebuild Balances from Vouchers'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  icon={RefreshCw}
+                  disabled={isRebuildingBalances}
+                  onClick={handleRecalculatePartyBalances}
+                  className="bg-[#1a6b2e] hover:bg-[#145324] text-white shrink-0 font-bold cursor-pointer"
+                >
+                  {isRebuildingBalances ? 'Recalculating...' : 'Recalculate Party Balances'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={RefreshCw}
+                  disabled={isRebuildingBalances}
+                  onClick={handleRecalculateCashBalance}
+                  className="bg-blue-50 border border-blue-400 hover:bg-blue-100 text-blue-900 shrink-0 font-bold cursor-pointer"
+                >
+                  {isRebuildingBalances ? 'Recalculating...' : 'Recalculate Cash Balance'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={RefreshCw}
+                  disabled={isRebuildingBalances}
+                  onClick={handleRebuildBalances}
+                  className="shrink-0 font-bold cursor-pointer"
+                >
+                  Rebuild All Ledgers
+                </Button>
+              </div>
             </div>
+
+            {/* Recalculation Results Table & Success Message */}
+            {recalculateResults && (
+              <div className="p-4 bg-white border-2 border-black rounded-lg space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-300">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>
+                      {recalculateResults.changes.length > 0
+                        ? `Recalculation Successful! ${recalculateResults.changes.length} party balance(s) updated to match ledgers.`
+                        : 'All party balances are 100% up to date and match their ledgers!'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 font-mono">
+                    Run at: {recalculateResults.runAt}
+                  </span>
+                </div>
+
+                {recalculateResults.changes.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse border border-black bg-white">
+                      <thead>
+                        <tr className="bg-[#DFDFDF] border-b border-black text-black font-bold">
+                          <th className="border border-black px-3 py-1.5 text-start">Party Name</th>
+                          <th className="border border-black px-3 py-1.5 text-right">Old Balance</th>
+                          <th className="border border-black px-3 py-1.5 text-right">New Balance</th>
+                          <th className="border border-black px-3 py-1.5 text-center">Party Side</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recalculateResults.changes.map((c) => (
+                          <tr key={c.id || c.name} className="border-b border-gray-300 hover:bg-gray-50">
+                            <td className="border border-black px-3 py-1.5 font-bold text-black">{c.name}</td>
+                            <td className="border border-black px-3 py-1.5 text-right font-mono text-gray-600" dir="ltr">
+                              {fmt(Math.abs(c.oldBalance))} {c.oldBalance > 0 ? 'Cr' : c.oldBalance < 0 ? 'Dr' : ''}
+                            </td>
+                            <td className="border border-black px-3 py-1.5 text-right font-mono font-bold text-black" dir="ltr">
+                              {fmt(Math.abs(c.newBalance))}
+                            </td>
+                            <td className="border border-black px-3 py-1.5 text-center font-bold">
+                              <span className={c.side === 'Cr' ? 'text-red-700' : 'text-[#1a6b2e]'}>
+                                {c.side} ({c.side === 'Cr' ? 'Jama / Payable' : 'Benaam / Receivable'})
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-600 bg-gray-50 p-2.5 rounded border border-gray-200">
+                    No discrepancies found. Every party balance is already identical to its ledger history.
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-950 space-y-1.5">
               <div className="font-bold flex items-center gap-1.5 text-blue-900">
                 <Info className="w-4 h-4 shrink-0" />
-                <span>Notice on Existing Data &amp; Journal Voucher Corrections:</span>
+                <span>Accounting Balance Convention:</span>
               </div>
               <p className="text-blue-900/90 leading-relaxed">
-                Journal Vouchers posted prior to this update used inverted party balance signs and bypassed direct Capital / Cash Book integration. If you have legacy test vouchers (like JV-0001), you can either click <strong>&quot;Rebuild Balances from Vouchers&quot;</strong> above to auto-correct all party signs and inject missing Cash Book/Capital lines, or use <strong>&quot;Clear Complete Data&quot;</strong> below to reset to a clean baseline and re-enter vouchers with 100% Trial Balance equilibrium.
+                Positive balance (&gt; 0) = Credit / Jama / Payable (we owe the party, red). Negative balance (&lt; 0) = Debit / Benaam / Receivable (party owes us, green). Recalculation rebuilds all balances using: <code>balance = openingBalance + sum(credit) - sum(debit)</code>.
               </p>
             </div>
           </Card>

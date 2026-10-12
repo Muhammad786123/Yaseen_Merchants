@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { partyService } from '../services/partyService.js';
 
 /**
  * Rebuilds and synchronizes all Party balances, Cash Book entries, Capital entries,
@@ -29,7 +30,6 @@ export async function rebuildBalancesFromVouchers() {
       db.bankTransfers,
     ],
     async () => {
-      const parties = await db.parties.toArray();
       const purchases = await db.purchases.toArray();
       const sales = await db.sales.toArray();
       const receipts = await db.receipts.toArray();
@@ -37,63 +37,9 @@ export async function rebuildBalancesFromVouchers() {
       const cashBookEntries = await db.cashBookEntries.toArray();
       const journalEntries = db.journalEntries ? await db.journalEntries.toArray() : [];
 
-      // 1. Recalculate Party balances
-      // App convention: party.balance > 0 = payable (we owe), < 0 = receivable.
-      // Purchase does balance + total, Sale does balance - total
-      // Receipt does balance + amount, Payment does balance - amount
-      // CashBook: CashGiven does balance - debit; CashReceived does balance + credit
-      // Journal: balance - deb + cred (Credit increases payable; Debit reduces it/creates receivable)
-      for (const p of parties) {
-        let bal = Number(p.openingBalance || 0);
-
-        purchases.forEach((pur) => {
-          if (pur.supplierId === p.id || pur.partyId === p.id) {
-            bal += Number(pur.total || 0);
-          }
-        });
-
-        sales.forEach((s) => {
-          if (s.customerId === p.id || s.partyId === p.id) {
-            bal -= Number(s.total || 0);
-          }
-        });
-
-        receipts.forEach((r) => {
-          if (r.partyId === p.id) {
-            bal += Number(r.amount || 0);
-          }
-        });
-
-        payments.forEach((pay) => {
-          if (pay.partyId === p.id) {
-            bal -= Number(pay.amount || 0);
-          }
-        });
-
-        cashBookEntries.forEach((cb) => {
-          if (cb.partyId === p.id) {
-            if (cb.type === 'CashGiven' || cb.debit > 0) {
-              bal -= Number(cb.debit || 0);
-            }
-            if (cb.type === 'CashReceived' || cb.credit > 0) {
-              bal += Number(cb.credit || 0);
-            }
-          }
-        });
-
-        journalEntries.forEach((jv) => {
-          (jv.lines || []).forEach((l) => {
-            if (l.accountType === 'party' && (l.accountId === p.id || l.accountName === p.name)) {
-              const deb = Number(l.debit || 0);
-              const cred = Number(l.credit || 0);
-              bal = bal - deb + cred;
-            }
-          });
-        });
-
-        await db.parties.update(p.id, { balance: bal });
-        stats.partiesUpdated++;
-      }
+      // 1. Recalculate Party balances via shared partyService
+      const changed = await partyService.recalculateAllBalances();
+      stats.partiesUpdated = changed.length;
 
       // 2. Ensure Journal cash lines exist in Cash Book
       for (const jv of journalEntries) {

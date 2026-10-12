@@ -11,6 +11,7 @@ import PartyDetails from './PartyDetails.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt } from '../../utils/formatters.js';
+import { partySide } from '../../utils/partyBalances.js';
 import { Plus, Edit, Trash2, Eye, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -81,83 +82,90 @@ export default function Parties() {
 
       {/* Parties Table */}
       <Table
-        headers={['Party Name', 'Type', 'City', 'Phone', 'Opening Balance', 'Current Balance', 'Actions']}
+        headers={['Code', 'Party Name', 'Type', 'City', 'Phone', 'Opening Balance', 'Current Balance', 'Actions']}
         emptyText="No parties found matching your criteria."
       >
-        {filteredParties.map((p) => (
-          <TR key={p.id}>
-            <TD className="font-bold text-black">
-              <button
-                onClick={() => setViewingParty(p)}
-                className="hover:underline text-left cursor-pointer font-bold"
-              >
-                {p.name}
-              </button>
-            </TD>
-            <TD>
-              <Badge
-                variant={
-                  p.type === 'Supplier'
-                    ? 'orange'
-                    : p.type === 'Customer'
-                    ? 'blue'
-                    : 'purple'
-                }
-              >
-                {p.type}
-              </Badge>
-            </TD>
-            <TD>{p.city || '-'}</TD>
-            <TD mono>{p.phone || '-'}</TD>
-            <TD mono right>{fmt(p.openingBalance || 0)}</TD>
-            <TD mono right>
-              <span
-                className={`font-black ${
-                  p.balance > 0
-                    ? 'text-red-700'
-                    : p.balance < 0
-                    ? 'text-[#1a6b2e]'
-                    : 'text-gray-800'
-                }`}
-              >
-                {fmt(Math.abs(p.balance || 0))} {p.balance > 0 ? 'Cr' : p.balance < 0 ? 'Dr' : ''}
-              </span>
-            </TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1.5">
+        {filteredParties.map((p) => {
+          const { side, amount } = partySide(p.balance);
+          const isZero = Number(p.balance || 0) === 0;
+          return (
+            <TR key={p.id}>
+              <TD mono className="font-bold text-gray-700">
+                {p.code || '-'}
+              </TD>
+              <TD className="font-bold text-black">
+                <button
+                  onClick={() => setViewingParty(p)}
+                  className="hover:underline text-left cursor-pointer font-bold"
+                >
+                  {p.name}
+                </button>
+              </TD>
+              <TD>
+                <Badge
+                  variant={
+                    p.type === 'Supplier'
+                      ? 'orange'
+                      : p.type === 'Customer'
+                      ? 'blue'
+                      : 'purple'
+                  }
+                >
+                  {p.type}
+                </Badge>
+              </TD>
+              <TD>{p.city || '-'}</TD>
+              <TD mono>{p.phone || '-'}</TD>
+              <TD mono right>{fmt(p.openingBalance || 0)}</TD>
+              <TD mono right>
+                <span
+                  className={`font-black ${
+                    !isZero && side === 'Cr'
+                      ? 'text-red-700'
+                      : !isZero && side === 'Dr'
+                      ? 'text-[#1a6b2e]'
+                      : 'text-gray-800'
+                  }`}
+                >
+                  {fmt(amount)} {!isZero ? side : ''}
+                </span>
+              </TD>
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => navigate(`/party-ledger?party=${p.id}`)}
-                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  className="h-9 min-h-[36px] px-2.5 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
                   title="View A/C Ledger (PERBALACC Statement)"
                 >
-                  <BookOpen className="w-3.5 h-3.5" />
+                  <BookOpen className="w-4 h-4" />
                   <span>Ledger</span>
                 </button>
                 <button
                   onClick={() => setViewingParty(p)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="Quick View Statement"
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setEditingParty(p)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Party"
                 >
-                  <Edit className="w-3.5 h-3.5" />
+                  <Edit className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(p.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Party"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>
           </TR>
-        ))}
+        );
+      })}
       </Table>
 
       {/* Add Party Modal */}
@@ -180,7 +188,7 @@ export default function Parties() {
       <Modal
         isOpen={!!editingParty}
         onClose={() => setEditingParty(null)}
-        title="Edit Party"
+        title={editingParty ? `Editing Party — ${editingParty.name}` : "Edit Party"}
       >
         <PartyForm
           initialData={editingParty}
@@ -199,9 +207,14 @@ export default function Parties() {
         title="Delete Party"
         message="Are you sure you want to delete this party? This action will permanently remove their records."
         onConfirm={async () => {
-          await deleteParty(deletingId);
-          showToast('Party deleted successfully!');
-          setDeletingId(null);
+          try {
+            await deleteParty(deletingId);
+            showToast('Party deleted successfully!');
+            setDeletingId(null);
+          } catch (err) {
+            alert(err.message || 'Cannot delete party');
+            setDeletingId(null);
+          }
         }}
         onCancel={() => setDeletingId(null)}
       />

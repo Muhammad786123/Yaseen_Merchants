@@ -47,29 +47,29 @@ export default function Qualities() {
               </button>
             </TD>
             <TD className="text-gray-800">{q.description || '-'}</TD>
-            <TD>
-              <div className="flex items-center justify-end gap-1.5">
+            <TD className="no-print">
+              <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
                   onClick={() => navigate(`/quality-ledger?quality=${q.id}`)}
-                  className="px-2 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
+                  className="h-9 min-h-[36px] px-2.5 py-1 border border-black bg-white hover:bg-emerald-50 text-emerald-800 flex items-center gap-1 font-bold text-xs cursor-pointer"
                   title="View Quality Movement Ledger (PERBALACC Statement)"
                 >
-                  <BookOpen className="w-3.5 h-3.5" />
+                  <BookOpen className="w-4 h-4" />
                   <span>Ledger</span>
                 </button>
                 <button
                   onClick={() => setEditingQuality(q)}
-                  className="p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                   title="Edit Quality"
                 >
-                  <Edit className="w-3.5 h-3.5" />
+                  <Edit className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setDeletingId(q.id)}
-                  className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                   title="Delete Quality"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </TD>
@@ -95,7 +95,7 @@ export default function Qualities() {
       <Modal
         isOpen={!!editingQuality}
         onClose={() => setEditingQuality(null)}
-        title="Edit Quality Grade"
+        title={editingQuality ? `Editing Quality Grade — ${editingQuality.name}` : "Edit Quality Grade"}
       >
         <QualityForm
           initialData={editingQuality}
@@ -113,9 +113,14 @@ export default function Qualities() {
         title="Delete Quality Grade"
         message="Are you sure you want to delete this quality grade?"
         onConfirm={async () => {
-          await deleteQuality(deletingId);
-          showToast('Quality grade deleted!');
-          setDeletingId(null);
+          try {
+            await deleteQuality(deletingId);
+            showToast('Quality grade deleted!');
+            setDeletingId(null);
+          } catch (err) {
+            alert(err.message || 'Cannot delete quality grade');
+            setDeletingId(null);
+          }
         }}
         onCancel={() => setDeletingId(null)}
       />

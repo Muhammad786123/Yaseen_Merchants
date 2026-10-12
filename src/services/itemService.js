@@ -1,4 +1,5 @@
 import { db } from '../db/database.js';
+import { getItemUsageCount } from '../utils/masterUsageChecker.js';
 
 export const itemService = {
   async getAll() {
@@ -33,6 +34,12 @@ export const itemService = {
   },
 
   async delete(id) {
+    const existing = await db.items.get(id);
+    if (!existing) return;
+    const count = await getItemUsageCount(existing.id, existing.name);
+    if (count > 0) {
+      throw new Error(`This record is used in ${count} transactions. Delete or edit those first`);
+    }
     return await db.items.delete(id);
   },
 };

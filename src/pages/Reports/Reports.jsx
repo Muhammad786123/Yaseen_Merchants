@@ -23,7 +23,9 @@ import PartyQualityAnalysis from './PartyQualityAnalysis.jsx';
 import { capitalService } from '../../services/capitalService.js';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, fmtNum, formatDate, getTodayStr } from '../../utils/formatters.js';
-import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
+import { partyService } from '../../services/partyService.js';
+import { calculateCashBalanceFromEntries, compareCashEntries } from '../../services/cashService.js';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -130,6 +132,7 @@ export default function Reports() {
   const totalStockQty = stockEntries.reduce((sum, s) => sum + Number(s.qty || 0), 0);
 
   // Operating Expenses
+  // Operating Expenses
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
   // Journal adjustments to Mall A/C and Expenses
@@ -138,8 +141,13 @@ export default function Reports() {
     .filter((l) => l.accountType === 'mall' || l.accountType === 'expense')
     .reduce((s, l) => s + Number(l.credit || 0) - Number(l.debit || 0), 0);
 
-  // Mall A/C Net Trading Position (Sales - Purchases - Expenses + Journal adjustments)
-  const mallNetPosition = totalSales - (totalPurchases + totalExpenses) + jvMallCredit;
+  // Cash Book adjustments to Mall A/C (Trading accounts: Mall, Sale, Purchase)
+  const cashBookMallAdj = rawCashBook
+    .filter((e) => e.accountType === 'mall')
+    .reduce((s, e) => s + Number(e.credit || 0) - Number(e.debit || 0), 0);
+
+  // Mall A/C Net Trading Position (Sales - Purchases - Expenses + Journal adjustments + Cash Book Mall adjustments)
+  const mallNetPosition = totalSales - (totalPurchases + totalExpenses) + jvMallCredit + cashBookMallAdj;
 
   // Mall Trading Position with Closing Stock (Net Trading Surplus / Profit)
   const mallTradingBalance = mallNetPosition + stockValuation;
@@ -152,9 +160,9 @@ export default function Reports() {
     totalPayable: totalPayables,
   } = splitPartyBalances(parties);
 
-  // Cash in Hand (from Cash account balance in accounts table)
+  // Cash in Hand (single source of truth computed from cashService)
+  const cashInHand = calculateCashBalanceFromEntries(rawCashBook, accounts);
   const cashAcc = accounts.find((a) => a.name.toLowerCase().includes('cash'));
-  const cashInHand = Number(cashAcc?.balance || 0);
   const openingCash = Number(cashAcc?.openingBalance || 0);
 
   // Bank Balances (excluding physical Cash)
@@ -162,8 +170,7 @@ export default function Reports() {
   const totalBankBalances = bankAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
   // Balance Sheet Totals
-  const grossProfit = mallNetPosition + stockValuation; // mallTradingBalance (expenses and JV Mall included)
-  const netProfit = grossProfit; // Net P/L = grossProfit - 0 (expenditure row is 0)
+  const grossProfit = mallTradingBalance; // mallTradingBalance (expenses and JV Mall included)
 
   const sumDebits =
     cashInHand +
@@ -181,10 +188,18 @@ export default function Reports() {
   const isTbBalanced = tbDifference < 1;
 
   const totalAssets = cashInHand + totalBankBalances + totalReceivables + stockValuation;
-  const totalLiabilitiesEquity = totalPayables + capitalBalance + grossProfit;
+  const plAssetsTotal = totalAssets; // Cash in Hand + Receivable + Expenditure (0) + Stock (Value) + Bank
+  const plLiabilitiesTotal = capitalBalance + totalPayables + grossProfit; // Capital + Payable + Gross Profit
+  const totalLiabilitiesEquity = plLiabilitiesTotal;
+
+  // NEW RULE: NET P/L = Total Assets - Capital - Payable
+  const netProfit = plAssetsTotal - capitalBalance - totalPayables;
+  const netPlDifference = Math.abs(netProfit - grossProfit);
+  const hasNetPlMismatch = netPlDifference >= 1;
 
   const isEquationBalanced = Math.abs(totalAssets - totalLiabilitiesEquity) < 1;
   const equationDiff = Math.abs(totalAssets - totalLiabilitiesEquity);
+  const isPlBalanced = isEquationBalanced;
 
   // --- TRADITIONAL TRIAL BALANCE COMPUTED ROWS & EQUILIBRIUM ---
   const tbParties = useMemo(() => {
@@ -199,14 +214,14 @@ export default function Reports() {
 
   const tbPartiesDebit = useMemo(() => {
     return tbParties
-      .filter((p) => Number(p.balance || 0) < 0)
-      .reduce((s, p) => s + Math.abs(Number(p.balance || 0)), 0);
+      .filter((p) => partySide(p.balance).side === 'Dr')
+      .reduce((s, p) => s + partySide(p.balance).amount, 0);
   }, [tbParties]);
 
   const tbPartiesCredit = useMemo(() => {
     return tbParties
-      .filter((p) => Number(p.balance || 0) > 0)
-      .reduce((s, p) => s + Number(p.balance || 0), 0);
+      .filter((p) => partySide(p.balance).side === 'Cr')
+      .reduce((s, p) => s + partySide(p.balance).amount, 0);
   }, [tbParties]);
 
   // Cash row: code 99020
@@ -248,15 +263,6 @@ export default function Reports() {
 
   const tbGrandDifference = Math.abs(tbGrandTotalBenaam - tbGrandTotalJama);
   const isTbGrandBalanced = tbGrandDifference < 1;
-
-  // P&L & Balance Sheet totals
-  // Assets: Cash in Hand + Receivable + Expenditure (0) + Stock (Value) + Bank
-  const plAssetsTotal = cashInHand + totalReceivables + 0 + stockValuation + totalBankBalances;
-  // Liabilities: Capital + Payable + Gross Profit (mallNetPosition + stockValuation)
-  const plLiabilitiesTotal = capitalBalance + totalPayables + grossProfit;
-  const plNetPL = grossProfit - 0; // equals grossProfit
-  const plDifference = Math.abs(plAssetsTotal - plLiabilitiesTotal);
-  const isPlBalanced = plDifference < 1;
 
   const trialBalanceDateStr = useMemo(() => {
     const now = new Date();
@@ -422,7 +428,7 @@ export default function Reports() {
 
   // 4. Cash Book Rows with chronological running balance
   const filteredCashBook = useMemo(() => {
-    const sorted = [...rawCashBook].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const sorted = [...rawCashBook].sort(compareCashEntries);
     let running = openingCash;
     const withBal = sorted.map((entry) => {
       const debit = Number(entry.debit || 0);
@@ -440,6 +446,7 @@ export default function Reports() {
         !q ||
         (cb.cashBookNo && String(cb.cashBookNo).includes(q)) ||
         (cb.refNo && cb.refNo.toLowerCase().includes(q)) ||
+        (cb.accountName && cb.accountName.toLowerCase().includes(q)) ||
         (cb.partyName && cb.partyName.toLowerCase().includes(q)) ||
         (cb.bankAccountName && cb.bankAccountName.toLowerCase().includes(q)) ||
         (cb.description && cb.description.toLowerCase().includes(q));
@@ -1160,7 +1167,7 @@ export default function Reports() {
                             {cb.cashBookNo ? `#${cb.cashBookNo}` : cb.refNo || '-'}
                           </td>
                           <td className="border border-black px-2 py-2 font-semibold text-gray-900 text-start">
-                            {cb.partyName || cb.bankAccountName || 'Physical Cash'}
+                            {cb.accountName || cb.partyName || cb.bankAccountName || 'Physical Cash'}
                           </td>
                           <td className="border border-black px-2 py-2 text-gray-700 text-start">
                             {cb.description || '-'}
@@ -1464,12 +1471,12 @@ export default function Reports() {
                 {isTbGrandBalanced ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
                     <CheckCircle2 className="w-4 h-4 text-[#1B5E20]" />
-                    <span>✓ Trial Balance 100% Balanced (Total: Rs. {fmt(tbGrandTotalBenaam)})</span>
+                    <span>✓ Trial Balance 100% Balanced (Total: {fmt(tbGrandTotalBenaam)})</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-red-100 text-red-900 border-2 border-black">
                     <AlertTriangle className="w-4 h-4 text-red-700" />
-                    <span>⚠ Out of Balance Difference: Rs. {fmt(tbGrandDifference)}</span>
+                    <span>⚠ Out of Balance Difference: {fmt(tbGrandDifference)}</span>
                   </span>
                 )}
               </div>
@@ -1485,8 +1492,19 @@ export default function Reports() {
 
             {/* Red Difference Banner (Visible on Screen & Print if Unbalanced) */}
             {!isTbGrandBalanced && (
-              <div className="p-3 bg-red-100 border-2 border-red-700 text-red-900 font-bold text-center text-lg">
-                Difference Rs. {fmt(tbGrandDifference)}
+              <div className="p-3 bg-red-100 border-2 border-red-700 text-red-900 font-bold flex flex-wrap items-center justify-between gap-3 text-lg">
+                <span>Difference {fmt(tbGrandDifference)}</span>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={async () => {
+                    const changes = await partyService.recalculateAllBalances();
+                    alert(`Party balances recalculated! (${changes.length} party balances updated)`);
+                  }}
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold no-print cursor-pointer"
+                >
+                  Recalculate Party Balances
+                </Button>
               </div>
             )}
 
@@ -1625,7 +1643,7 @@ export default function Reports() {
                           بینک
                         </td>
                       </tr>
-                      {bankAccounts.map((b) => {
+                      {bankAccounts.filter((b) => Number(b.balance || 0) !== 0).map((b) => {
                         const bal = Number(b.balance || 0);
                         const deb = bal >= 0 ? bal : 0;
                         const cred = bal < 0 ? Math.abs(bal) : 0;
@@ -1637,7 +1655,7 @@ export default function Reports() {
                               {srCounter++}
                             </td>
                             <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              {b.code || b.id || '99021'}
+                              {b.code || '99101'}
                             </td>
                             <td className={`border border-black px-3 py-0.5 text-start ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`}>
                               {displayName}
@@ -2007,12 +2025,11 @@ export default function Reports() {
                 {isPlBalanced ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-[#E8F5E9] text-[#1B5E20] border-2 border-black">
                     <CheckCircle2 className="w-4 h-4 text-[#1B5E20]" />
-                    <span>✓ Balanced (Assets = Liabilities: Rs. {fmt(plAssetsTotal)})</span>
+                    <span>✓ Balanced (Assets = Liabilities: {fmt(plAssetsTotal)})</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-red-100 text-red-900 border-2 border-black">
-                    <AlertTriangle className="w-4 h-4 text-red-700" />
-                    <span>⚠ Out of Balance Difference: Rs. {fmt(plDifference)}</span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-white text-black border-2 border-black">
+                    <span>{netProfit > 0 ? `NET PROFIT: ${fmt(netProfit)}` : netProfit < 0 ? `NET LOSS: (${fmt(Math.abs(netProfit))})` : 'NET P/L: 0'}</span>
                   </span>
                 )}
               </div>
@@ -2025,13 +2042,6 @@ export default function Reports() {
                 Print Statement
               </Button>
             </div>
-
-            {/* Red Difference Banner if Out of Balance */}
-            {!isPlBalanced && (
-              <div className="p-3 bg-red-100 border-2 border-red-700 text-red-900 font-bold text-center text-lg">
-                Difference Rs. {fmt(plDifference)}
-              </div>
-            )}
 
             {/* Printable Traditional Two-Block Sheet (Assets vs Liabilities) */}
             <div
@@ -2213,23 +2223,40 @@ export default function Reports() {
               {/* BOTTOM: NET P/L & EQUILIBRIUM */}
               <div className="pt-8 text-center space-y-4">
                 <div className="inline-flex items-center justify-center">
-                  <span className="text-red-600 font-bold text-2xl me-4 uppercase tracking-wider">
-                    NET P/L
+                  <span
+                    className={`${
+                      netProfit < 0
+                        ? 'text-red-600'
+                        : netProfit > 0
+                        ? 'text-[#1a6b2e]'
+                        : 'text-gray-900'
+                    } font-bold text-2xl me-4 uppercase tracking-wider`}
+                  >
+                    {netProfit < 0
+                      ? 'NET LOSS'
+                      : netProfit > 0
+                      ? 'NET PROFIT'
+                      : 'NET P/L'}
                   </span>
-                  <div className="bg-[#FFFF00] border-2 border-black px-6 py-1.5 num-total text-2xl text-black inline-block shadow-sm">
-                    {plNetPL < 0 ? `(${fmt(Math.abs(plNetPL))})` : fmt(plNetPL)}
+                  <div className={`bg-[#FFFF00] border-2 border-black px-6 py-1.5 num-total text-2xl font-bold ${netProfit < 0 ? 'text-red-600' : 'text-black'} inline-block shadow-sm`}>
+                    {netProfit < 0
+                      ? `(${fmt(Math.abs(netProfit))})`
+                      : netProfit === 0
+                      ? '0'
+                      : fmt(netProfit)}
                   </div>
                 </div>
 
-                {isPlBalanced ? (
+                {hasNetPlMismatch && (
+                  <div className="text-xs text-gray-500 font-sans">
+                    Does not match the trading result by Rs. {fmt(netPlDifference)} - check Trial Balance
+                  </div>
+                )}
+
+                {isPlBalanced && (
                   <div className="text-green-700 font-bold text-base flex items-center justify-center gap-1.5">
                     <CheckCircle2 className="w-5 h-5 text-green-700" />
                     <span>Balanced (Assets = Liabilities)</span>
-                  </div>
-                ) : (
-                  <div className="text-red-700 font-bold text-base flex items-center justify-center gap-1.5">
-                    <AlertTriangle className="w-5 h-5 text-red-700" />
-                    <span>Difference Rs. {fmt(plDifference)}</span>
                   </div>
                 )}
               </div>

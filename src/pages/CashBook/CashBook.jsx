@@ -8,11 +8,12 @@ import { useCashBook } from '../../hooks/useCashBook.js';
 import { useParties } from '../../hooks/useParties.js';
 import { useFinances } from '../../hooks/useFinances.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { db } from '../../db/database.js';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
+import { partySide } from '../../utils/partyBalances.js';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { cashBookService } from '../../services/cashBookService.js';
+import { cashService, compareCashEntries, calculateCashBalanceFromEntries } from '../../services/cashService.js';
 import {
   Save,
   PlusCircle,
@@ -24,16 +25,28 @@ import {
   Pencil,
   Trash2,
   Lock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Plus,
+  AlertTriangle,
 } from 'lucide-react';
 
+import SearchableAccountDropdown, { TRADING_ACCOUNTS } from '../../components/common/SearchableAccountDropdown.jsx';
+import { deriveMallHead } from '../../services/cashBookService.js';
+import { salePurchaseService } from '../../services/salePurchaseService.js';
+
 const DENOMINATIONS = [5000, 1000, 500, 100, 50, 20, 10, 5];
+const EXPENSE_HEADS = ['Labour', 'Transport', 'Electricity', 'Rent', 'Other'];
 
 const createEmptyRow = (idx) => ({
   id: `row_${idx}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-  accountType: 'party', // 'party' | 'bank' | 'general'
+  accountType: 'party', // 'party' | 'bank' | 'mall'
   accountNo: '',
   accountId: '',
   accountName: '',
+  head: null,
   detail: '',
   credit: '',
   debit: '',
@@ -50,11 +63,14 @@ export default function CashBook() {
 
   // --- MANUAL CASH BOOK ENTRY SCREEN STATE ---
   const [cashBookNo, setCashBookNo] = useState(1);
+  const [bookNoInput, setBookNoInput] = useState('0001');
+  const [isSavedBook, setIsSavedBook] = useState(false);
   const [entryDate, setEntryDate] = useState(getTodayStr());
   const [topAccountNo, setTopAccountNo] = useState('');
   const [topAccountId, setTopAccountId] = useState('');
   const [topAccountName, setTopAccountName] = useState('');
-  const [activePartyBalance, setActivePartyBalance] = useState(0);
+  const [topAccountType, setTopAccountType] = useState('party');
+  const [activeAccountBalance, setActiveAccountBalance] = useState(0);
 
   // 8 default rows matching the reference layout
   const [rows, setRows] = useState(() => Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
@@ -64,11 +80,12 @@ export default function CashBook() {
     DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
   );
 
-  // Search modal state
+  // Modals & Dialogs
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [voucherFilter, setVoucherFilter] = useState('');
+  const [showDeleteBookDialog, setShowDeleteBookDialog] = useState(false);
 
-  // Edit / Delete individual entry state
+  // Edit / Delete individual entry state (for Search modal)
   const [editingEntry, setEditingEntry] = useState(null);
   const [deletingEntryId, setDeletingEntryId] = useState(null);
   const [editDate, setEditDate] = useState('');
@@ -78,26 +95,236 @@ export default function CashBook() {
   const [editDebit, setEditDebit] = useState(0);
   const [editCredit, setEditCredit] = useState(0);
 
-  // Auto-generate next Cash Book Number starting fresh from 0001
+  // Initial load: compute next book number once on first page load
   useEffect(() => {
-    async function determineNextCbNo() {
+    let isMounted = true;
+    async function initPage() {
       try {
-        const all = await db.cashBookEntries.toArray();
-        const maxNo = all.reduce((max, e) => {
-          const num = parseInt(e.cashBookNo, 10);
-          return !isNaN(num) && num > max ? num : max;
-        }, 0);
-        setCashBookNo(maxNo > 0 ? maxNo + 1 : 1);
+        const nextNo = await cashBookService.getNextBookNo();
+        if (isMounted) {
+          setCashBookNo(nextNo);
+          setBookNoInput(String(nextNo).padStart(4, '0'));
+          setIsSavedBook(false);
+        }
       } catch {
-        setCashBookNo(1);
+        if (isMounted) {
+          setCashBookNo(1);
+          setBookNoInput('0001');
+          setIsSavedBook(false);
+        }
       }
     }
-    determineNextCbNo();
-  }, [cashBookEntries.length]);
+    initPage();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  // Selected party / account from top bar
-  const selectedTopParty = parties.find((p) => p.id === topAccountId || p.name === topAccountName);
-  const previousBalance = selectedTopParty ? Number(selectedTopParty.balance || 0) : 0;
+  // Keyboard navigation: PageUp = previous, PageDown = next
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'textarea') return;
+      if (e.key === 'PageUp') {
+        e.preventDefault();
+        handleNavigatePrevious();
+      } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        handleNavigateNext();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cashBookNo]);
+
+  // Load a specific Cash Book by number
+  const loadBook = async (targetNo) => {
+    try {
+      const { sheet, entries, exists } = await cashBookService.getBook(targetNo);
+      if (!exists) {
+        const nextNo = await cashBookService.getNextBookNo();
+        if (targetNo === nextNo) {
+          await handleNewCashBook(targetNo);
+          return;
+        }
+        showToast(`Cash Book ${String(targetNo).padStart(4, '0')} not found`, 'error');
+        setBookNoInput(String(cashBookNo).padStart(4, '0'));
+        return;
+      }
+
+      setCashBookNo(targetNo);
+      setBookNoInput(String(targetNo).padStart(4, '0'));
+      setEntryDate(sheet?.date || entries[0]?.date || getTodayStr());
+      setDenominations(
+        sheet?.denominations || DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
+      );
+
+      const loadedRows = entries.map((e, idx) => {
+        let accountType = e.accountType || (e.bankAccountId || e.bankAccountName ? 'bank' : e.partyId || e.partyName ? 'party' : 'general');
+        let accountId = e.partyId || e.bankAccountId || e.accountId || '';
+        let accountName = e.partyName || e.bankAccountName || e.accountName || '';
+        let accountNo = '';
+        let head = e.head || null;
+
+        if (accountType === 'mall' || e.accountType === 'mall') {
+          accountType = 'mall';
+          head = e.head || deriveMallHead(accountName, accountId);
+          accountNo = head === 'Sale' ? '99011' : head === 'Purchase' ? '99012' : '99010';
+          accountName = e.accountName || (head === 'Sale' ? 'Sale A/C - سیل' : head === 'Purchase' ? 'Purchase A/C - پرچیز' : 'Mall A/C - مال کھاتہ');
+          accountId = accountNo;
+        } else if (accountType === 'party' || e.partyId) {
+          const p = parties.find((party) => party.id === accountId || party.name === accountName);
+          if (p) {
+            accountType = 'party';
+            accountId = p.id;
+            accountName = p.name;
+            accountNo = p.code || p.id;
+          }
+        } else if (accountType === 'bank' || e.bankAccountId) {
+          const b = bankAccounts.find((bank) => bank.id === accountId || bank.name === accountName);
+          if (b) {
+            accountType = 'bank';
+            accountId = b.id;
+            accountName = b.name;
+            accountNo = b.code || b.id;
+          }
+        }
+
+        return {
+          id: e.id || `row_${idx}_${Date.now()}`,
+          accountType,
+          accountNo,
+          accountId,
+          accountName,
+          head,
+          detail: e.description || '',
+          credit: e.credit ? String(e.credit) : '',
+          debit: e.debit ? String(e.debit) : '',
+          linkedTransactionId: e.linkedTransactionId || e.linkedInvoiceId || null,
+        };
+      });
+
+      while (loadedRows.length < 8) {
+        loadedRows.push(createEmptyRow(loadedRows.length));
+      }
+
+      setRows(loadedRows);
+      setIsSavedBook(true);
+
+      if (loadedRows[0]?.accountId || loadedRows[0]?.accountName) {
+        setTopAccountId(loadedRows[0].accountId);
+        setTopAccountNo(loadedRows[0].accountNo);
+        setTopAccountName(loadedRows[0].accountName);
+        setTopAccountType(loadedRows[0].accountType);
+        if (loadedRows[0].accountType === 'party') {
+          const p = parties.find(
+            (party) =>
+              party.id === loadedRows[0].accountId || party.name === loadedRows[0].accountName
+          );
+          setActiveAccountBalance(Number(p?.balance || 0));
+        } else if (loadedRows[0].accountType === 'bank') {
+          const b = bankAccounts.find(
+            (bank) =>
+              bank.id === loadedRows[0].accountId || bank.name === loadedRows[0].accountName
+          );
+          setActiveAccountBalance(Number(b?.balance || 0));
+        } else if (loadedRows[0].accountType === 'mall') {
+          try {
+            const sum = await salePurchaseService.getSummary();
+            setActiveAccountBalance(Number(sum.netBalance || 0));
+          } catch {
+            setActiveAccountBalance(0);
+          }
+        }
+      } else {
+        setTopAccountId('');
+        setTopAccountNo('');
+        setTopAccountName('');
+        setTopAccountType('party');
+        setActiveAccountBalance(0);
+      }
+    } catch (err) {
+      console.error('Error loading cash book:', err);
+      showToast('Failed to load cash book', 'error');
+    }
+  };
+
+  // Navigation handlers
+  const handleNavigateFirst = async () => {
+    const numbers = await cashBookService.getAllBookNumbers();
+    if (numbers.length > 0) {
+      await loadBook(numbers[0]);
+    } else {
+      await handleNewCashBook(1);
+    }
+  };
+
+  const handleNavigatePrevious = async () => {
+    const numbers = await cashBookService.getAllBookNumbers();
+    const prevNos = numbers.filter((n) => n < cashBookNo);
+    if (prevNos.length > 0) {
+      await loadBook(Math.max(...prevNos));
+    } else {
+      showToast('Already at the first Cash Book');
+    }
+  };
+
+  const handleNavigateNext = async () => {
+    const numbers = await cashBookService.getAllBookNumbers();
+    const nextNos = numbers.filter((n) => n > cashBookNo);
+    if (nextNos.length > 0) {
+      await loadBook(Math.min(...nextNos));
+    } else {
+      const maxNo = numbers.length > 0 ? Math.max(...numbers) : 0;
+      if (cashBookNo <= maxNo) {
+        await handleNewCashBook(maxNo + 1);
+      } else {
+        showToast('Already at the latest new Cash Book');
+      }
+    }
+  };
+
+  const handleNavigateLast = async () => {
+    const numbers = await cashBookService.getAllBookNumbers();
+    if (numbers.length > 0) {
+      await loadBook(Math.max(...numbers));
+    } else {
+      await handleNewCashBook(1);
+    }
+  };
+
+  const handleNewCashBook = async (explicitNo) => {
+    const nextNo =
+      explicitNo !== undefined ? explicitNo : await cashBookService.getNextBookNo();
+    setCashBookNo(nextNo);
+    setBookNoInput(String(nextNo).padStart(4, '0'));
+    setEntryDate(getTodayStr());
+    setRows(Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
+    setDenominations(DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {}));
+    setTopAccountId('');
+    setTopAccountNo('');
+    setTopAccountName('');
+    setActiveAccountBalance(0);
+    setIsSavedBook(false);
+  };
+
+  const handleBookNoInputSubmit = async (val) => {
+    const target = parseInt(val, 10);
+    if (isNaN(target) || target <= 0) {
+      setBookNoInput(String(cashBookNo).padStart(4, '0'));
+      return;
+    }
+    const numbers = await cashBookService.getAllBookNumbers();
+    const maxNo = numbers.length > 0 ? Math.max(...numbers) : 0;
+    if (numbers.includes(target)) {
+      await loadBook(target);
+    } else if (target === maxNo + 1) {
+      await handleNewCashBook(target);
+    } else {
+      showToast(`Cash Book ${String(target).padStart(4, '0')} not found`, 'error');
+      setBookNoInput(String(cashBookNo).padStart(4, '0'));
+    }
+  };
 
   // Format Date for DD/MM/YY and calculate Day of Week
   const { formattedDateDDMMYY, dayOfWeek } = useMemo(() => {
@@ -117,34 +344,136 @@ export default function CashBook() {
     }
   }, [entryDate]);
 
+  // Self-check: compare stored accounts.balance (Cash) with single source of truth getCashBalance()
+  const cashAcc = accounts.find(
+    (a) => a.name?.toLowerCase() === 'cash' || a.name?.toLowerCase().includes('cash')
+  );
+  const storedCashBalance = Number(cashAcc?.balance || 0);
+  const fullComputedCashBalance = useMemo(() => {
+    return calculateCashBalanceFromEntries(cashBookEntries, accounts);
+  }, [cashBookEntries, accounts]);
+
+  const isCashOutOfSync = Math.abs(storedCashBalance - fullComputedCashBalance) > 1;
+
+  // Find the first entry of the current Cash Book (if this is a saved book)
+  const firstBookEntry = useMemo(() => {
+    if (!isSavedBook) return null;
+    const bookEntries = cashBookEntries.filter(
+      (e) => Number(e.cashBookNo) === Number(cashBookNo)
+    );
+    if (bookEntries.length === 0) return null;
+    const sorted = [...bookEntries].sort(compareCashEntries);
+    return sorted[0];
+  }, [cashBookEntries, cashBookNo, isSavedBook]);
+
+  // Previous Balance (green box):
+  // getCashBalance({ beforeKey: firstBookEntry }) for a saved book.
+  // For a new unsaved book, it is the full current cash balance.
+  const previousCashBalance = useMemo(() => {
+    if (isSavedBook && firstBookEntry) {
+      return calculateCashBalanceFromEntries(cashBookEntries, accounts, {
+        beforeKey: firstBookEntry,
+      });
+    }
+    // For a new unsaved book, take the full current cash balance
+    return calculateCashBalanceFromEntries(cashBookEntries, accounts);
+  }, [cashBookEntries, accounts, isSavedBook, firstBookEntry]);
+
+  // Helper to extract existing expense head prefix
+  const getExpenseHeadPrefix = (detail = '') => {
+    const text = String(detail || '').trim();
+    for (const h of EXPENSE_HEADS) {
+      if (
+        text.toLowerCase() === h.toLowerCase() ||
+        text.toLowerCase().startsWith(h.toLowerCase() + ' -') ||
+        text.toLowerCase().startsWith(h.toLowerCase() + ':')
+      ) {
+        return h;
+      }
+    }
+    return '';
+  };
+
+  // Helper to set/replace/strip expense head prefix in detail text
+  const handleApplyExpenseHead = (idx, head) => {
+    setRows((prev) => {
+      const updated = [...prev];
+      const curDetail = String(updated[idx].detail || '').trim();
+      if (!head) {
+        const existingHead = getExpenseHeadPrefix(curDetail);
+        if (existingHead) {
+          const stripped = curDetail.replace(new RegExp(`^${existingHead}\\s*[-:]?\\s*`, 'i'), '').trim();
+          updated[idx].detail = stripped;
+        }
+        return updated;
+      }
+
+      const existingHead = getExpenseHeadPrefix(curDetail);
+      if (existingHead) {
+        const stripped = curDetail.replace(new RegExp(`^${existingHead}\\s*[-:]?\\s*`, 'i'), '').trim();
+        updated[idx].detail = stripped ? `${head} - ${stripped}` : head;
+      } else if (!curDetail) {
+        updated[idx].detail = head;
+      } else {
+        updated[idx].detail = `${head} - ${curDetail}`;
+      }
+      return updated;
+    });
+  };
+
   // Row update handlers
   const handleRowChange = (idx, field, value) => {
     setRows((prev) => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: value };
 
+      // Typing an amount in one side clears the other side of that row
+      if (field === 'credit') {
+        if (value && Number(value) > 0) {
+          updated[idx].debit = '';
+        }
+      } else if (field === 'debit') {
+        if (value && Number(value) > 0) {
+          updated[idx].credit = '';
+        }
+      }
+
       if (field === 'accountId') {
-        // Determine if selection is party or bank
-        const party = parties.find((p) => p.id === value);
-        if (party) {
-          updated[idx].accountType = 'party';
-          updated[idx].accountNo = party.code || party.id;
-          updated[idx].accountName = party.name;
-          setActivePartyBalance(Number(party.balance || 0));
+        const trading = TRADING_ACCOUNTS.find((t) => t.id === value || t.code === value);
+        if (trading) {
+          updated[idx].accountType = 'mall';
+          updated[idx].accountNo = trading.code;
+          updated[idx].accountName = trading.name;
+          updated[idx].head = trading.head;
+          setTopAccountId(trading.id);
+          setTopAccountNo(trading.code);
+          setTopAccountName(trading.name);
+          setTopAccountType('mall');
+          salePurchaseService.getSummary().then((sum) => setActiveAccountBalance(Number(sum?.netBalance || 0))).catch(() => {});
         } else {
-          const bank = bankAccounts.find((b) => b.id === value);
-          if (bank) {
-            updated[idx].accountType = 'bank';
-            updated[idx].accountNo = bank.code || bank.id;
-            updated[idx].accountName = bank.name;
-            setActivePartyBalance(Number(bank.balance || 0));
+          const party = parties.find((p) => p.id === value);
+          if (party) {
+            updated[idx].accountType = 'party';
+            updated[idx].accountNo = party.code || party.id;
+            updated[idx].accountName = party.name;
+            updated[idx].head = null;
+            setActiveAccountBalance(Number(party.balance || 0));
+            setTopAccountId(party.id);
+            setTopAccountNo(party.code || party.id);
+            setTopAccountName(party.name);
+            setTopAccountType('party');
           } else {
-            const acc = accounts.find((a) => a.id === value);
-            if (acc) {
-              updated[idx].accountType = 'general';
-              updated[idx].accountNo = acc.code || acc.id;
-              updated[idx].accountName = acc.name;
-              setActivePartyBalance(Number(acc.balance || 0));
+            const bank = bankAccounts.find((b) => b.id === value);
+            if (bank) {
+              updated[idx].accountType = 'bank';
+              updated[idx].accountNo = bank.code || bank.id;
+              updated[idx].accountName = bank.name;
+              updated[idx].head = null;
+              setActiveAccountBalance(Number(bank.balance || 0));
+              setTopAccountId(bank.id);
+              setTopAccountNo(bank.code || bank.id);
+              setTopAccountName(bank.name);
+              setTopAccountType('bank');
             }
           }
         }
@@ -153,52 +482,145 @@ export default function CashBook() {
     });
   };
 
+  // Row account select from SearchableAccountDropdown
+  const handleRowAccountSelect = async (idx, acc) => {
+    if (!acc) return;
+    setRows((prev) => {
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        accountType: acc.accountType,
+        accountId: acc.accountId,
+        accountNo: acc.accountNo,
+        accountName: acc.accountName,
+        head: acc.head || null,
+      };
+      return updated;
+    });
+
+    setTopAccountId(acc.accountId);
+    setTopAccountNo(acc.accountNo);
+    setTopAccountName(acc.accountName);
+    setTopAccountType(acc.accountType);
+
+    if (acc.accountType === 'party') {
+      const p = parties.find((party) => party.id === acc.accountId || party.name === acc.accountName);
+      setActiveAccountBalance(Number(p?.balance || acc.balance || 0));
+    } else if (acc.accountType === 'bank') {
+      const b = bankAccounts.find((bank) => bank.id === acc.accountId || bank.name === acc.accountName);
+      setActiveAccountBalance(Number(b?.balance || acc.balance || 0));
+    } else if (acc.accountType === 'mall') {
+      try {
+        const sum = await salePurchaseService.getSummary();
+        setActiveAccountBalance(Number(sum.netBalance || 0));
+      } catch {
+        setActiveAccountBalance(0);
+      }
+    }
+  };
+
   // Top account change handler
-  const handleTopAccountSelect = (val) => {
-    const party = parties.find((p) => p.id === val);
-    if (party) {
-      setTopAccountId(party.id);
-      setTopAccountNo(party.code || party.id);
-      setTopAccountName(party.name);
-      setActivePartyBalance(Number(party.balance || 0));
+  const handleTopAccountSelect = async (val) => {
+    if (!val) {
+      setTopAccountId('');
+      setTopAccountNo('');
+      setTopAccountName('');
+      setTopAccountType('party');
+      setActiveAccountBalance(0);
+      return;
+    }
+
+    const acc = typeof val === 'object' ? val : null;
+    const accountId = acc ? acc.accountId : val;
+
+    const trading = TRADING_ACCOUNTS.find((t) => t.id === accountId || t.code === accountId);
+    if (trading || acc?.accountType === 'mall') {
+      const item = trading || acc;
+      const tid = item.accountId || item.id;
+      const tcode = item.accountNo || item.code;
+      const tname = item.accountName || item.name;
+      const thead = item.head || 'Mall';
+      setTopAccountId(tid);
+      setTopAccountNo(tcode);
+      setTopAccountName(tname);
+      setTopAccountType('mall');
+      try {
+        const sum = await salePurchaseService.getSummary();
+        setActiveAccountBalance(Number(sum?.netBalance || 0));
+      } catch {
+        setActiveAccountBalance(0);
+      }
+
+      setRows((prev) => {
+        const updated = [...prev];
+        if (!updated[0].accountName) {
+          updated[0].accountType = 'mall';
+          updated[0].accountId = tid;
+          updated[0].accountNo = tcode;
+          updated[0].accountName = tname;
+          updated[0].head = thead;
+        }
+        return updated;
+      });
+      return;
+    }
+
+    const party = parties.find((p) => p.id === accountId);
+    if (party || acc?.accountType === 'party') {
+      const p = party || acc;
+      const pid = p.accountId || p.id;
+      const pcode = p.accountNo || p.code || p.id;
+      const pname = p.accountName || p.name;
+      setTopAccountId(pid);
+      setTopAccountNo(pcode);
+      setTopAccountName(pname);
+      setTopAccountType('party');
+      setActiveAccountBalance(Number(p.balance !== undefined ? p.balance : party?.balance || 0));
 
       setRows((prev) => {
         const updated = [...prev];
         if (!updated[0].accountName) {
           updated[0].accountType = 'party';
-          updated[0].accountId = party.id;
-          updated[0].accountNo = party.code || party.id;
-          updated[0].accountName = party.name;
+          updated[0].accountId = pid;
+          updated[0].accountNo = pcode;
+          updated[0].accountName = pname;
+          updated[0].head = null;
         }
         return updated;
       });
-    } else {
-      const bank = bankAccounts.find((b) => b.id === val);
-      if (bank) {
-        setTopAccountId(bank.id);
-        setTopAccountNo(bank.code || bank.id);
-        setTopAccountName(bank.name);
-        setActivePartyBalance(Number(bank.balance || 0));
+      return;
+    }
 
-        setRows((prev) => {
-          const updated = [...prev];
-          if (!updated[0].accountName) {
-            updated[0].accountType = 'bank';
-            updated[0].accountId = bank.id;
-            updated[0].accountNo = bank.code || bank.id;
-            updated[0].accountName = bank.name;
-          }
-          return updated;
-        });
-      }
+    const bank = bankAccounts.find((b) => b.id === accountId);
+    if (bank || acc?.accountType === 'bank') {
+      const b = bank || acc;
+      const bid = b.accountId || b.id;
+      const bcode = b.accountNo || b.code || b.id || 'BANK';
+      const bname = b.accountName || b.name;
+      setTopAccountId(bid);
+      setTopAccountNo(bcode);
+      setTopAccountName(bname);
+      setTopAccountType('bank');
+      setActiveAccountBalance(Number(b.balance !== undefined ? b.balance : bank?.balance || 0));
+
+      setRows((prev) => {
+        const updated = [...prev];
+        if (!updated[0].accountName) {
+          updated[0].accountType = 'bank';
+          updated[0].accountId = bid;
+          updated[0].accountNo = bcode;
+          updated[0].accountName = bname;
+          updated[0].head = null;
+        }
+        return updated;
+      });
     }
   };
 
   // Grid live calculations
   const totalCredit = rows.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
   const totalDebit = rows.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
-  const netMovement = totalCredit - totalDebit;
-  const currentRunningBalance = Number(currentCashBalance || 0) + netMovement;
+  const currentClosingBalance = previousCashBalance + totalCredit - totalDebit;
 
   // Denominations live calculations
   const denominationValues = useMemo(() => {
@@ -217,8 +639,8 @@ export default function CashBook() {
   // Difference between Physical Cash details and Grid Net Cash
   const cashDifference = denominationValues.valSum - totalCredit;
 
-  // Handle Save / Post
-  const handleSaveEntry = async () => {
+  // Handle Save / Update Book
+  const handleSaveOrUpdate = async () => {
     const validRows = rows.filter(
       (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
     );
@@ -229,77 +651,53 @@ export default function CashBook() {
     }
 
     try {
-      for (const row of validRows) {
-        const cred = Number(row.credit) || 0;
-        const deb = Number(row.debit) || 0;
-        const pId = row.accountId || (parties.find((p) => p.name === row.accountName)?.id) || null;
-        const bId = row.accountId || (bankAccounts.find((b) => b.name === row.accountName)?.id) || null;
-
-        const isBank = row.accountType === 'bank' || bankAccounts.some((b) => b.id === row.accountId || b.name === row.accountName);
-
-        // Post Cash Book entry
-        const entryId = 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-        await db.cashBookEntries.add({
-          id: entryId,
+      if (isSavedBook) {
+        await cashBookService.updateBook({
+          cashBookNo,
           date: entryDate,
-          cashBookNo: String(cashBookNo),
-          partyId: isBank ? null : pId,
-          partyName: isBank ? null : row.accountName,
-          bankAccountId: isBank ? bId : null,
-          bankAccountName: isBank ? row.accountName : null,
-          debit: deb,
-          credit: cred,
-          description: row.detail || `Manual Cash Book No ${cashBookNo}`,
-          type: isBank ? (deb > 0 ? 'Deposit' : 'Withdrawal') : (cred > 0 ? 'CashReceived' : 'CashGiven'),
-          refNo: `CB-${String(cashBookNo).padStart(4, '0')}`,
+          denominations,
+          rows,
         });
-
-        if (isBank) {
-          // Cash Book: Credit = cash from bank (withdrawal), bank decreases
-          // Debit = cash to bank (deposit), bank increases
-          const bank = await db.accounts.get(bId) || await db.accounts.where({ name: row.accountName }).first();
-          if (bank) {
-            const currentBankBal = Number(bank.balance || 0);
-            const newBankBal = currentBankBal + deb - cred;
-            await db.accounts.update(bank.id, { balance: newBankBal });
-          }
-        } else if (pId) {
-          // Party: Cash given (debit) increases party balance, Cash received (credit) decreases party balance
-          const party = await db.parties.get(pId);
-          if (party) {
-            const currentBal = Number(party.balance || 0);
-            const newBal = currentBal + deb - cred;
-            await db.parties.update(pId, { balance: newBal });
-          }
-        }
+        showToast(`Cash Book #${String(cashBookNo).padStart(4, '0')} updated successfully!`);
+      } else {
+        await cashBookService.saveBook({
+          cashBookNo,
+          date: entryDate,
+          denominations,
+          rows,
+        });
+        showToast(`Cash Book #${String(cashBookNo).padStart(4, '0')} saved successfully!`);
       }
 
-      // Update physical Cash account in accounts table
-      const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
-      if (cashAcc) {
-        await db.accounts.update(cashAcc.id, {
-          balance: Number(cashAcc.balance || 0) + totalCredit - totalDebit,
-        });
-      }
-
-      showToast(`Cash Book #${cashBookNo} saved successfully! (${validRows.length} lines posted)`);
-      handleNewEntry();
+      // Requirement 1: stay on the same book, reload from DB, do NOT clear rows, do NOT increment number
+      await loadBook(cashBookNo);
     } catch (err) {
-      console.error('Failed to save Cash Book:', err);
-      alert('Error saving Cash Book entry. Check console for details.');
+      console.error('Failed to save/update Cash Book:', err);
+      alert(err.message || 'Error saving Cash Book entry. Check console for details.');
     }
   };
 
-  // Reset for New Entry
-  const handleNewEntry = () => {
-    setCashBookNo((prev) => prev + 1);
-    setEntryDate(getTodayStr());
-    setTopAccountNo('');
-    setTopAccountId('');
-    setTopAccountName('');
-    setActivePartyBalance(0);
-    setRows(Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
-    setDenominations(DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d]: '' }), {}));
+  // Handle Delete Book
+  const handleDeleteBook = async () => {
+    try {
+      await cashBookService.deleteBook(cashBookNo);
+      showToast(`Cash Book #${String(cashBookNo).padStart(4, '0')} deleted and effects reversed!`);
+      setShowDeleteBookDialog(false);
+
+      // Open previous book after delete
+      const numbers = await cashBookService.getAllBookNumbers();
+      const prevNos = numbers.filter((n) => n < cashBookNo);
+      if (prevNos.length > 0) {
+        await loadBook(Math.max(...prevNos));
+      } else if (numbers.length > 0) {
+        await loadBook(numbers[0]);
+      } else {
+        await handleNewCashBook(1);
+      }
+    } catch (err) {
+      console.error('Failed to delete Cash Book:', err);
+      alert(err.message || 'Error deleting Cash Book entry.');
+    }
   };
 
   // Clear current rows
@@ -325,7 +723,7 @@ export default function CashBook() {
       );
     } else {
       alert(
-        `✓ All ${validRows.length} entries verified!\nTotal Credit (Jamma): ${fmt(totalCredit)}\nTotal Debit (Benaam): ${fmt(totalDebit)}\nNet Movement: ${fmt(netMovement)}\nPhysical Cash Reconciliation: Matched.`
+        `✓ All ${validRows.length} entries verified!\nTotal Credit (Jamma): ${fmt(totalCredit)}\nTotal Debit (Benaam): ${fmt(totalDebit)}\nPrevious Balance: ${fmt(previousCashBalance)}\nClosing Balance: ${fmt(currentClosingBalance)}\nPhysical Cash Reconciliation: Matched.`
       );
     }
   };
@@ -340,11 +738,25 @@ export default function CashBook() {
     safePrint();
   };
 
+  // Formatted top active balance representation
+  const topParty = parties.find((p) => p.id === topAccountId || p.name === topAccountName);
+  const activeBalanceDisplay = useMemo(() => {
+    if (topParty) {
+      const side = partySide(topParty.balance);
+      return `${fmt(side.amount)} ${side.side}`;
+    }
+    if (topAccountType === 'mall' || activeAccountBalance !== 0) {
+      const side = partySide(activeAccountBalance);
+      return `${fmt(side.amount)} ${side.side}`;
+    }
+    return '0.00';
+  }, [topParty, topAccountType, activeAccountBalance]);
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Cash Book"
-        subtitle="Traditional Roznamcha Cash In/Out journal, physical denomination count & party reconciliation"
+        subtitle="Traditional Roznamcha Cash In/Out journal, physical denomination count & numbered book navigation"
         actions={
           <div className="flex gap-2 no-print">
             <button
@@ -367,6 +779,28 @@ export default function CashBook() {
         }
       />
 
+      {/* Self-check sync banner */}
+      {isCashOutOfSync && (
+        <div className="bg-amber-100 border-2 border-amber-500 p-3 flex flex-wrap items-center justify-between gap-2 text-amber-950 font-bold no-print mb-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />
+            <span className="text-sm">
+              Cash balance out of sync — Recalculate (Computed: {fmt(fullComputedCashBalance)}, Stored: {fmt(storedCashBalance)})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await cashService.repairJournalCashRows();
+              showToast(`Cash balance recalculated! Physical Cash is ${fmt(res.currentCashBalance)}.`);
+            }}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs border border-black cursor-pointer shadow-none"
+          >
+            Recalculate Cash Balance
+          </button>
+        </div>
+      )}
+
       {/* Classic Traditional Cash Book Container */}
       <div
         id="cashbook-print-area"
@@ -385,20 +819,80 @@ export default function CashBook() {
         </div>
 
         {/* Top Info Bar (Bordered container) */}
-        <div className="cashbook-info-bar max-w-2xl mx-auto mb-4 border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-3 space-y-2">
-          {/* Row 1: Cash Book No & Date */}
+        <div className="cashbook-info-bar max-w-3xl mx-auto mb-4 border-2 border-[#0000CC] bg-[#EBE9ED] print:bg-[#FAF9F7] p-3 space-y-2">
+          {/* Row 1: Cash Book Navigation Bar & Date */}
           <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
-            <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Cash Book No</label>
-            <div className="sm:col-span-3 print:col-span-3">
-              <input
-                type="text"
-                readOnly
-                value={String(cashBookNo).padStart(4, '0')}
-                className="w-full bg-white border border-black px-2 py-1 font-mono font-bold text-gray-900 outline-none text-center text-sm"
-              />
+            <label className="sm:col-span-2 print:col-span-3 font-bold text-gray-900">Cash Book No</label>
+            <div className="sm:col-span-5 print:col-span-3 flex items-center gap-1">
+              {/* Print-only View */}
+              <span className="hidden print:block w-full bg-white border border-black px-2 py-1 font-mono font-bold text-gray-900 text-center text-sm">
+                {String(cashBookNo).padStart(4, '0')}
+              </span>
+
+              {/* Interactive Old-Software Navigation Bar */}
+              <div className="print:hidden flex items-center gap-1 w-full">
+                <button
+                  type="button"
+                  onClick={handleNavigateFirst}
+                  title="First Cash Book (|<)"
+                  className="px-1.5 py-1 border border-black bg-white hover:bg-gray-200 text-black font-bold text-xs cursor-pointer"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNavigatePrevious}
+                  title="Previous Cash Book (<) [PageUp]"
+                  className="px-1.5 py-1 border border-black bg-white hover:bg-gray-200 text-black font-bold text-xs cursor-pointer"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={bookNoInput}
+                  onChange={(e) => setBookNoInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleBookNoInputSubmit(bookNoInput);
+                    }
+                  }}
+                  onBlur={() => handleBookNoInputSubmit(bookNoInput)}
+                  className="w-16 bg-white border border-black px-1.5 py-1 font-mono font-bold text-gray-900 outline-none text-center text-sm"
+                  title="Type Book Number & Press Enter"
+                />
+                <button
+                  type="button"
+                  onClick={handleNavigateNext}
+                  title="Next Cash Book (>) [PageDown]"
+                  className="px-1.5 py-1 border border-black bg-white hover:bg-gray-200 text-black font-bold text-xs cursor-pointer"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNavigateLast}
+                  title="Last Cash Book (>|)"
+                  className="px-1.5 py-1 border border-black bg-white hover:bg-gray-200 text-black font-bold text-xs cursor-pointer"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNewCashBook()}
+                  title="New Cash Book"
+                  className="px-2 py-1 border border-black bg-[#E3F2FD] hover:bg-blue-100 text-[#0D47A1] font-bold text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New</span>
+                </button>
+              </div>
             </div>
 
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Date(DD/MM/YY)</label>
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">
+              Date(DD/MM/YY)
+            </label>
             <div className="sm:col-span-2 print:col-span-2">
               <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-sm font-mono font-bold text-center">
                 {formattedDateDDMMYY || entryDate}
@@ -410,7 +904,7 @@ export default function CashBook() {
                 className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-sm outline-none"
               />
             </div>
-            <div className="sm:col-span-2 print:col-span-2">
+            <div className="sm:col-span-1 print:col-span-2">
               <div
                 className="w-full bg-[#76FF03] border border-black font-bold font-mono text-xs text-black px-1 py-1 text-center truncate"
                 title={dayOfWeek}
@@ -422,36 +916,31 @@ export default function CashBook() {
 
           {/* Row 2: Account No & Account Name */}
           <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
-            <label className="sm:col-span-3 print:col-span-3 font-bold text-gray-900">Account No</label>
-            <div className="sm:col-span-3 print:col-span-3">
+            <label className="sm:col-span-2 print:col-span-3 font-bold text-gray-900">Account No</label>
+            <div className="sm:col-span-5 print:col-span-3">
               <span className="hidden print:block w-full bg-white border border-black px-1.5 py-1 text-sm font-mono font-bold text-center">
-                {topAccountNo || (selectedTopParty ? (selectedTopParty.code || selectedTopParty.id) : '-')}
+                {topAccountNo || (topParty ? topParty.code || topParty.id : '-')}
               </span>
-              <select
-                value={topAccountId}
-                onChange={(e) => handleTopAccountSelect(e.target.value)}
-                className="print:hidden w-full bg-white border border-black px-1.5 py-1 text-sm outline-none font-mono"
-              >
-                <option value="">-- Select Account --</option>
-                <optgroup label="Parties">
-                  {parties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code || p.id} - {p.name}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Bank Accounts">
-                  {bankAccounts.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code || b.id} - {b.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+              <div className="print:hidden">
+                <SearchableAccountDropdown
+                  id="top-account-selector"
+                  value={topAccountId}
+                  accountType={topAccountType}
+                  accountNo={topAccountNo}
+                  accountName={topAccountName}
+                  parties={parties}
+                  bankAccounts={bankAccounts}
+                  tradingAccounts={TRADING_ACCOUNTS}
+                  onSelect={handleTopAccountSelect}
+                  placeholder="-- Select Account --"
+                />
+              </div>
             </div>
 
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Account Name</label>
-            <div className="sm:col-span-4 print:col-span-4">
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">
+              Account Name
+            </label>
+            <div className="sm:col-span-3 print:col-span-4">
               <span className="hidden print:block w-full bg-white border border-black px-2 py-1 text-sm font-bold text-gray-900 truncate">
                 {topAccountName || '-'}
               </span>
@@ -466,13 +955,27 @@ export default function CashBook() {
             </div>
           </div>
 
-          {/* Row 3: Previous Balance */}
+          {/* Row 3: Account Balance & Previous Cash Balance */}
           <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2 items-center text-sm">
-            <div className="sm:col-span-6 print:col-span-6"></div>
-            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">Previous Balance</label>
-            <div className="sm:col-span-4 print:col-span-4">
-              <div className="w-full bg-[#76FF03] border border-black font-bold font-mono text-sm text-black px-2 py-1 text-left tabular-nums" dir="ltr">
-                {previousBalance ? fmt(previousBalance) : '0.00'}
+            <label className="sm:col-span-2 print:col-span-3 font-bold text-blue-900">Account Balance</label>
+            <div className="sm:col-span-5 print:col-span-3">
+              <div
+                className="w-full bg-[#E0E7FF] border border-black font-bold font-mono text-sm text-blue-950 px-2 py-1 text-left tabular-nums"
+                dir="ltr"
+              >
+                {activeBalanceDisplay}
+              </div>
+            </div>
+
+            <label className="sm:col-span-2 print:col-span-2 font-bold text-gray-900 text-end pe-1">
+              Previous Balance
+            </label>
+            <div className="sm:col-span-3 print:col-span-4">
+              <div
+                className="w-full bg-[#76FF03] border border-black font-bold font-mono text-sm text-black px-2 py-1 text-left tabular-nums"
+                dir="ltr"
+              >
+                {previousCashBalance ? fmt(previousCashBalance) : '0.00'}
               </div>
             </div>
           </div>
@@ -488,10 +991,16 @@ export default function CashBook() {
                   <thead>
                     <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
                       <th className="border border-black px-3 py-2.5 w-24 text-base font-bold">Acc/ No</th>
-                      <th className="border border-black px-3 py-2.5 w-48 text-start text-base font-bold">Account Name</th>
+                      <th className="border border-black px-3 py-2.5 w-48 text-start text-base font-bold">
+                        Account Name
+                      </th>
                       <th className="border border-black px-3 py-2.5 text-start text-base font-bold">Detail</th>
-                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">Credit/Jamma</th>
-                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">Debit/Benaam</th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">
+                        Credit/Jamma
+                      </th>
+                      <th className="border border-black px-3 py-2.5 w-28 text-left text-base font-bold" dir="ltr">
+                        Debit/Benaam
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -502,27 +1011,21 @@ export default function CashBook() {
                           <span className="hidden print:block px-2 py-2 text-base font-mono tabular-nums">
                             {row.accountNo || '-'}
                           </span>
-                          <select
-                            value={row.accountId}
-                            onChange={(e) => handleRowChange(idx, 'accountId', e.target.value)}
-                            className="print:hidden w-full px-2 py-2 text-base font-mono outline-none bg-transparent"
-                          >
-                            <option value="">-</option>
-                            <optgroup label="Parties">
-                              {parties.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.code || p.id} - {p.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                            <optgroup label="Bank Accounts">
-                              {bankAccounts.map((b) => (
-                                <option key={b.id} value={b.id}>
-                                  {b.code || b.id} - {b.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                          </select>
+                          <div className="print:hidden">
+                            <SearchableAccountDropdown
+                              compact={true}
+                              id={`row-acc-${idx}`}
+                              value={row.accountId}
+                              accountType={row.accountType}
+                              accountNo={row.accountNo}
+                              accountName={row.accountName}
+                              parties={parties}
+                              bankAccounts={bankAccounts}
+                              tradingAccounts={TRADING_ACCOUNTS}
+                              onSelect={(acc) => handleRowAccountSelect(idx, acc)}
+                              placeholder="-"
+                            />
+                          </div>
                         </td>
 
                         {/* Account Name */}
@@ -530,14 +1033,25 @@ export default function CashBook() {
                           <span className="hidden print:block px-3 py-2 text-base font-medium truncate text-start">
                             {row.accountName || ''}
                           </span>
-                          <input
-                            type="text"
-                            value={row.accountName}
-                            onChange={(e) => handleRowChange(idx, 'accountName', e.target.value)}
-                            placeholder="Select or enter account..."
-                            dir="auto"
-                            className="print:hidden w-full px-3 py-2 text-base outline-none bg-transparent font-medium text-start"
-                          />
+                          <div className="print:hidden flex items-center">
+                            {row.linkedTransactionId && (
+                              <span
+                                className="flex items-center gap-1 ms-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold shrink-0 cursor-help"
+                                title="Edit from the original voucher"
+                              >
+                                <Lock className="w-3 h-3 text-amber-800" />
+                                <span>Edit from original voucher</span>
+                              </span>
+                            )}
+                            <input
+                              type="text"
+                              value={row.accountName}
+                              onChange={(e) => handleRowChange(idx, 'accountName', e.target.value)}
+                              placeholder="Select or enter account..."
+                              dir="auto"
+                              className="w-full px-3 py-2 text-base outline-none bg-transparent font-medium text-start"
+                            />
+                          </div>
                         </td>
 
                         {/* Detail Narration */}
@@ -545,17 +1059,43 @@ export default function CashBook() {
                           <span className="hidden print:block px-3 py-2 text-base text-gray-800 truncate text-start">
                             {row.detail || ''}
                           </span>
-                          <input
-                            type="text"
-                            value={row.detail}
-                            onChange={(e) => handleRowChange(idx, 'detail', e.target.value)}
-                            placeholder="Manual description..."
-                            dir="auto"
-                            className="print:hidden w-full px-3 py-2 text-base outline-none bg-transparent text-start"
-                          />
+                          <div className="print:hidden p-1">
+                            <input
+                              type="text"
+                              value={row.detail}
+                              onChange={(e) => handleRowChange(idx, 'detail', e.target.value)}
+                              placeholder="Manual description..."
+                              dir="auto"
+                              className="w-full px-2 py-1 text-base outline-none bg-transparent text-start"
+                            />
+                            {/* Expense Head Suggestions when Mall A/C debit (expense) is chosen */}
+                            {row.accountType === 'mall' && Number(row.debit) > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1 px-1">
+                                <span className="text-gray-500 font-semibold text-[10px]">Expense:</span>
+                                {EXPENSE_HEADS.map((head) => {
+                                  const isActive = getExpenseHeadPrefix(row.detail).toLowerCase() === head.toLowerCase();
+                                  return (
+                                    <button
+                                      key={head}
+                                      type="button"
+                                      onClick={() => handleApplyExpenseHead(idx, isActive ? '' : head)}
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
+                                        isActive
+                                          ? 'bg-amber-500 text-white border-amber-600 font-bold'
+                                          : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                      }`}
+                                      title={isActive ? 'Click to remove head' : `Tag as ${head}`}
+                                    >
+                                      {head}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </td>
 
-                        {/* Credit / Jamma (Cash In) */}
+                        {/* Credit / Jamma (Cash Received) */}
                         <td className="border border-black p-0" dir="ltr">
                           <span className="hidden print:block px-3 py-2 text-base font-mono font-bold text-left text-emerald-800 tabular-nums">
                             {row.credit ? Number(row.credit).toLocaleString('en-PK') : '-'}
@@ -571,7 +1111,7 @@ export default function CashBook() {
                           />
                         </td>
 
-                        {/* Debit / Benaam (Cash Out) */}
+                        {/* Debit / Benaam (Cash Paid) */}
                         <td className="border border-black p-0" dir="ltr">
                           <span className="hidden print:block px-3 py-2 text-base font-mono font-bold text-left text-red-800 tabular-nums">
                             {row.debit ? Number(row.debit).toLocaleString('en-PK') : '-'}
@@ -594,7 +1134,7 @@ export default function CashBook() {
 
               {/* Helper hint */}
               <div className="mt-1 flex items-center justify-between text-sm text-gray-700 px-1 font-medium no-print">
-                <span>Credit/Jamma = Cash Received | Debit/Benaam = Cash Paid</span>
+                <span>Credit/Jamma = Cash Received into Box | Debit/Benaam = Cash Paid out</span>
                 <button
                   type="button"
                   onClick={() => setRows((prev) => [...prev, createEmptyRow(prev.length)])}
@@ -609,27 +1149,48 @@ export default function CashBook() {
             <div className="mt-4 pt-2 border-t border-black space-y-2">
               <div className="flex items-center justify-end gap-2 text-base">
                 <span className="font-bold text-gray-900">Total</span>
-                <div className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-emerald-800 tabular-nums" dir="ltr">
+                <div
+                  className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-emerald-800 tabular-nums"
+                  dir="ltr"
+                >
                   {totalCredit ? totalCredit.toLocaleString('en-PK') : '0'}
                 </div>
-                <div className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-red-800 tabular-nums" dir="ltr">
+                <div
+                  className="w-28 bg-white border border-black px-2.5 py-1.5 text-left font-mono font-bold text-[17px] text-red-800 tabular-nums"
+                  dir="ltr"
+                >
                   {totalDebit ? totalDebit.toLocaleString('en-PK') : '0'}
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm pt-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-red-700">Party Balance</span>
-                  <div className="bg-[#0000FF] border border-black px-4 py-1.5 text-white font-mono font-bold text-[17px] min-w-[130px] text-center tabular-nums" dir="ltr">
-                    {activePartyBalance ? fmt(activePartyBalance) : (previousBalance ? fmt(previousBalance) : '0.00')}
+                  <span className="font-bold text-blue-900">Account Balance</span>
+                  <div
+                    className="bg-[#0000FF] border border-black px-4 py-1.5 text-white font-mono font-bold text-[17px] min-w-[130px] text-center tabular-nums"
+                    dir="ltr"
+                  >
+                    {activeBalanceDisplay}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-gray-900">Current Cash Balance</span>
-                  <div className="bg-[#76FF03] border border-black px-4 py-1.5 text-black font-mono font-bold text-[17px] min-w-[140px] text-left tabular-nums" dir="ltr">
-                    {fmt(currentRunningBalance)}
+                  <span className="font-bold text-gray-900">Current / Closing Balance</span>
+                  <div
+                    className={`border border-black px-4 py-1.5 font-mono font-bold text-[17px] min-w-[140px] text-left tabular-nums ${
+                      currentClosingBalance < 0
+                        ? 'bg-red-100 text-red-700 border-red-600'
+                        : 'bg-[#76FF03] text-black'
+                    }`}
+                    dir="ltr"
+                  >
+                    {fmt(currentClosingBalance)}
                   </div>
+                  {currentClosingBalance < 0 && (
+                    <span className="text-xs font-bold text-red-700 bg-red-100 border border-red-400 px-2 py-1">
+                      Cash is negative
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -647,7 +1208,9 @@ export default function CashBook() {
                   <tr className="bg-[#DFDFDF] border-b border-black text-gray-900 font-bold text-center">
                     <th className="border border-black px-2.5 py-2 w-16 text-start text-sm font-bold">Details</th>
                     <th className="border border-black px-2.5 py-2 w-16 text-sm font-bold">Count</th>
-                    <th className="border border-black px-2.5 py-2 text-left text-sm font-bold" dir="ltr">Cash</th>
+                    <th className="border border-black px-2.5 py-2 text-left text-sm font-bold" dir="ltr">
+                      Cash
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -672,7 +1235,10 @@ export default function CashBook() {
                           className="print:hidden w-full px-2 py-1.5 text-base font-mono text-center outline-none bg-transparent tabular-nums"
                         />
                       </td>
-                      <td className="border border-black px-2.5 py-1.5 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
+                      <td
+                        className="border border-black px-2.5 py-1.5 text-left font-mono font-bold text-gray-900 tabular-nums"
+                        dir="ltr"
+                      >
                         {item.val ? item.val.toLocaleString('en-PK') : '-'}
                       </td>
                     </tr>
@@ -680,11 +1246,16 @@ export default function CashBook() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#DFDFDF] font-bold">
-                    <td className="border border-black px-2.5 py-2 text-gray-900 text-base font-bold text-start">Total</td>
+                    <td className="border border-black px-2.5 py-2 text-gray-900 text-base font-bold text-start">
+                      Total
+                    </td>
                     <td className="border border-black px-2 py-2 text-center font-mono text-[17px] font-bold tabular-nums">
                       {denominationValues.countSum || 0}
                     </td>
-                    <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-900 tabular-nums" dir="ltr">
+                    <td
+                      className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-900 tabular-nums"
+                      dir="ltr"
+                    >
                       {denominationValues.valSum.toLocaleString('en-PK')}
                     </td>
                   </tr>
@@ -710,9 +1281,19 @@ export default function CashBook() {
         {/* Print-only Signatures & Audit Footer */}
         <div className="hidden print:block mt-6 pt-3 border-t border-black">
           <div className="flex items-center justify-between text-sm text-gray-600 mb-6 print-note-text">
-            <span>Printed on: <strong>{new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
-            <span>Cash Book Voucher #<strong>{String(cashBookNo).padStart(4, '0')}</strong></span>
-            <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
+            <span>
+              Printed on:{' '}
+              <strong>
+                {new Date().toLocaleDateString('en-GB')}{' '}
+                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </strong>
+            </span>
+            <span>
+              Cash Book Voucher #<strong>{String(cashBookNo).padStart(4, '0')}</strong>
+            </span>
+            <span>
+              System: <strong>Yaseen Merchants Offline Accounting</strong>
+            </span>
           </div>
           <div className="grid grid-cols-3 gap-6 text-center text-sm">
             <div className="flex flex-col items-center">
@@ -733,20 +1314,39 @@ export default function CashBook() {
         {/* Bottom Action Toolbar */}
         <div className="mt-5 flex flex-wrap items-center justify-center gap-6 no-print">
           <div className="border-2 border-black bg-white p-1 flex items-center gap-2">
+            {/* Save or Update Button */}
             <button
               type="button"
-              onClick={handleSaveEntry}
-              className="w-10 h-10 flex items-center justify-center border border-black bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-all cursor-pointer"
-              title="Save / Post Cash Book Entry"
+              onClick={handleSaveOrUpdate}
+              className={`px-3 h-10 flex items-center gap-2 border border-black transition-all cursor-pointer font-bold text-xs ${
+                isSavedBook
+                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                  : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900'
+              }`}
+              title={isSavedBook ? 'Update Cash Book' : 'Save Cash Book'}
             >
-              <Save className="w-5 h-5 text-emerald-700" />
+              <Save className={`w-5 h-5 ${isSavedBook ? 'text-amber-800' : 'text-emerald-800'}`} />
+              <span>{isSavedBook ? 'Update Cash Book' : 'Save Cash Book'}</span>
             </button>
+
+            {/* Delete Cash Book (Only if saved) */}
+            {isSavedBook && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteBookDialog(true)}
+                className="px-3 h-10 flex items-center gap-1.5 border border-black bg-red-100 hover:bg-red-200 text-red-900 transition-all cursor-pointer font-bold text-xs"
+                title="Delete Cash Book"
+              >
+                <Trash2 className="w-4 h-4 text-red-800" />
+                <span>Delete Cash Book</span>
+              </button>
+            )}
 
             <button
               type="button"
-              onClick={handleNewEntry}
+              onClick={() => handleNewCashBook()}
               className="w-10 h-10 flex items-center justify-center border border-black bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all cursor-pointer"
-              title="New Cash Book Entry"
+              title="New Cash Book"
             >
               <PlusCircle className="w-5 h-5 text-blue-700" />
             </button>
@@ -764,7 +1364,7 @@ export default function CashBook() {
               type="button"
               onClick={() => setIsSearchModalOpen(true)}
               className="w-10 h-10 flex items-center justify-center border border-black bg-sky-50 hover:bg-sky-100 text-sky-800 transition-all cursor-pointer"
-              title="Search Past Cash Book Vouchers"
+              title="Search Past Cash Book Records"
             >
               <Search className="w-5 h-5 text-blue-700" />
             </button>
@@ -798,6 +1398,16 @@ export default function CashBook() {
           </div>
         </div>
 
+        {/* Delete Cash Book Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={showDeleteBookDialog}
+          title={`Delete Cash Book #${String(cashBookNo).padStart(4, '0')}?`}
+          message="Are you sure you want to delete this Cash Book? This will reverse all effects on physical cash, party balances, and bank accounts, and permanently remove all rows in this book."
+          confirmLabel="Delete Cash Book"
+          onConfirm={handleDeleteBook}
+          onCancel={() => setShowDeleteBookDialog(false)}
+        />
+
         {/* Search Past Cash Book Records Modal */}
         <Modal
           isOpen={isSearchModalOpen}
@@ -821,7 +1431,7 @@ export default function CashBook() {
                   .filter(
                     (e) =>
                       !voucherFilter ||
-                      (e.cashBookNo && e.cashBookNo.includes(voucherFilter)) ||
+                      (e.cashBookNo && String(e.cashBookNo).includes(voucherFilter)) ||
                       (e.partyName && e.partyName.toLowerCase().includes(voucherFilter.toLowerCase())) ||
                       (e.bankAccountName && e.bankAccountName.toLowerCase().includes(voucherFilter.toLowerCase())) ||
                       (e.description && e.description.toLowerCase().includes(voucherFilter.toLowerCase()))
@@ -831,11 +1441,13 @@ export default function CashBook() {
                     <TR key={e.id}>
                       <TD mono className="font-bold text-black">
                         <div className="flex items-center gap-1.5">
-                          <span>{e.cashBookNo ? `#${e.cashBookNo}` : e.refNo || '-'}</span>
+                          <span>{e.cashBookNo ? `#${String(e.cashBookNo).padStart(4, '0')}` : e.refNo || '-'}</span>
                           {e.editCount > 0 && (
                             <span
                               className="px-1 py-0.2 bg-amber-100 text-amber-800 border border-amber-400 text-[9px] font-bold rounded-sm"
-                              title={`Edited ${e.editCount} time(s). Last edited: ${e.updatedAt ? formatDate(e.updatedAt) : 'Recently'}`}
+                              title={`Edited ${e.editCount} time(s). Last edited: ${
+                                e.updatedAt ? formatDate(e.updatedAt) : 'Recently'
+                              }`}
                             >
                               Edited
                             </span>
@@ -843,7 +1455,7 @@ export default function CashBook() {
                         </div>
                       </TD>
                       <TD>{formatDate(e.date)}</TD>
-                      <TD className="font-semibold">{e.partyName || e.bankAccountName || '-'}</TD>
+                      <TD className="font-semibold">{e.partyName || e.bankAccountName || e.accountName || '-'}</TD>
                       <TD className="text-gray-700">{e.description || '-'}</TD>
                       <TD mono right className="text-red-700 font-bold">
                         {e.debit ? fmt(e.debit) : '-'}
@@ -851,19 +1463,33 @@ export default function CashBook() {
                       <TD mono right className="text-emerald-800 font-bold">
                         {e.credit ? fmt(e.credit) : '-'}
                       </TD>
-                      <TD>
-                        {e.linkedTransactionId ? (
-                          <div className="flex items-center justify-end">
+                      <TD className="no-print">
+                        {e.cashBookNo ? (
+                          <div className="flex items-center justify-end no-print">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsSearchModalOpen(false);
+                                loadBook(Number(e.cashBookNo));
+                              }}
+                              className="h-9 min-h-[36px] px-3 bg-blue-50 border border-black hover:bg-blue-100 text-blue-900 text-xs font-bold flex items-center justify-center cursor-pointer"
+                              title="Open this Cash Book in editor"
+                            >
+                              Open Book #{String(e.cashBookNo).padStart(4, '0')}
+                            </button>
+                          </div>
+                        ) : e.linkedTransactionId ? (
+                          <div className="flex items-center justify-end no-print">
                             <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 border border-gray-300 text-xs rounded cursor-not-allowed"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-gray-500 border border-gray-300 text-xs rounded cursor-not-allowed"
                               title="Created by another voucher (Purchase, Sale, Journal, Expense, Issue). Edit from the original voucher."
                             >
-                              <Lock className="w-3 h-3 text-gray-500" />
-                              <span className="text-[10px] font-medium">Edit from original voucher</span>
+                              <Lock className="w-3.5 h-3.5 text-gray-500" />
+                              <span className="text-[11px] font-medium">Edit from original voucher</span>
                             </span>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 no-print">
                             <button
                               onClick={() => {
                                 setEditingEntry(e);
@@ -874,17 +1500,17 @@ export default function CashBook() {
                                 setEditDebit(e.debit || 0);
                                 setEditCredit(e.credit || 0);
                               }}
-                              className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
                               title="Edit Manual Cash Entry"
                             >
-                              <Pencil className="w-3.5 h-3.5" />
+                              <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setDeletingEntryId(e.id)}
-                              className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
                               title="Delete Manual Cash Entry"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         )}
@@ -900,7 +1526,7 @@ export default function CashBook() {
         <Modal
           isOpen={!!editingEntry}
           onClose={() => setEditingEntry(null)}
-          title={`Edit Cash Book Entry — ${editingEntry?.cashBookNo ? '#' + editingEntry.cashBookNo : editingEntry?.refNo || ''}`}
+          title={`Editing Cash Book Entry — ${editingEntry?.cashBookNo ? '#' + String(editingEntry.cashBookNo).padStart(4, '0') : editingEntry?.refNo || editingEntry?.id?.slice(0, 8)}`}
           maxWidth="max-w-md"
         >
           {editingEntry && (
@@ -1032,11 +1658,11 @@ export default function CashBook() {
           )}
         </Modal>
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Individual Entry Confirmation Dialog */}
         <ConfirmDialog
           isOpen={!!deletingEntryId}
           title="Delete Cash Book Entry"
-          message="This will reverse all its effects on parties, cash, bank and stock."
+          message="This will reverse all its effects on parties, cash, and bank."
           confirmLabel="Delete Entry"
           onConfirm={async () => {
             try {

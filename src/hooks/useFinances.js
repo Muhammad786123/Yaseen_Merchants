@@ -17,12 +17,16 @@ export function useFinances() {
     expenses,
     accounts,
     addReceipt: receiptService.add,
+    updateReceipt: receiptService.update,
     deleteReceipt: receiptService.delete,
     addPayment: paymentService.add,
+    updatePayment: paymentService.update,
     deletePayment: paymentService.delete,
     addExpense: expenseService.add,
     updateExpense: expenseService.update,
     deleteExpense: expenseService.delete,
     addAccount: accountService.add,
+    updateAccount: accountService.update,
+    deleteAccount: accountService.delete,
   };
 }
