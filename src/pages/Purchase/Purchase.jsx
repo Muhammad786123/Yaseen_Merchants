@@ -13,7 +13,7 @@ import { useParties } from '../../hooks/useParties.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useItems } from '../../hooks/useItems.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { fmt, formatDate } from '../../utils/formatters.js';
+import { fmt, formatDate, getLineLabel } from '../../utils/formatters.js';
 import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
 
 export default function Purchase() {
@@ -105,7 +105,7 @@ export default function Purchase() {
             <TD>
               <div className="text-xs text-gray-700">
                 {p.items && p.items.length > 0
-                  ? `${p.items.length} item(s): ${p.items.map((i) => i.itemName).join(', ')}`
+                  ? `${p.items.length} item(s): ${p.items.map((i) => getLineLabel(i)).join(', ')}`
                   : '-'}
               </div>
             </TD>
@@ -251,7 +251,7 @@ export default function Purchase() {
                   {viewingPurchase.items?.map((it, idx) => (
                     <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
                       <td className="p-2 border border-gray-400 text-center font-mono text-gray-500">{idx + 1}</td>
-                      <td className="p-2 border border-gray-400 font-semibold text-gray-900">{it.itemName}</td>
+                      <td className="p-2 border border-gray-400 font-semibold text-gray-900">{getLineLabel(it)}</td>
                       <td className="p-2 border border-gray-400 text-gray-700">{it.quality}</td>
                       <td className="p-2 border border-gray-400 text-right font-mono font-medium">{it.qty}</td>
                       <td className="p-2 border border-gray-400 text-right font-mono">{fmt(it.rate)}</td>

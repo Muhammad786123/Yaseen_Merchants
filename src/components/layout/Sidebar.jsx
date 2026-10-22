@@ -15,6 +15,7 @@ import {
   Package,
   BarChart2,
   Settings as SettingsIcon,
+  Scale,
   MinusCircle,
   X,
   LogOut,
@@ -32,6 +33,7 @@ export const navItems = [
   { path: '/issue', label: 'Issue', icon: Share2 },
   { path: '/cash-book', label: 'Cash Book', icon: DollarSign },
   { path: '/journal', label: 'Journal', icon: BookOpen },
+  { path: '/sale-purchase-ledger', label: 'Mall A/C (Sale-Purchase)', icon: Scale },
   { path: '/stock', label: 'Stock', icon: Package },
   { path: '/reports', label: 'Reports', icon: BarChart2 },
   { path: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -84,6 +86,9 @@ export default function Sidebar({
     const currentPath = location.pathname;
     if (item.path === '/journal') {
       return currentPath === '/journal' || currentPath === '/party-ledger';
+    }
+    if (item.path === '/sale-purchase-ledger') {
+      return currentPath === '/sale-purchase-ledger';
     }
     if (item.path === '/stock') {
       return currentPath === '/stock' || currentPath === '/stock-ledger';

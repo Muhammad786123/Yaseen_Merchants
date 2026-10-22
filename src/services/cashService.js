@@ -78,7 +78,7 @@ export function isEntryBeforeKey(entry, beforeKey) {
 /**
  * Pure calculation function that works synchronously over arrays of entries & accounts.
  */
-export function calculateCashBalanceFromEntries(entries = [], accounts = [], { beforeKey } = {}) {
+export function calculateCashBalanceFromEntries(entries = [], accounts = [], { beforeKey, beforeDate } = {}) {
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const cashAcc = safeAccounts.find((a) => a.name?.toLowerCase() === 'cash' || a.name?.toLowerCase().includes('cash'));
   const openingBalance = Number(cashAcc?.openingBalance || 0);
@@ -88,6 +88,9 @@ export function calculateCashBalanceFromEntries(entries = [], accounts = [], { b
 
   let net = 0;
   for (const entry of sorted) {
+    if (beforeDate && entry.date && entry.date >= beforeDate) {
+      continue;
+    }
     if (beforeKey && !isEntryBeforeKey(entry, beforeKey)) {
       continue;
     }

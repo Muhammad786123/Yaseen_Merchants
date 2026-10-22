@@ -8,6 +8,7 @@ import Modal from '../../components/ui/Modal.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import IssueForm from '../../components/forms/IssueForm.jsx';
 import { useIssues } from '../../hooks/useIssues.js';
+import { issueTotalValue } from '../../services/issueService.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useItems } from '../../hooks/useItems.js';
 import { useQualities } from '../../hooks/useQualities.js';
@@ -59,7 +60,7 @@ export default function Issue() {
       </div>
 
       <Table
-        headers={['Issue #', 'Date', 'From Warehouse', 'Issued Items', 'Derived Value', 'Actions']}
+        headers={['Issue #', 'Date', 'From Warehouse', 'Issued Items', 'Total Value', 'Actions']}
         emptyText="No material issues recorded."
       >
         {filteredIssues.map((iss) => (
@@ -102,7 +103,7 @@ export default function Issue() {
                 )}
               </div>
             </TD>
-            <TD mono right className="font-bold text-black">{fmt(iss.totalValue)}</TD>
+            <TD mono right className="font-bold text-black">{fmt(issueTotalValue(iss))}</TD>
             <TD className="no-print">
               <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
@@ -140,81 +141,85 @@ export default function Issue() {
         maxWidth="max-w-[96vw]"
         isPrintPreview={true}
       >
-        {viewingIssue && (
-          <PrintDocument
-            id="issue-print-area"
-            title="MATERIAL ISSUE SLIP"
-            documentNo={viewingIssue.no}
-            date={formatDate(viewingIssue.date)}
-            actionTitle={`Material Issue Slip — ${viewingIssue.no}`}
-            printButtonText="Print Issue Slip"
-            metadata={[
-              { label: 'From Warehouse / Store', value: viewingIssue.fromWarehouse || 'Warehouse 1' },
-            ]}
-            summary={
-              viewingIssue.totalValue > 0 ? (
-                <div className="flex justify-end pt-1">
-                  <div className="w-72 space-y-1.5 text-xs">
-                    <div className="flex justify-between p-2 rounded-lg border border-gray-300 bg-gray-50">
-                      <span className="text-gray-600 font-medium">Estimated Value:</span>
-                      <span className="font-mono font-bold text-gray-900">{fmt(viewingIssue.totalValue)}</span>
+        {viewingIssue && (() => {
+          const totalSlipVal = issueTotalValue(viewingIssue);
+          const totalSlipQty = viewingIssue.items?.reduce((sum, it) => sum + Number(it.issueQty || it.qty || 0), 0) || 0;
+          return (
+            <PrintDocument
+              id="issue-print-area"
+              title="MATERIAL ISSUE SLIP"
+              documentNo={viewingIssue.no}
+              date={formatDate(viewingIssue.date)}
+              actionTitle={`Material Issue Slip — ${viewingIssue.no}`}
+              printButtonText="Print Issue Slip"
+              metadata={[
+                { label: 'From Warehouse / Store', value: viewingIssue.fromWarehouse || 'Warehouse 1' },
+              ]}
+              summary={
+                totalSlipVal > 0 ? (
+                  <div className="flex justify-end pt-1">
+                    <div className="w-72 space-y-1.5 text-xs">
+                      <div className="flex justify-between p-2 rounded-lg border border-gray-300 bg-gray-50">
+                        <span className="text-gray-600 font-medium">Estimated Value:</span>
+                        <span className="font-mono font-bold text-gray-900">{fmt(totalSlipVal)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null
-            }
-            signatures={[
-              { label: 'Store Incharge', sub: 'Warehouse / Store' },
-              { label: 'Issued To', sub: 'Production Floor' },
-              { label: 'Authorized By', sub: 'Plant Supervisor' },
-            ]}
-          >
-            <div className="mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Issued Items</h4>
-              <table
-                className="invoice-table print-table w-full text-xs text-left border-collapse border border-gray-400"
-                style={{ width: '100%', borderCollapse: 'collapse' }}
-              >
-                <thead>
-                  <tr className="bg-[#F0EDE8] border-b border-gray-400 text-[#1E3A5F]">
-                    <th className="p-2 font-bold border border-gray-400 w-12 text-center">#</th>
-                    <th className="p-2 font-bold border border-gray-400">Item Name</th>
-                    <th className="p-2 font-bold border border-gray-400">Quality</th>
-                    <th className="p-2 font-bold border border-gray-400 text-center">Unit</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Quantity (KG)</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Est. Rate</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Est. Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewingIssue.items?.map((it, idx) => (
-                    <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
-                      <td className="p-2 border border-gray-400 text-center font-mono text-gray-500">{idx + 1}</td>
-                      <td className="p-2 border border-gray-400 font-semibold text-gray-900">{it.itemName}</td>
-                      <td className="p-2 border border-gray-400 text-gray-700">{it.quality || '-'}</td>
-                      <td className="p-2 border border-gray-400 text-center text-gray-600">{it.unit || 'KG'}</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono font-bold text-[#1E3A5F]">{it.issueQty} KG</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono text-gray-700">{it.rate ? fmt(it.rate) : '-'}</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono font-bold text-gray-900">{it.value ? fmt(it.value) : '-'}</td>
+                ) : null
+              }
+              signatures={[
+                { label: 'Store Incharge', sub: 'Warehouse / Store' },
+                { label: 'Issued To', sub: 'Production Floor' },
+                { label: 'Authorized By', sub: 'Plant Supervisor' },
+              ]}
+            >
+              <div className="mb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Issued Items</h4>
+                <table
+                  className="invoice-table print-table w-full text-xs text-left border-collapse border border-gray-400"
+                  style={{ width: '100%', borderCollapse: 'collapse' }}
+                >
+                  <thead>
+                    <tr className="bg-[#F0EDE8] border-b border-gray-400 text-[#1E3A5F]">
+                      <th className="p-2 font-bold border border-gray-400 w-12 text-center">#</th>
+                      <th className="p-2 font-bold border border-gray-400">Item Name</th>
+                      <th className="p-2 font-bold border border-gray-400">Quality</th>
+                      <th className="p-2 font-bold border border-gray-400 text-center">Unit</th>
+                      <th className="p-2 font-bold border border-gray-400 text-right">Quantity (KG)</th>
+                      <th className="p-2 font-bold border border-gray-400 text-right">Est. Rate</th>
+                      <th className="p-2 font-bold border border-gray-400 text-right">Est. Value</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-[#FAF9F7] font-bold border-t-2 border-gray-400">
-                    <td colSpan={4} className="p-2 text-right border border-gray-400">Total:</td>
-                    <td className="p-2 text-right border border-gray-400 font-mono text-[#1E3A5F]">
-                      {viewingIssue.items?.reduce((sum, it) => sum + Number(it.issueQty || 0), 0)} KG
-                    </td>
-                    <td className="p-2 border border-gray-400"></td>
-                    <td className="p-2 text-right border border-gray-400 font-mono text-[#1E3A5F]">
-                      {fmt(viewingIssue.totalValue)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </PrintDocument>
-        )}
+                  </thead>
+                  <tbody>
+                    {viewingIssue.items?.map((it, idx) => (
+                      <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
+                        <td className="p-2 border border-gray-400 text-center font-mono text-gray-500">{idx + 1}</td>
+                        <td className="p-2 border border-gray-400 font-semibold text-gray-900">{it.itemName}</td>
+                        <td className="p-2 border border-gray-400 text-gray-700">{it.quality || '-'}</td>
+                        <td className="p-2 border border-gray-400 text-center text-gray-600">{it.unit || 'KG'}</td>
+                        <td className="p-2 border border-gray-400 text-right font-mono font-bold text-[#1E3A5F]">{it.issueQty} KG</td>
+                        <td className="p-2 border border-gray-400 text-right font-mono text-gray-700">{it.rate ? fmt(it.rate) : '-'}</td>
+                        <td className="p-2 border border-gray-400 text-right font-mono font-bold text-gray-900">{it.value ? fmt(it.value) : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#FAF9F7] font-bold border-t-2 border-gray-400">
+                      <td colSpan={4} className="p-2 text-right border border-gray-400">Total:</td>
+                      <td className="p-2 text-right border border-gray-400 font-mono text-[#1E3A5F]">
+                        {totalSlipQty.toLocaleString('en-PK')} KG
+                      </td>
+                      <td className="p-2 border border-gray-400"></td>
+                      <td className="p-2 text-right border border-gray-400 font-mono text-[#1E3A5F]">
+                        {fmt(totalSlipVal)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </PrintDocument>
+          );
+        })()}
       </Modal>
 
       {/* Add / Edit Modal */}

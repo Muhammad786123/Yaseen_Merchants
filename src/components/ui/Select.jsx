@@ -7,9 +7,11 @@ export default function Select({
   options = [],
   placeholder = 'Select option...',
   required = false,
+  disabled = false,
   error = '',
   className = '',
   id,
+  ...props
 }) {
   const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
@@ -24,11 +26,15 @@ export default function Select({
         id={selectId}
         value={value}
         onChange={(e) => onChange && onChange(e.target.value)}
-        className={`w-full px-2 py-1.5 text-xs text-start border rounded-none outline-none bg-white transition-colors text-gray-900 ${
-          error
-            ? 'border-red-600 focus:border-red-700 bg-red-50/20'
-            : 'border-black focus:border-blue-700'
+        disabled={disabled}
+        className={`w-full px-2 py-1.5 text-xs text-start border rounded-none outline-none transition-colors ${
+          disabled
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300'
+            : error
+            ? 'border-red-600 focus:border-red-700 bg-red-50/20 text-gray-900'
+            : 'border-black focus:border-blue-700 bg-white text-gray-900'
         } ${className}`}
+        {...props}
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((opt) => {

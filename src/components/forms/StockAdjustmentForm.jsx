@@ -44,7 +44,6 @@ export default function StockAdjustmentForm({
     const errs = {};
     if (!isRequired(date)) errs.date = 'Date is required';
     if (!itemId) errs.itemId = 'Please select an item';
-    if (!quality) errs.quality = 'Please select a quality grade';
     if (!warehouseId) errs.warehouseId = 'Please select a warehouse';
     if (!qty || numQty <= 0) errs.qty = 'Quantity must be greater than 0';
     if (!rate || numRate <= 0) errs.rate = 'Valuation rate (Rs./kg) is required';
@@ -66,7 +65,7 @@ export default function StockAdjustmentForm({
       adjustmentType,
       itemId,
       itemName: selectedItem?.name || 'Item',
-      quality,
+      quality: '',
       warehouseId,
       warehouseName: selectedWarehouse?.name || 'Warehouse',
       qty: numQty,
@@ -109,7 +108,7 @@ export default function StockAdjustmentForm({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Item Selection */}
         <Select
           label="Inventory Item"
@@ -121,19 +120,6 @@ export default function StockAdjustmentForm({
             label: `${i.code ? `${i.code} - ` : ''}${i.name}`,
           }))}
           error={errors.itemId}
-        />
-
-        {/* Quality Grade */}
-        <Select
-          label="Quality Grade"
-          value={quality}
-          onChange={setQuality}
-          required
-          options={qualities.map((q) => ({
-            value: q.name,
-            label: q.name,
-          }))}
-          error={errors.quality}
         />
 
         {/* Warehouse */}

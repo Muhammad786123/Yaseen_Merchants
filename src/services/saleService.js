@@ -1,5 +1,4 @@
 import { db } from '../db/database.js';
-import { syncStockEntriesToDb } from '../utils/stockUtils.js';
 import { partyService } from './partyService.js';
 
 export const saleService = {
@@ -25,7 +24,7 @@ export const saleService = {
 
     await db.transaction(
       'rw',
-      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts],
       async () => {
         let linkedReceiptId = null;
 
@@ -35,6 +34,11 @@ export const saleService = {
           const recCount = await db.receipts.count();
           const recNo = `RCT-${String(recCount + 1).padStart(4, '0')}`;
 
+          const bankAcc = (saleData.receivedAccountId ? await db.accounts.get(saleData.receivedAccountId) : null) ||
+            (await db.accounts.where({ name: receivedAccount }).first());
+
+          const isCash = receivedAccount === 'Cash' || receivedAccount === 'Cash Book' || (bankAcc && bankAcc.name.toLowerCase().includes('cash'));
+
           const receiptRecord = {
             id: recId,
             no: recNo,
@@ -42,8 +46,12 @@ export const saleService = {
             partyId: saleData.customerId,
             partyName: saleData.customerName,
             amount: received,
-            account: receivedAccount,
+            accountId: bankAcc ? bankAcc.id : saleData.receivedAccountId || null,
+            account: isCash ? 'Cash' : (bankAcc ? bankAcc.name : receivedAccount),
             description: `Receipt against sale invoice ${no}`,
+            sourceVoucher: no,
+            sourceType: 'Sale',
+            sourceId: id,
           };
           await db.receipts.add(receiptRecord);
           linkedReceiptId = recId;
@@ -57,7 +65,7 @@ export const saleService = {
           }
 
           // Cash or Bank movement
-          if (receivedAccount === 'Cash') {
+          if (isCash) {
             await db.cashBookEntries.add({
               id: 'cb_' + Date.now() + Math.random().toString(36).substr(2, 4),
               date: receiptRecord.date,
@@ -68,6 +76,9 @@ export const saleService = {
               credit: received,
               description: `Cash receipt ${recNo} for sale ${no}`,
               linkedTransactionId: recId,
+              sourceVoucher: no,
+              sourceType: 'Sale',
+              sourceId: id,
             });
 
             const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
@@ -119,7 +130,6 @@ export const saleService = {
       }
     );
 
-    await syncStockEntriesToDb();
     return newSale;
   },
 
@@ -144,7 +154,7 @@ export const saleService = {
 
     await db.transaction(
       'rw',
-      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts],
       async () => {
         // Step 1: Reverse old sale total from previous customer
         if (existing.customerId) {
@@ -169,7 +179,8 @@ export const saleService = {
             }
 
             // Restore Cash Book & Cash account balance
-            if (oldRec.account === 'Cash') {
+            const wasCash = oldRec.account === 'Cash' || oldRec.account === 'Cash Book' || oldRec.account?.toLowerCase().includes('cash');
+            if (wasCash) {
               const cbEntries = await db.cashBookEntries
                 .where({ linkedTransactionId: oldRec.id })
                 .toArray();
@@ -207,6 +218,11 @@ export const saleService = {
           const recCount = await db.receipts.count();
           const recNo = `RCT-${String(recCount + 1).padStart(4, '0')}`;
 
+          const bankAcc = (saleData.receivedAccountId ? await db.accounts.get(saleData.receivedAccountId) : null) ||
+            (await db.accounts.where({ name: newReceivedAccount }).first());
+
+          const isNewCash = newReceivedAccount === 'Cash' || newReceivedAccount === 'Cash Book' || (bankAcc && bankAcc.name.toLowerCase().includes('cash'));
+
           const receiptRecord = {
             id: recId,
             no: recNo,
@@ -214,8 +230,12 @@ export const saleService = {
             partyId: saleData.customerId,
             partyName: saleData.customerName,
             amount: newReceived,
-            account: newReceivedAccount,
+            accountId: bankAcc ? bankAcc.id : saleData.receivedAccountId || null,
+            account: isNewCash ? 'Cash' : (bankAcc ? bankAcc.name : newReceivedAccount),
             description: `Receipt against sale invoice ${existing.no}`,
+            sourceVoucher: existing.no,
+            sourceType: 'Sale',
+            sourceId: id,
           };
           await db.receipts.add(receiptRecord);
           newLinkedReceiptId = recId;
@@ -229,7 +249,7 @@ export const saleService = {
           }
 
           // Cash or Bank movement
-          if (newReceivedAccount === 'Cash') {
+          if (isNewCash) {
             await db.cashBookEntries.add({
               id: 'cb_' + Date.now() + Math.random().toString(36).substr(2, 4),
               date: receiptRecord.date,
@@ -240,6 +260,9 @@ export const saleService = {
               credit: newReceived,
               description: `Cash receipt ${recNo} for sale ${existing.no}`,
               linkedTransactionId: recId,
+              sourceVoucher: existing.no,
+              sourceType: 'Sale',
+              sourceId: id,
             });
 
             const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
@@ -290,7 +313,6 @@ export const saleService = {
       }
     );
 
-    await syncStockEntriesToDb();
     await partyService.recalculateAllBalances();
     return updatedSale;
   },
@@ -300,7 +322,6 @@ export const saleService = {
    * (1) Reverse FULL sale total from Customer Party A/C (no clamp)
    * (2) Reverse & delete linked receipt and its Cash Book entry & account balance
    * (3) Remove sale record
-   * (4) Re-sync stock
    */
   async delete(id) {
     const existing = await db.sales.get(id);
@@ -308,7 +329,7 @@ export const saleService = {
 
     await db.transaction(
       'rw',
-      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.sales, db.parties, db.receipts, db.cashBookEntries, db.accounts],
       async () => {
         // 1. Reverse customer party balance without clamp
         if (existing.customerId) {
@@ -331,7 +352,8 @@ export const saleService = {
               });
             }
 
-            if (oldRec.account === 'Cash') {
+            const wasCash = oldRec.account === 'Cash' || oldRec.account === 'Cash Book' || oldRec.account?.toLowerCase().includes('cash');
+            if (wasCash) {
               const cbEntries = await db.cashBookEntries
                 .where({ linkedTransactionId: oldRec.id })
                 .toArray();
@@ -366,7 +388,6 @@ export const saleService = {
       }
     );
 
-    await syncStockEntriesToDb();
     await partyService.recalculateAllBalances();
   },
 };

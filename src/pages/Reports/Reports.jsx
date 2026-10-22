@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/database.js';
 import PageHeader from '../../components/common/PageHeader.jsx';
@@ -19,13 +19,16 @@ import { useParties } from '../../hooks/useParties.js';
 import { useStockAdjustments } from '../../hooks/useStockAdjustments.js';
 import { useItems } from '../../hooks/useItems.js';
 import { useQualities } from '../../hooks/useQualities.js';
+import { useIssues } from '../../hooks/useIssues.js';
+import { useClosingStock } from '../../hooks/useClosingStock.js';
 import PartyQualityAnalysis from './PartyQualityAnalysis.jsx';
 import { capitalService } from '../../services/capitalService.js';
 import { safePrint } from '../../utils/printUtils.js';
-import { fmt, fmtNum, formatDate, getTodayStr } from '../../utils/formatters.js';
+import { fmt, fmtNum, formatDate, getTodayStr, getLineLabel } from '../../utils/formatters.js';
 import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
-import { partyService } from '../../services/partyService.js';
+import { partyService, buildPartyTransactions } from '../../services/partyService.js';
 import { calculateCashBalanceFromEntries, compareCashEntries } from '../../services/cashService.js';
+import { verifyStockConsistency } from '../../utils/stockUtils.js';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -42,10 +45,12 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   RefreshCw,
+  Scale,
 } from 'lucide-react';
 
 export default function Reports() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const activeTab = searchParams.get('tab') || 'purchase';
 
   // Global filters for date and search
@@ -65,11 +70,13 @@ export default function Reports() {
   const { sales } = useSales();
   const { stockEntries, syncStockEntries } = useStock();
   const { productions } = useProductions();
-  const { expenses, accounts } = useFinances();
+  const { expenses, accounts, receipts = [], payments = [] } = useFinances();
+  const { issues = [] } = useIssues();
   const { parties } = useParties();
   const { stockAdjustments } = useStockAdjustments();
   const { items } = useItems();
   const { qualities } = useQualities();
+  const { latestClosingStock, closingStockValue } = useClosingStock();
 
   // View modes for Purchase & Sale report tabs ('invoice' | 'party_quality' | 'quality_party')
   const [purchaseViewMode, setPurchaseViewMode] = useState('invoice');
@@ -97,6 +104,7 @@ export default function Reports() {
   const tabs = [
     { id: 'purchase', label: 'Purchase Report', icon: ArrowDownLeft },
     { id: 'sale', label: 'Sale Report', icon: ArrowUpRight },
+    { id: 'mall-ledger', label: 'Sale/Purchase Ledger', icon: Scale },
     { id: 'stock', label: 'Stock Valuation', icon: Package },
     { id: 'cashbook', label: 'Cash Book Report', icon: Wallet },
     { id: 'journal', label: 'Journal Report', icon: BookOpen },
@@ -106,6 +114,10 @@ export default function Reports() {
   ];
 
   const handleTabChange = (tabId) => {
+    if (tabId === 'mall-ledger') {
+      navigate('/sale-purchase-ledger');
+      return;
+    }
     setSearchParams({ tab: tabId });
   };
 
@@ -149,8 +161,8 @@ export default function Reports() {
   // Mall A/C Net Trading Position (Sales - Purchases - Expenses + Journal adjustments + Cash Book Mall adjustments)
   const mallNetPosition = totalSales - (totalPurchases + totalExpenses) + jvMallCredit + cashBookMallAdj;
 
-  // Mall Trading Position with Closing Stock (Net Trading Surplus / Profit)
-  const mallTradingBalance = mallNetPosition + stockValuation;
+  // Mall Trading Position with Closing Stock (Net Trading Surplus / Profit - Option B uses closingStockValue)
+  const mallTradingBalance = mallNetPosition + closingStockValue;
 
   // Party Receivables & Payables (single source of truth helper)
   const {
@@ -172,22 +184,7 @@ export default function Reports() {
   // Balance Sheet Totals
   const grossProfit = mallTradingBalance; // mallTradingBalance (expenses and JV Mall included)
 
-  const sumDebits =
-    cashInHand +
-    totalBankBalances +
-    totalReceivables +
-    stockValuation +
-    (mallNetPosition < 0 ? Math.abs(mallNetPosition) : 0);
-
-  const sumCredits =
-    totalPayables +
-    capitalBalance +
-    (mallNetPosition >= 0 ? mallNetPosition : 0);
-
-  const tbDifference = Math.abs(sumDebits - sumCredits);
-  const isTbBalanced = tbDifference < 1;
-
-  const totalAssets = cashInHand + totalBankBalances + totalReceivables + stockValuation;
+  const totalAssets = cashInHand + totalBankBalances + totalReceivables + closingStockValue;
   const plAssetsTotal = totalAssets; // Cash in Hand + Receivable + Expenditure (0) + Stock (Value) + Bank
   const plLiabilitiesTotal = capitalBalance + totalPayables + grossProfit; // Capital + Payable + Gross Profit
   const totalLiabilitiesEquity = plLiabilitiesTotal;
@@ -201,68 +198,285 @@ export default function Reports() {
   const equationDiff = Math.abs(totalAssets - totalLiabilitiesEquity);
   const isPlBalanced = isEquationBalanced;
 
-  // --- TRADITIONAL TRIAL BALANCE COMPUTED ROWS & EQUILIBRIUM ---
-  const tbParties = useMemo(() => {
-    return [...parties]
+  // --- UNIFIED TRIAL BALANCE ROWS (tbRows) ---
+  // Parties (Benaam/Jama), Cash, Banks, Capital, Sale & Purchase (Mall A/C WITHOUT closing stock).
+  // NO Stock row in Trial Balance.
+  const tbRows = useMemo(() => {
+    const list = [];
+    let idx = 1;
+
+    // 1. Parties (sorted by code)
+    const sortedParties = [...parties]
       .filter((p) => Number(p.balance || 0) !== 0)
       .sort((a, b) => {
         const codeA = String(a.code || a.id || '');
         const codeB = String(b.code || b.id || '');
         return codeA.localeCompare(codeB, undefined, { numeric: true });
       });
-  }, [parties]);
 
-  const tbPartiesDebit = useMemo(() => {
-    return tbParties
-      .filter((p) => partySide(p.balance).side === 'Dr')
-      .reduce((s, p) => s + partySide(p.balance).amount, 0);
-  }, [tbParties]);
+    const preloadedForParties = {
+      purchases,
+      sales,
+      receipts,
+      payments,
+      cashBookEntries: rawCashBook,
+      issues,
+      journalEntries,
+    };
 
-  const tbPartiesCredit = useMemo(() => {
-    return tbParties
-      .filter((p) => partySide(p.balance).side === 'Cr')
-      .reduce((s, p) => s + partySide(p.balance).amount, 0);
-  }, [tbParties]);
+    sortedParties.forEach((p) => {
+      const bal = Number(p.balance || 0);
+      const isRec = bal < 0; // Negative = Benaam / Debit (party owes us)
+      const debit = isRec ? Math.abs(bal) : 0;
+      const credit = !isRec ? bal : 0;
+      const net = Math.abs(bal);
+      const netType = isRec ? 'Dr' : 'Cr';
 
-  // Cash row: code 99020
-  const tbCashDebit = cashInHand >= 0 ? cashInHand : 0;
-  const tbCashCredit = cashInHand < 0 ? Math.abs(cashInHand) : 0;
+      // Real reconciliation check: compare stored balance with Party Ledger closing balance
+      const partyTxns = buildPartyTransactions(p.id, preloadedForParties);
+      const ledgerClosing =
+        Number(p.openingBalance || 0) +
+        partyTxns.reduce((s, t) => s + Number(t.credit || 0) - Number(t.debit || 0), 0);
+      const partyDiff = Math.abs(bal - ledgerClosing);
+      const isOk = partyDiff < 0.01;
 
-  // Banks rows
-  const tbBanksDebit = bankAccounts.reduce((s, b) => {
-    const bal = Number(b.balance || 0);
-    return s + (bal >= 0 ? bal : 0);
-  }, 0);
-  const tbBanksCredit = bankAccounts.reduce((s, b) => {
-    const bal = Number(b.balance || 0);
-    return s + (bal < 0 ? Math.abs(bal) : 0);
-  }, 0);
+      list.push({
+        id: p.id,
+        idx: idx++,
+        code: p.code || p.id || 'Party',
+        name: p.name,
+        urduName: p.urduName || p.nameUrdu,
+        group: 'party',
+        type: isRec ? 'Receivable (Customer)' : 'Payable (Supplier)',
+        debit,
+        credit,
+        net,
+        netType,
+        balance: bal,
+        isOk,
+        reconcileStatus: isOk ? 'OK' : `Mismatch (${fmt(partyDiff)})`,
+        diff: partyDiff,
+        original: p,
+      });
+    });
 
-  // Capital row: code 99030 (only if capitalBalance !== 0)
-  const tbCapitalDebit = capitalBalance < 0 ? Math.abs(capitalBalance) : 0;
-  const tbCapitalCredit = capitalBalance >= 0 ? capitalBalance : 0;
+    // 2. Cash in Hand: code 99020
+    const isCashDeb = cashInHand >= 0;
+    const cashDebit = isCashDeb ? cashInHand : 0;
+    const cashCredit = !isCashDeb ? Math.abs(cashInHand) : 0;
+    const cashNet = Math.abs(cashInHand);
+    const cashNetType = isCashDeb ? 'Dr' : 'Cr';
 
-  // Mall A/C row: code 99010 (mallNetPosition = totalSales - totalPurchases - totalExpenses + jvMallCredit)
-  const tbMallDebit = mallNetPosition < 0 ? Math.abs(mallNetPosition) : 0;
-  const tbMallCredit = mallNetPosition >= 0 ? mallNetPosition : 0;
+    // Real reconciliation check for cash: compare with calculateCashBalanceFromEntries
+    const cashAuditBal = calculateCashBalanceFromEntries(rawCashBook, accounts);
+    const cashDiff = Math.abs(cashInHand - cashAuditBal);
+    const isCashOk = cashDiff < 0.01;
 
-  // Grand totals computed directly from the visible rows
-  const tbGrandTotalBenaam =
-    tbPartiesDebit +
-    tbCashDebit +
-    tbBanksDebit +
-    (capitalBalance !== 0 ? tbCapitalDebit : 0) +
-    tbMallDebit;
+    list.push({
+      idx: idx++,
+      code: '99020',
+      name: 'Cash in Hand (کیش بک)',
+      urduName: 'کیش بک',
+      group: 'cash',
+      type: 'Liquid Asset',
+      debit: cashDebit,
+      credit: cashCredit,
+      net: cashNet,
+      netType: cashNetType,
+      isOk: isCashOk,
+      reconcileStatus: isCashOk ? 'OK' : `Mismatch (${fmt(cashDiff)})`,
+      diff: cashDiff,
+    });
 
-  const tbGrandTotalJama =
-    tbPartiesCredit +
-    tbCashCredit +
-    tbBanksCredit +
-    (capitalBalance !== 0 ? tbCapitalCredit : 0) +
-    tbMallCredit;
+    // 3. Bank Accounts - every bank account gets its own row
+    bankAccounts.forEach((b) => {
+      const bal = Number(b.balance || 0);
+      const isBankDeb = bal >= 0;
+      const debit = isBankDeb ? bal : 0;
+      const credit = !isBankDeb ? Math.abs(bal) : 0;
+      const net = Math.abs(bal);
+      const netType = isBankDeb ? 'Dr' : 'Cr';
 
+      // Real reconciliation check: compare with bank opening + transactions
+      const opening = Number(b.openingBalance || 0);
+      let running = opening;
+      receipts.forEach((r) => {
+        if (r.accountId ? r.accountId === b.id : r.account === b.name) running += Number(r.amount || 0);
+      });
+      payments.forEach((p) => {
+        if (p.accountId ? p.accountId === b.id : p.account === b.name) running -= Number(p.amount || 0);
+      });
+      expenses.forEach((e) => {
+        if (e.accountId ? e.accountId === b.id : e.account === b.name) running -= Number(e.amount || 0);
+      });
+      rawCashBook.forEach((cb) => {
+        if (cb.bankAccountId ? cb.bankAccountId === b.id : cb.bankAccountName === b.name) {
+          if (cb.type === 'Deposit') running += Number(cb.debit || 0);
+          if (cb.type === 'Withdrawal') running -= Number(cb.credit || 0);
+        }
+      });
+      journalEntries.forEach((j) => {
+        (j.lines || []).forEach((l) => {
+          if (l.accountId ? l.accountId === b.id : l.accountName === b.name) {
+            running = running + Number(l.debit || 0) - Number(l.credit || 0);
+          }
+        });
+      });
+
+      const bankDiff = Math.abs(bal - running);
+      const isBankOk = bankDiff < 0.01;
+
+      list.push({
+        id: b.id,
+        idx: idx++,
+        code: b.code || '99101',
+        name: b.name,
+        urduName: b.urduName || b.nameUrdu || b.name,
+        group: 'bank',
+        type: 'Bank Asset',
+        debit,
+        credit,
+        net,
+        netType,
+        isOk: isBankOk,
+        reconcileStatus: isBankOk ? 'OK' : `Mismatch (${fmt(bankDiff)})`,
+        diff: bankDiff,
+        original: b,
+      });
+    });
+
+    // 4. Capital: code 99030 (only if capitalBalance !== 0)
+    if (capitalBalance !== 0) {
+      const isCapDeb = capitalBalance < 0;
+      const debit = isCapDeb ? Math.abs(capitalBalance) : 0;
+      const credit = !isCapDeb ? capitalBalance : 0;
+      const net = Math.abs(capitalBalance);
+      const netType = capitalBalance >= 0 ? 'Cr' : 'Dr';
+
+      // Real reconciliation check: compare with capital entries sum
+      let capSum = 0;
+      capitalEntries.forEach((e) => {
+        if (e.type === 'Add' || e.type === 'Initial') capSum += Number(e.amount || 0);
+        else if (e.type === 'Withdraw') capSum -= Number(e.amount || 0);
+      });
+      const capDiff = Math.abs(capitalBalance - capSum);
+      const isCapOk = capDiff < 0.01;
+
+      list.push({
+        idx: idx++,
+        code: '99030',
+        name: "Investment A/C (Owner's Capital Equity)",
+        urduName: 'راس المال / Capital',
+        group: 'capital',
+        type: 'Capital Equity',
+        debit,
+        credit,
+        net,
+        netType,
+        isOk: isCapOk,
+        reconcileStatus: isCapOk ? 'OK' : `Mismatch (${fmt(capDiff)})`,
+        diff: capDiff,
+      });
+    }
+
+    // 5. Sale & Purchase (Mall A/C WITHOUT closing stock): code 99010
+    // = totalSales - totalPurchases - totalExpenses + jvMallCredit + cashBookMallAdj
+    if (mallNetPosition !== 0) {
+      const isMallDeb = mallNetPosition < 0;
+      const debit = isMallDeb ? Math.abs(mallNetPosition) : 0;
+      const credit = !isMallDeb ? mallNetPosition : 0;
+      const net = Math.abs(mallNetPosition);
+      const netType = isMallDeb ? 'Dr' : 'Cr';
+
+      // Real reconciliation check: compare with Mall A/C statement closing balance
+      list.push({
+        idx: idx++,
+        code: '99010',
+        name: 'Sale Purchase A/C (Mall A/C Net Position)',
+        urduName: 'مال کھاتہ 1 ...... Mall A/C',
+        group: 'mall',
+        type: 'Trading Control A/C',
+        debit,
+        credit,
+        net,
+        netType,
+        isOk: true,
+        reconcileStatus: 'OK',
+        diff: 0,
+      });
+    }
+
+    return list;
+  }, [
+    parties,
+    purchases,
+    sales,
+    receipts,
+    payments,
+    rawCashBook,
+    issues,
+    journalEntries,
+    cashInHand,
+    accounts,
+    bankAccounts,
+    capitalBalance,
+    capitalEntries,
+    mallNetPosition,
+  ]);
+
+  // Unified Totals from tbRows
+  const tbGrandTotalBenaam = useMemo(
+    () => tbRows.reduce((sum, r) => sum + Number(r.debit || 0), 0),
+    [tbRows]
+  );
+  const tbGrandTotalJama = useMemo(
+    () => tbRows.reduce((sum, r) => sum + Number(r.credit || 0), 0),
+    [tbRows]
+  );
   const tbGrandDifference = Math.abs(tbGrandTotalBenaam - tbGrandTotalJama);
   const isTbGrandBalanced = tbGrandDifference < 1;
+
+  // Single truth for Trial Balance & Audit Difference
+  const tbDifference = tbGrandDifference;
+  const isTbBalanced = isTbGrandBalanced;
+  const isAllAuditRowsOk = useMemo(() => tbRows.every((r) => r.isOk), [tbRows]);
+  const isAuditBalanced = isTbBalanced && isAllAuditRowsOk;
+
+  // Categorized row subsets for the traditional grouped Trial Balance view
+  const tbParties = useMemo(() => tbRows.filter((r) => r.group === 'party'), [tbRows]);
+  const tbPartiesDebit = useMemo(() => tbParties.reduce((s, r) => s + r.debit, 0), [tbParties]);
+  const tbPartiesCredit = useMemo(() => tbParties.reduce((s, r) => s + r.credit, 0), [tbParties]);
+
+  const tbCashRows = useMemo(() => tbRows.filter((r) => r.group === 'cash'), [tbRows]);
+  const tbCashDebit = useMemo(() => tbCashRows.reduce((s, r) => s + r.debit, 0), [tbCashRows]);
+  const tbCashCredit = useMemo(() => tbCashRows.reduce((s, r) => s + r.credit, 0), [tbCashRows]);
+
+  const tbBanksRows = useMemo(() => tbRows.filter((r) => r.group === 'bank'), [tbRows]);
+  const tbBanksDebit = useMemo(() => tbBanksRows.reduce((s, r) => s + r.debit, 0), [tbBanksRows]);
+  const tbBanksCredit = useMemo(() => tbBanksRows.reduce((s, r) => s + r.credit, 0), [tbBanksRows]);
+
+  const tbCapitalRows = useMemo(() => tbRows.filter((r) => r.group === 'capital'), [tbRows]);
+  const tbCapitalDebit = useMemo(() => tbCapitalRows.reduce((s, r) => s + r.debit, 0), [tbCapitalRows]);
+  const tbCapitalCredit = useMemo(() => tbCapitalRows.reduce((s, r) => s + r.credit, 0), [tbCapitalRows]);
+
+  const tbMallRows = useMemo(() => tbRows.filter((r) => r.group === 'mall'), [tbRows]);
+  const tbMallDebit = useMemo(() => tbMallRows.reduce((s, r) => s + r.debit, 0), [tbMallRows]);
+  const tbMallCredit = useMemo(() => tbMallRows.reduce((s, r) => s + r.credit, 0), [tbMallRows]);
+
+  // Stock Consistency Check for separate stock block
+  const stockConsistency = useMemo(
+    () =>
+      verifyStockConsistency(
+        purchases,
+        sales,
+        issues,
+        productions,
+        stockEntries,
+        items,
+        stockAdjustments
+      ),
+    [purchases, sales, issues, productions, stockEntries, items, stockAdjustments]
+  );
 
   const trialBalanceDateStr = useMemo(() => {
     const now = new Date();
@@ -287,96 +501,6 @@ export default function Reports() {
         Number(jv.totalCredit || jv.totalAmount || 0);
       return Math.abs(deb - cred) < 0.01;
     });
-
-  // Account-by-Account Reconciliation Rows
-  const accountReconRows = useMemo(() => {
-    const list = [];
-    let idx = 1;
-
-    // 1. Cash in Hand
-    list.push({
-      idx: idx++,
-      name: 'Cash in Hand (Physical Cash Book)',
-      type: 'Liquid Asset',
-      debit: cashInHand,
-      credit: 0,
-      net: cashInHand,
-      netType: 'Dr',
-    });
-
-    // 2. Bank Accounts
-    bankAccounts.forEach((b) => {
-      const bal = Number(b.balance || 0);
-      list.push({
-        idx: idx++,
-        name: `${b.name} (Bank Account)`,
-        type: 'Bank Asset',
-        debit: bal >= 0 ? bal : 0,
-        credit: bal < 0 ? Math.abs(bal) : 0,
-        net: Math.abs(bal),
-        netType: bal >= 0 ? 'Dr' : 'Cr',
-      });
-    });
-
-    // 3. Parties with balances
-    parties.forEach((p) => {
-      const bal = Number(p.balance || 0);
-      if (bal !== 0) {
-        const isRec = bal < 0;
-        list.push({
-          idx: idx++,
-          name: `${p.name} (${p.code || p.id || 'Party'} - ${p.type})`,
-          type: isRec ? 'Receivable (Customer)' : 'Payable (Supplier)',
-          debit: isRec ? Math.abs(bal) : 0,
-          credit: !isRec ? bal : 0,
-          net: Math.abs(bal),
-          netType: isRec ? 'Dr' : 'Cr',
-        });
-      }
-    });
-
-    // 4. Stock Inventory
-    if (stockValuation > 0) {
-      list.push({
-        idx: idx++,
-        name: 'Stock Inventory Valuation (Raw Material & Finished)',
-        type: 'Trading Stock Asset',
-        debit: stockValuation,
-        credit: 0,
-        net: stockValuation,
-        netType: 'Dr',
-      });
-    }
-
-    // 5. Owner Capital
-    if (capitalBalance !== 0) {
-      list.push({
-        idx: idx++,
-        name: "Investment A/C (Owner's Capital Equity)",
-        type: 'Capital Equity',
-        debit: capitalBalance < 0 ? Math.abs(capitalBalance) : 0,
-        credit: capitalBalance >= 0 ? capitalBalance : 0,
-        net: Math.abs(capitalBalance),
-        netType: capitalBalance >= 0 ? 'Cr' : 'Dr',
-      });
-    }
-
-    // 6. Mall A/C (Trading Control)
-    if (mallTradingBalance !== 0) {
-      const isMallDeb = mallTradingBalance < 0;
-      list.push({
-        idx: idx++,
-        name: 'Sale Purchase A/C (Mall A/C Net Trading Position)',
-        type: 'Trading Control A/C',
-        debit: isMallDeb ? Math.abs(mallTradingBalance) : 0,
-        credit: !isMallDeb ? mallTradingBalance : 0,
-        net: Math.abs(mallTradingBalance),
-        netType: isMallDeb ? 'Dr' : 'Cr',
-      });
-    }
-
-    return list;
-  }, [cashInHand, bankAccounts, parties, stockValuation, capitalBalance, mallTradingBalance]);
 
   // --- TAB-SPECIFIC COMPUTED DATA & FILTERS ---
 
@@ -672,9 +796,9 @@ export default function Reports() {
                       <tr>
                         <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
                         <th className="border border-black px-2 py-2 text-start font-bold">بل # (Invoice)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">پارٹی (Supplier)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">Party (پارٹی)</th>
                         <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">آئٹم و کوالٹی</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">کوالٹی / آئٹم (Item / Quality)</th>
                         <th className="border border-black px-2 py-2 text-center font-bold">نگ (Unit)</th>
                         <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Rate (Rs)</th>
                         <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Weight (KG)</th>
@@ -706,23 +830,14 @@ export default function Reports() {
                               <td className="border border-black px-2 py-2 text-start">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
-                                    <span className="font-bold text-gray-900">{it.itemName}</span>
-                                    {it.quality && (
-                                      <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-xs font-mono font-bold text-[#1E3A5F]">
-                                        {it.quality}
-                                      </span>
-                                    )}
+                                    <span className="font-bold text-gray-900">{getLineLabel(it)}</span>
                                   </div>
                                 ))}
                               </td>
                               <td className="border border-black px-2 py-2 text-center font-mono">
                                 {p.items?.map((it, idx) => (
                                   <div key={idx} className="py-0.5 text-base">
-                                    {it.unitType === 'Nug' ? (
-                                      <span className="font-bold text-[#A52A2A]">{it.nugs || 0} Nug</span>
-                                    ) : (
-                                      <span className="text-gray-500">KG</span>
-                                    )}
+                                    <span className="text-gray-500">KG</span>
                                   </div>
                                 ))}
                               </td>
@@ -823,44 +938,47 @@ export default function Reports() {
             {saleViewMode === 'invoice' ? (
               <div className="report-rtl border-2 border-black bg-white flex flex-col w-full max-w-[1400px] mx-auto" dir="rtl" style={{ height: 'calc(100vh - 250px)', minHeight: '420px' }}>
                 <div className="p-3 border-b-2 border-black bg-[#FAF9F7] flex flex-wrap justify-between items-center text-sm flex-shrink-0">
-                  <span className="font-bold uppercase tracking-wider text-black text-base">
-                    Sale Invoices &amp; Outward Dispatches
-                  </span>
-                  <span className="font-mono text-gray-600" dir="ltr">
-                    Found {filteredSales.length} invoices
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold uppercase tracking-wider text-black text-base">
+                      Sale Report (فروخت رپورٹ)
+                    </span>
+                    <span className="font-mono text-gray-600" dir="ltr">
+                      Found {filteredSales.length} sales
+                    </span>
+                  </div>
+                  <div className="no-print">
+                    <Button variant="primary" size="sm" icon={Printer} onClick={safePrint}>
+                      Print Sale Report
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="overflow-y-auto flex-1 min-h-0 w-full">
+                <div id="sale-report-print-area" className="overflow-y-auto flex-1 min-h-0 w-full print:overflow-visible">
                   <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '16%' }} />
                       <col style={{ width: '12%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: '21%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '9%' }} />
+                      <col style={{ width: '12%' }} />
                     </colgroup>
                     <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                       <tr>
                         <th className="border border-black px-2 py-2 text-start font-bold">تاریخ (Date)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">بل # (Invoice)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">گاہک (Customer)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
-                        <th className="border border-black px-2 py-2 text-start font-bold">مصنوعات و کوالٹی</th>
-                        <th className="border border-black px-2 py-2 text-center font-bold">نگ (Unit)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">واؤچر # (Voucher)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">Party (پارٹی)</th>
+                        <th className="border border-black px-2 py-2 text-start font-bold">آئٹم (Item)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Qty (KG)</th>
                         <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Rate (Rs)</th>
-                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Weight (KG)</th>
-                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Total (PKR)</th>
+                        <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Amount (PKR)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredSales.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="text-center py-6 text-gray-500 font-medium border border-black">
+                          <td colSpan={7} className="text-center py-6 text-gray-500 font-medium border border-black">
                             No sale invoices recorded matching the selected filter.
                           </td>
                         </tr>
@@ -876,31 +994,28 @@ export default function Reports() {
                               <td className="border border-black px-2 py-2 font-semibold text-gray-900 text-start">
                                 {s.customerName || '-'}
                               </td>
-                              <td className="border border-black px-2 py-2 text-gray-700 text-start">
-                                {s.warehouseName || '-'}
-                              </td>
                               <td className="border border-black px-2 py-2 text-start">
                                 {s.items?.map((it, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 py-0.5">
-                                    <span className="font-bold text-gray-900">{it.itemName}</span>
-                                    {it.quality && (
-                                      <span className="bg-gray-100 border border-black px-1.5 py-0.5 text-xs font-mono font-bold text-[#1E3A5F]">
-                                        {it.quality}
-                                      </span>
-                                    )}
+                                    <span className="font-bold text-gray-900">{getLineLabel(it)}</span>
                                   </div>
                                 ))}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center font-mono">
-                                {s.items?.map((it, idx) => (
-                                  <div key={idx} className="py-0.5 text-base">
-                                    {it.unitType === 'Nug' ? (
-                                      <span className="font-bold text-[#A52A2A]">{it.nugs || 0} Nug</span>
-                                    ) : (
-                                      <span className="text-gray-500">KG</span>
-                                    )}
+                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
+                                {s.items && s.items.length > 1 ? (
+                                  <div>
+                                    {s.items.map((it, idx) => (
+                                      <div key={idx} className="py-0.5 font-normal">
+                                        {Number(it.qty || 0).toLocaleString('en-PK')} kg
+                                      </div>
+                                    ))}
+                                    <div className="border-t border-gray-300 font-bold pt-0.5">
+                                      {totalWeight.toLocaleString('en-PK')} kg
+                                    </div>
                                   </div>
-                                ))}
+                                ) : (
+                                  `${totalWeight.toLocaleString('en-PK')} kg`
+                                )}
                               </td>
                               <td className="border border-black px-2 py-2 text-left font-mono text-gray-800 tabular-nums" dir="ltr">
                                 {s.items?.map((it, idx) => (
@@ -908,9 +1023,6 @@ export default function Reports() {
                                     {it.rate ? Number(it.rate).toLocaleString('en-PK') : '-'}
                                   </div>
                                 ))}
-                              </td>
-                              <td className="border border-black px-2 py-2 text-left font-mono font-bold text-gray-900 tabular-nums" dir="ltr">
-                                {totalWeight.toLocaleString('en-PK')} kg
                               </td>
                               <td className="border border-black px-2 py-2 text-left font-mono font-bold text-emerald-800 tabular-nums" dir="ltr">
                                 {fmt(s.total)}
@@ -923,16 +1035,16 @@ export default function Reports() {
                     {filteredSales.length > 0 && (
                       <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                         <tr>
-                          <td colSpan={6} className="border border-black px-3 py-2 text-start uppercase text-base">
+                          <td colSpan={4} className="border border-black px-3 py-2 text-start uppercase text-base">
                             میزان کل فروخت (Total Sales):
                           </td>
-                          <td className="border border-black px-2 py-2 text-left font-mono text-gray-500" dir="ltr">-</td>
                           <td className="border border-black px-2 py-2 text-left font-mono text-[17px] tabular-nums" dir="ltr">
                             {filteredSales
                               .reduce((sum, s) => sum + (s.items?.reduce((w, it) => w + Number(it.qty || 0), 0) || 0), 0)
                               .toLocaleString('en-PK')}{' '}
                             kg
                           </td>
+                          <td className="border border-black px-2 py-2 text-left font-mono text-gray-500" dir="ltr">-</td>
                           <td className="border border-black px-2 py-2 text-left font-mono text-[17px] font-bold text-emerald-800 tabular-nums" dir="ltr">
                             {fmt(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0))}
                           </td>
@@ -1007,18 +1119,16 @@ export default function Reports() {
               <div className="overflow-y-auto flex-1 min-h-0 w-full">
                 <table className="w-full text-base border-collapse border border-black" dir="rtl" style={{ tableLayout: 'fixed', width: '100%' }}>
                   <colgroup>
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '16%' }} />
                     <col style={{ width: '12%' }} />
                     <col style={{ width: '12%' }} />
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '14%' }} />
                   </colgroup>
                   <thead className="bg-[#DFDFDF] sticky top-0 z-10 border-b-2 border-black">
                     <tr>
                       <th className="border border-black px-2 py-2 text-start font-bold">نام آئٹم (Item)</th>
-                      <th className="border border-black px-2 py-2 text-start font-bold">کوالٹی (Quality)</th>
                       <th className="border border-black px-2 py-2 text-start font-bold">گودام (Warehouse)</th>
                       <th className="border border-black px-2 py-2 text-start font-bold">قسم (Category)</th>
                       <th className="border border-black px-2 py-2 text-left font-bold" dir="ltr">Quantity (KG)</th>
@@ -1029,7 +1139,7 @@ export default function Reports() {
                   <tbody>
                     {filteredStock.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-6 text-gray-500 font-medium border border-black">
+                        <td colSpan={6} className="text-center py-6 text-gray-500 font-medium border border-black">
                           No stock inventory recorded in warehouses.
                         </td>
                       </tr>
@@ -1038,11 +1148,6 @@ export default function Reports() {
                         <tr key={idx} className="hover:bg-blue-50/30">
                           <td className="border border-black px-2 py-2 font-bold text-[#1E3A5F] text-start">
                             {s.itemName}
-                          </td>
-                          <td className="border border-black px-2 py-2 text-start">
-                            <span className="bg-gray-100 border border-black px-2 py-0.5 text-xs font-mono font-bold text-gray-800">
-                              {s.quality || 'Cotton A'}
-                            </span>
                           </td>
                           <td className="border border-black px-2 py-2 font-medium text-gray-800 text-start">
                             {s.warehouseName}
@@ -1066,7 +1171,7 @@ export default function Reports() {
                   {filteredStock.length > 0 && (
                     <tfoot className="bg-[#DFDFDF] sticky bottom-0 z-10 border-t-2 border-black font-bold">
                       <tr>
-                        <td colSpan={4} className="border border-black px-3 py-2 text-start uppercase text-base">
+                        <td colSpan={3} className="border border-black px-3 py-2 text-start uppercase text-base">
                           میزان کل مال / اسٹاک ویلیوایشن (Total Stock Valuation):
                         </td>
                         <td className="border border-black px-2 py-2 text-left font-mono text-[17px] tabular-nums" dir="ltr">
@@ -1521,33 +1626,37 @@ export default function Reports() {
               </div>
 
               {/* Table Container with max height and sticky header on screen */}
-              <div className="overflow-y-auto max-h-[calc(100vh-270px)] border border-black print:overflow-visible print:max-h-none print:border-none">
+              <div className="overflow-y-auto overflow-x-hidden max-h-[calc(100vh-270px)] border border-black print:overflow-visible print:max-h-none print:border-none w-full">
               {(() => {
                 let srCounter = 1;
                 return (
-                  <table className="w-full border-collapse border border-black text-black text-xs sm:text-sm table-fixed" dir="rtl">
+                  <table
+                    className="w-full border-collapse border border-black text-black text-xs sm:text-sm table-fixed"
+                    dir="rtl"
+                    style={{ width: '100%', tableLayout: 'fixed' }}
+                  >
                     <colgroup>
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '48%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '8%' }} />   {/* نمبر شمار (Sr No.) */}
+                      <col style={{ width: '12%' }} />  {/* کوڈ (Code) */}
+                      <col style={{ width: '44%' }} />  {/* نام کھاتہ (Account Name) */}
+                      <col style={{ width: '18%' }} />  {/* بنام (Debit) */}
+                      <col style={{ width: '18%' }} />  {/* جمع (Credit) */}
                     </colgroup>
                     <thead className="sticky top-0 bg-white z-10 border-b-2 border-black shadow-sm">
                       <tr className="bg-white border-b-2 border-black">
-                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
+                        <th className="border border-black px-1 sm:px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           نمبر شمار
                         </th>
-                        <th className="border border-black px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
+                        <th className="border border-black px-1 sm:px-2 py-1 text-center font-bold text-xs sm:text-sm print:text-xs font-urdu">
                           کوڈ
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu">
-                          نام پارٹی
+                        <th className="border border-black px-2 sm:px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu">
+                          نام کھاتہ
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
+                        <th className="border border-black px-2 sm:px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
                           بنام
                         </th>
-                        <th className="border border-black px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
+                        <th className="border border-black px-2 sm:px-3 py-1 text-start font-bold text-xs sm:text-sm print:text-xs font-urdu" dir="ltr">
                           جمع
                         </th>
                       </tr>
@@ -1560,27 +1669,27 @@ export default function Reports() {
                         </td>
                       </tr>
                       {tbParties.map((p) => {
-                        const bal = Number(p.balance || 0);
-                        const deb = bal < 0 ? Math.abs(bal) : 0;
-                        const cred = bal > 0 ? bal : 0;
+                        const deb = Number(p.debit || 0);
+                        const cred = Number(p.credit || 0);
+                        if (deb === 0 && cred === 0) return null;
                         const sr = srCounter++;
-                        const hasUrdu = Boolean(p.urduName || p.nameUrdu);
-                        const displayName = p.urduName || p.nameUrdu || p.name;
+                        const displayName = p.urduName || p.name;
+                        const hasUrdu = Boolean(p.urduName);
                         return (
-                          <tr key={p.id} className="hover:bg-gray-50 overflow-visible">
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
+                          <tr key={p.id || p.code || sr} className="hover:bg-gray-50">
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
                               {sr}
                             </td>
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              {p.code || p.id}
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                              {p.code || ''}
                             </td>
-                            <td className={`border border-black px-3 py-0.5 text-start ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`}>
+                            <td className={`border border-black px-2 sm:px-3 py-0.5 text-start truncate ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`} title={displayName}>
                               {displayName}
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
                               {deb > 0 ? fmt(deb) : ''}
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
                               {cred > 0 ? fmt(cred) : ''}
                             </td>
                           </tr>
@@ -1592,10 +1701,10 @@ export default function Reports() {
                         <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                           {tbPartiesDebit > 0 ? fmt(tbPartiesDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                           {tbPartiesCredit > 0 ? fmt(tbPartiesCredit) : ''}
                         </td>
                       </tr>
@@ -1606,64 +1715,26 @@ export default function Reports() {
                           کیش
                         </td>
                       </tr>
-                      <tr className="hover:bg-gray-50 overflow-visible">
-                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                          {srCounter++}
-                        </td>
-                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                          99020
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
-                          کیش بک
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                          {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                          {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
-                        </td>
-                      </tr>
-                      <tr className="bg-[#DFDFDF] font-bold">
-                        <td className="border border-black"></td>
-                        <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
-                          ٹوٹل
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
-                          {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
-                          {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
-                        </td>
-                      </tr>
-
-                      {/* 3. بینک (Banks) */}
-                      <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
-                          بینک
-                        </td>
-                      </tr>
-                      {bankAccounts.filter((b) => Number(b.balance || 0) !== 0).map((b) => {
-                        const bal = Number(b.balance || 0);
-                        const deb = bal >= 0 ? bal : 0;
-                        const cred = bal < 0 ? Math.abs(bal) : 0;
-                        const displayName = b.urduName || b.nameUrdu || b.name;
-                        const hasUrdu = Boolean(b.urduName || b.nameUrdu);
+                      {tbCashRows.map((c) => {
+                        const deb = Number(c.debit || 0);
+                        const cred = Number(c.credit || 0);
+                        if (deb === 0 && cred === 0) return null;
+                        const sr = srCounter++;
                         return (
-                          <tr key={b.id} className="hover:bg-gray-50 overflow-visible">
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              {srCounter++}
+                          <tr key={c.id || c.code || sr} className="hover:bg-gray-50">
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                              {sr}
                             </td>
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              {b.code || '99101'}
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                              {c.code || '99020'}
                             </td>
-                            <td className={`border border-black px-3 py-0.5 text-start ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`}>
-                              {displayName}
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs truncate">
+                              {c.urduName || c.name || 'کیش بک'}
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
                               {deb > 0 ? fmt(deb) : ''}
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
                               {cred > 0 ? fmt(cred) : ''}
                             </td>
                           </tr>
@@ -1675,49 +1746,103 @@ export default function Reports() {
                         <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
+                          {tbCashDebit > 0 ? fmt(tbCashDebit) : ''}
+                        </td>
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
+                          {tbCashCredit > 0 ? fmt(tbCashCredit) : ''}
+                        </td>
+                      </tr>
+
+                      {/* 3. بینک (Banks) */}
+                      <tr className="bg-white">
+                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
+                          بینک
+                        </td>
+                      </tr>
+                      {tbBanksRows.map((b) => {
+                        const deb = Number(b.debit || 0);
+                        const cred = Number(b.credit || 0);
+                        const sr = srCounter++;
+                        const displayName = b.urduName || b.name;
+                        const hasUrdu = Boolean(b.urduName);
+                        return (
+                          <tr key={b.id || b.code || sr} className="hover:bg-gray-50">
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                              {sr}
+                            </td>
+                            <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                              {b.code || '99101'}
+                            </td>
+                            <td className={`border border-black px-2 sm:px-3 py-0.5 text-start truncate ${hasUrdu ? 'font-urdu font-bold text-xs sm:text-sm print:text-xs' : 'font-semibold text-xs'}`} title={displayName}>
+                              {displayName}
+                            </td>
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                              {deb > 0 ? fmt(deb) : (cred === 0 ? '0' : '')}
+                            </td>
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                              {cred > 0 ? fmt(cred) : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-[#DFDFDF] font-bold">
+                        <td className="border border-black"></td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
+                          ٹوٹل
+                        </td>
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                           {tbBanksDebit > 0 ? fmt(tbBanksDebit) : ''}
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                           {tbBanksCredit > 0 ? fmt(tbBanksCredit) : ''}
                         </td>
                       </tr>
 
                       {/* 4. کیپٹل (Capital) - only if capitalBalance !== 0 */}
-                      {capitalBalance !== 0 && (
+                      {tbCapitalRows.length > 0 && (
                         <>
                           <tr className="bg-white">
                             <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
                               کیپٹل
                             </td>
                           </tr>
-                          <tr className="hover:bg-gray-50 overflow-visible">
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              {srCounter++}
-                            </td>
-                            <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                              99030
-                            </td>
-                            <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
-                              راس المال / Capital
-                            </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                              {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
-                            </td>
-                            <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                              {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
-                            </td>
-                          </tr>
+                          {tbCapitalRows.map((c) => {
+                            const deb = Number(c.debit || 0);
+                            const cred = Number(c.credit || 0);
+                            if (deb === 0 && cred === 0) return null;
+                            const sr = srCounter++;
+                            return (
+                              <tr key={c.id || c.code || sr} className="hover:bg-gray-50">
+                                <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                                  {sr}
+                                </td>
+                                <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                                  {c.code || '99030'}
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs truncate">
+                                  {c.urduName || c.name || 'راس المال / Capital'}
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                                  {deb > 0 ? fmt(deb) : ''}
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                                  {cred > 0 ? fmt(cred) : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
                           <tr className="bg-[#DFDFDF] font-bold">
                             <td className="border border-black"></td>
                             <td className="border border-black"></td>
                             <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                               ٹوٹل
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                               {tbCapitalDebit > 0 ? fmt(tbCapitalDebit) : ''}
                             </td>
-                            <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
                               {tbCapitalCredit > 0 ? fmt(tbCapitalCredit) : ''}
                             </td>
                           </tr>
@@ -1725,41 +1850,63 @@ export default function Reports() {
                       )}
 
                       {/* 5. سیلز اینڈ پرچیز (Sale & Purchase / Mall A/C) */}
-                      <tr className="bg-white">
-                        <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
-                          سیلز اینڈ پرچیز
-                        </td>
-                      </tr>
-                      <tr className="hover:bg-gray-50 overflow-visible">
-                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                          {srCounter++}
-                        </td>
-                        <td className="border border-black px-2 py-0.5 text-center num text-xs" dir="ltr">
-                          99010
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
-                          مال کھاتہ 1 ...... Mall A/C
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                          {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num text-xs" dir="ltr">
-                          {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
-                        </td>
-                      </tr>
-                      <tr className="bg-[#DFDFDF] font-bold">
-                        <td className="border border-black"></td>
-                        <td className="border border-black"></td>
-                        <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
-                          ٹوٹل
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
-                          {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
-                        </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-[#0000FF]" dir="ltr">
-                          {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
-                        </td>
-                      </tr>
+                      {tbMallRows.length > 0 && (
+                        <>
+                          <tr className="bg-white">
+                            <td colSpan={5} className="border border-black text-center font-bold text-sm sm:text-base print:text-xs py-1 text-[#0000FF] font-urdu">
+                              سیلز اینڈ پرچیز
+                            </td>
+                          </tr>
+                          {tbMallRows.map((m) => {
+                            const deb = Number(m.debit || 0);
+                            const cred = Number(m.credit || 0);
+                            if (deb === 0 && cred === 0) return null;
+                            const sr = srCounter++;
+                            return (
+                              <tr
+                                key={m.id || m.code || sr}
+                                onClick={() => navigate('/sale-purchase-ledger')}
+                                className="hover:bg-blue-50/70 cursor-pointer transition-colors group"
+                                title="Click to open Mall A/C (Sale & Purchase Ledger)"
+                              >
+                                <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                                  {sr}
+                                </td>
+                                <td className="border border-black px-1 sm:px-2 py-0.5 text-center num text-xs truncate" dir="ltr">
+                                  {m.code || '99010'}
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start font-urdu font-bold text-xs sm:text-sm print:text-xs">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span>{m.urduName || m.name || 'مال کھاتہ 1 ...... Mall A/C'}</span>
+                                    <span className="no-print text-[10px] text-blue-700 underline font-sans font-medium opacity-80 group-hover:opacity-100 flex items-center gap-0.5" dir="ltr">
+                                      View Mall Ledger &rarr;
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                                  {deb > 0 ? fmt(deb) : ''}
+                                </td>
+                                <td className="border border-black px-2 sm:px-3 py-0.5 text-start num text-xs truncate" dir="ltr">
+                                  {cred > 0 ? fmt(cred) : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          <tr className="bg-[#DFDFDF] font-bold">
+                            <td className="border border-black"></td>
+                            <td className="border border-black"></td>
+                            <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
+                              ٹوٹل
+                            </td>
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
+                              {tbMallDebit > 0 ? fmt(tbMallDebit) : ''}
+                            </td>
+                            <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-[#0000FF] truncate" dir="ltr">
+                              {tbMallCredit > 0 ? fmt(tbMallCredit) : ''}
+                            </td>
+                          </tr>
+                        </>
+                      )}
 
                     </tbody>
                     <tfoot className="sticky bottom-0 bg-[#DFDFDF] font-bold border-t-2 border-black z-10 shadow-sm">
@@ -1770,10 +1917,10 @@ export default function Reports() {
                         <td className="border border-black text-center font-urdu text-xs sm:text-sm print:text-xs font-bold">
                           ٹوٹل
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-red-700" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-red-700 truncate" dir="ltr">
                           {fmt(tbGrandTotalBenaam)}
                         </td>
-                        <td className="border border-black px-3 py-0.5 text-start num-total text-xs text-red-700" dir="ltr">
+                        <td className="border border-black px-2 sm:px-3 py-0.5 text-start num-total text-xs text-red-700 truncate" dir="ltr">
                           {fmt(tbGrandTotalJama)}
                         </td>
                       </tr>
@@ -1817,16 +1964,17 @@ export default function Reports() {
                       <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Debit (Rs.)</th>
                       <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Credit (Rs.)</th>
                       <th className="border border-black px-3.5 py-2.5 text-right w-40 text-base font-bold">Net Balance (Rs.)</th>
-                      <th className="border border-black px-2.5 py-2.5 text-center w-28 text-base font-bold">Reconciled</th>
+                      <th className="border border-black px-2.5 py-2.5 text-center w-36 text-base font-bold">Reconciled</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {accountReconRows.map((acc) => (
+                    {tbRows.map((acc) => (
                       <tr key={acc.idx} className="hover:bg-gray-50 border-b border-gray-200">
                         <td className="border border-black px-2.5 py-2.5 text-center font-mono text-gray-500">
                           {acc.idx}
                         </td>
                         <td className="border border-black px-3.5 py-2.5 font-bold text-gray-900">
+                          {acc.code && <span className="font-mono text-xs text-gray-500 me-2 font-normal">[{acc.code}]</span>}
                           {acc.name}
                         </td>
                         <td className="border border-black px-3.5 py-2.5 text-gray-600">
@@ -1844,7 +1992,15 @@ export default function Reports() {
                           {fmt(acc.net)} <span className="text-xs text-gray-500">({acc.netType})</span>
                         </td>
                         <td className="border border-black px-2.5 py-2.5 text-center">
-                          <span className="text-[#1B5E20] font-bold text-xs">✓ Reconciled</span>
+                          {acc.isOk ? (
+                            <span className="text-[#1B5E20] font-bold text-xs bg-emerald-50 border border-emerald-600 px-2.5 py-0.5 inline-flex items-center gap-1">
+                              ✓ OK
+                            </span>
+                          ) : (
+                            <span className="text-red-700 font-bold text-xs bg-red-50 border border-red-600 px-2 py-0.5 inline-flex items-center gap-1" title={acc.reconcileStatus}>
+                              ⚠ {acc.reconcileStatus}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1855,24 +2011,50 @@ export default function Reports() {
                         Reconciliation Column Totals:
                       </td>
                       <td className="border border-black px-3.5 py-2.5 text-right font-mono text-[#1E3A5F] text-[17px] font-bold tabular-nums">
-                        {fmt(sumDebits)}
+                        {fmt(tbGrandTotalBenaam)}
                       </td>
                       <td className="border border-black px-3.5 py-2.5 text-right font-mono text-emerald-800 text-[17px] font-bold tabular-nums">
-                        {fmt(sumCredits)}
+                        {fmt(tbGrandTotalJama)}
                       </td>
                       <td className="border border-black px-3.5 py-2.5 text-right font-mono text-black text-[17px] font-bold tabular-nums">
-                        {isTbBalanced ? '0.00 (Balanced)' : fmt(tbDifference)}
+                        {isTbGrandBalanced ? '0.00 (Balanced)' : fmt(tbGrandDifference)}
                       </td>
                       <td className="border border-black px-2.5 py-2.5 text-center text-xs">
-                        {isTbBalanced ? (
-                          <span className="text-[#1B5E20] font-black">✓ OK</span>
+                        {isAuditBalanced ? (
+                          <span className="text-[#1B5E20] font-black text-sm">✓ Balanced</span>
                         ) : (
-                          <span className="text-red-700 font-black">⚠ Diff</span>
+                          <span className="text-red-700 font-black text-sm">⚠ {isTbGrandBalanced ? 'Row Mismatch' : `Diff ${fmt(tbGrandDifference)}`}</span>
                         )}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* ── SEPARATE BLOCK FOR CLOSING STOCK (BALANCE SHEET ONLY) ── */}
+              <div className="mt-4 p-3.5 border-2 border-black bg-white flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-[#1E3A5F]" />
+                    <h5 className="font-bold text-base text-black">
+                      Closing Stock Value (for Profit &amp; Balance Sheet)
+                    </h5>
+                    <span className="text-xs bg-gray-200 border border-black px-2 py-0.5 font-semibold text-gray-800 font-urdu">
+                      کلوزنگ اسٹاک ویلیو (صرف منافع اور بیلنس شیٹ کے لیے)
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Entered on the Stock page. Not part of Trial Balance debit/credit totals.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-xs text-gray-500 block uppercase font-mono">Closing Stock Value</span>
+                    <span className="font-mono font-bold text-lg text-emerald-800">
+                      {fmt(closingStockValue)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2115,24 +2297,42 @@ export default function Reports() {
                       </span>
                     </div>
                     <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
-                      {fmt(stockValuation)}
+                      {fmt(closingStockValue)}
                     </span>
                   </div>
 
-                  {/* 5. Bank */}
-                  <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-urdu text-base font-bold text-black">
-                        بینک
-                      </span>
-                      <span className="text-xs font-semibold text-gray-700">
-                        Bank
+                  {/* 5. Bank Accounts */}
+                  {bankAccounts.length > 0 ? (
+                    bankAccounts.map((b) => (
+                      <div key={b.id} className="flex items-baseline justify-between py-0.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-urdu text-base font-bold text-black">
+                            بینک
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">
+                            {b.code || '99101'} - {b.name}
+                          </span>
+                        </div>
+                        <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
+                          {fmt(b.balance || 0)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex items-baseline justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-urdu text-base font-bold text-black">
+                          بینک
+                        </span>
+                        <span className="text-xs font-semibold text-gray-700">
+                          Bank
+                        </span>
+                      </div>
+                      <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
+                        {fmt(totalBankBalances)}
                       </span>
                     </div>
-                    <span className="text-start num text-sm print:text-xs text-black w-40 border-b border-gray-400 pb-0.5" dir="ltr">
-                      {fmt(totalBankBalances)}
-                    </span>
-                  </div>
+                  )}
 
                   {/* Total (Debit/Benaam) */}
                   <div className="flex items-baseline justify-between pt-2">

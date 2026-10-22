@@ -7,23 +7,28 @@
  *  party.balance = 0  => zero balance
  */
 
+import { balanceSide } from './partySide.js';
+
+export { balanceSide };
+
 /**
  * Single source of truth for party balance classification.
  * Returns side ('Dr' | 'Cr'), positive amount (Math.abs), and Urdu label ('Benaam' | 'Jama').
  * Party type (Customer/Supplier) is NEVER used to decide the side.
  *
  * @param {number|string} balance
- * @returns {{ side: 'Dr' | 'Cr', amount: number, label: 'Benaam' | 'Jama' }}
+ * @returns {{ side: 'Dr' | 'Cr' | '', amount: number, label: 'Benaam' | 'Jama' | '', en: string, ur: string, color: string | undefined }}
  */
 export function partySide(balance) {
-  const num = Number(balance || 0);
-  if (num > 0) {
-    return { side: 'Cr', amount: num, label: 'Jama' };
-  }
-  if (num < 0) {
-    return { side: 'Dr', amount: Math.abs(num), label: 'Benaam' };
-  }
-  return { side: 'Cr', amount: 0, label: 'Jama' };
+  const info = balanceSide(balance);
+  return {
+    side: info.en,
+    en: info.en,
+    ur: info.ur,
+    amount: info.amount,
+    label: info.en === 'Cr' ? 'Jama' : info.en === 'Dr' ? 'Benaam' : '',
+    color: info.color,
+  };
 }
 
 /**

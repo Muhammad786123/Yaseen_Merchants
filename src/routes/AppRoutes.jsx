@@ -6,7 +6,6 @@ import Login from '../pages/Login/Login.jsx';
 import Dashboard from '../pages/Dashboard/Dashboard.jsx';
 import Parties from '../pages/Parties/Parties.jsx';
 import Items from '../pages/Items/Items.jsx';
-import Qualities from '../pages/Qualities/Qualities.jsx';
 import Warehouses from '../pages/Warehouses/Warehouses.jsx';
 import Purchase from '../pages/Purchase/Purchase.jsx';
 import Issue from '../pages/Issue/Issue.jsx';
@@ -54,7 +53,7 @@ export default function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/parties" element={<Parties />} />
                 <Route path="/items" element={<Items />} />
-                <Route path="/qualities" element={<Qualities />} />
+                <Route path="/qualities" element={<Navigate to="/items" replace />} />
                 <Route path="/warehouses" element={<Warehouses />} />
                 <Route path="/purchase" element={<Purchase />} />
                 <Route path="/issue" element={<Issue />} />
@@ -64,9 +63,9 @@ export default function AppRoutes() {
                 <Route path="/payment" element={<Navigate to="/cash-book" replace />} />
                 <Route path="/stock" element={<Stock />} />
                 <Route path="/stock-ledger" element={<StockLedger />} />
-                <Route path="/item-ledger" element={<StockLedger />} />
+                <Route path="/item-ledger" element={<QualityLedger />} />
                 <Route path="/warehouse-ledger" element={<WarehouseLedger />} />
-                <Route path="/quality-ledger" element={<QualityLedger />} />
+                <Route path="/quality-ledger" element={<Navigate to="/item-ledger" replace />} />
                 <Route path="/cash-book" element={<CashBook />} />
                 <Route path="/journal" element={<Journal />} />
                 <Route path="/party-ledger" element={<PartyLedger />} />

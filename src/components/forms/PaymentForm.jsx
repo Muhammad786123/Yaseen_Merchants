@@ -25,13 +25,15 @@ export default function PaymentForm({ parties = [], accounts = [], initialData =
   const handleSubmit = (e) => {
     e.preventDefault();
     const partyObj = parties.find((p) => p.id === partyId);
+    const accObj = accounts.find((a) => a.name === account || a.id === account);
 
     onSubmit({
       date,
       partyId,
       partyName: partyObj ? partyObj.name : '',
       amount: Number(amount),
-      account,
+      accountId: accObj ? accObj.id : null,
+      account: accObj ? accObj.name : account,
       description,
     });
   };

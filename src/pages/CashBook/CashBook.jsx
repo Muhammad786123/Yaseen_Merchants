@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/database.js';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
@@ -7,13 +9,18 @@ import { Table, TR, TD } from '../../components/ui/Table.jsx';
 import { useCashBook } from '../../hooks/useCashBook.js';
 import { useParties } from '../../hooks/useParties.js';
 import { useFinances } from '../../hooks/useFinances.js';
+import { useStock } from '../../hooks/useStock.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
-import { partySide } from '../../utils/partyBalances.js';
+import { balanceSide } from '../../utils/partySide.js';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
-import { cashBookService } from '../../services/cashBookService.js';
+import { cashBookService, extractVoucherInfo } from '../../services/cashBookService.js';
 import { cashService, compareCashEntries, calculateCashBalanceFromEntries } from '../../services/cashService.js';
+import { saleService } from '../../services/saleService.js';
+import { purchaseService } from '../../services/purchaseService.js';
+import SaleForm from '../../components/forms/SaleForm.jsx';
+import PurchaseForm from '../../components/forms/PurchaseForm.jsx';
 import {
   Save,
   PlusCircle,
@@ -57,7 +64,11 @@ export default function CashBook() {
   const { cashBookEntries, currentCashBalance } = useCashBook();
   const { parties } = useParties();
   const { accounts } = useFinances();
+  const { stockEntries } = useStock();
   const { showToast } = useApp();
+
+  const items = useLiveQuery(() => (db.items ? db.items.toArray() : []), []) || [];
+  const warehouses = useLiveQuery(() => (db.warehouses ? db.warehouses.toArray() : []), []) || [];
 
   const bankAccounts = accounts.filter((a) => !a.name.toLowerCase().includes('cash'));
 
@@ -84,6 +95,10 @@ export default function CashBook() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [voucherFilter, setVoucherFilter] = useState('');
   const [showDeleteBookDialog, setShowDeleteBookDialog] = useState(false);
+
+  // Source Invoice editing state (when clicking SAL-... or PUR-... in grid)
+  const [editingSale, setEditingSale] = useState(null);
+  const [editingPurchase, setEditingPurchase] = useState(null);
 
   // Edit / Delete individual entry state (for Search modal)
   const [editingEntry, setEditingEntry] = useState(null);
@@ -204,11 +219,7 @@ export default function CashBook() {
         };
       });
 
-      while (loadedRows.length < 8) {
-        loadedRows.push(createEmptyRow(loadedRows.length));
-      }
-
-      setRows(loadedRows);
+      setRows(loadedRows.length > 0 ? loadedRows : Array.from({ length: 8 }, (_, i) => createEmptyRow(i)));
       setIsSavedBook(true);
 
       if (loadedRows[0]?.accountId || loadedRows[0]?.accountName) {
@@ -355,29 +366,122 @@ export default function CashBook() {
 
   const isCashOutOfSync = Math.abs(storedCashBalance - fullComputedCashBalance) > 1;
 
-  // Find the first entry of the current Cash Book (if this is a saved book)
-  const firstBookEntry = useMemo(() => {
-    if (!isSavedBook) return null;
-    const bookEntries = cashBookEntries.filter(
-      (e) => Number(e.cashBookNo) === Number(cashBookNo)
+  // Linked system entries whose date equals entryDate and have no cashBookNo
+  // (Receipts from Sales, payments of Purchases, Journal cash lines, customer receipts, etc.)
+  const systemRowsForDate = useMemo(() => {
+    const unnumbered = cashBookEntries.filter(
+      (e) => !e.cashBookNo && e.date === entryDate
     );
-    if (bookEntries.length === 0) return null;
-    const sorted = [...bookEntries].sort(compareCashEntries);
-    return sorted[0];
-  }, [cashBookEntries, cashBookNo, isSavedBook]);
+    return unnumbered.map((e, idx) => {
+      const voucherInfo = extractVoucherInfo(e);
+      const party = parties.find((p) => p.id === e.partyId || p.name === e.partyName);
+      return {
+        id: e.id || `sys_${idx}`,
+        isSystemRow: true,
+        accountType: 'party',
+        accountNo: party?.code || party?.id || 'SYS',
+        accountId: e.partyId || '',
+        accountName: e.partyName || (voucherInfo?.sourceType ? `${voucherInfo.sourceType} Receipt` : 'System Entry'),
+        head: null,
+        detail: e.description || '',
+        credit: Number(e.credit || 0) > 0 ? String(e.credit) : '',
+        debit: Number(e.debit || 0) > 0 ? String(e.debit) : '',
+        linkedTransactionId: e.linkedTransactionId || null,
+        sourceVoucher: voucherInfo?.voucherNo || null,
+        sourceType: voucherInfo?.sourceType || null,
+        sourceId: voucherInfo?.sourceId || e.linkedTransactionId || null,
+      };
+    });
+  }, [cashBookEntries, entryDate, parties]);
+
+  // Click handler to open the source voucher (Sale or Purchase) for edit
+  const handleOpenVoucher = async (row) => {
+    const voucherNo = row.sourceVoucher;
+    const sourceType = row.sourceType;
+    const sourceId = row.sourceId || row.linkedTransactionId;
+
+    if (sourceType === 'Sale' || voucherNo?.startsWith('SAL')) {
+      let sale = null;
+      if (sourceId) {
+        sale = await db.sales.get(sourceId);
+      }
+      if (!sale && voucherNo) {
+        sale = await db.sales.where({ no: voucherNo }).first();
+      }
+      if (!sale && row.detail) {
+        const m = row.detail.match(/SAL-\d+/i);
+        if (m) sale = await db.sales.where({ no: m[0].toUpperCase() }).first();
+      }
+      if (sale) {
+        setEditingSale(sale);
+        return;
+      }
+      showToast(`Sale invoice ${voucherNo || ''} not found`, 'error');
+    } else if (sourceType === 'Purchase' || voucherNo?.startsWith('PUR')) {
+      let pur = null;
+      if (sourceId) {
+        pur = await db.purchases.get(sourceId);
+      }
+      if (!pur && voucherNo) {
+        pur = await db.purchases.where({ no: voucherNo }).first();
+      }
+      if (!pur && row.detail) {
+        const m = row.detail.match(/PUR-\d+/i);
+        if (m) pur = await db.purchases.where({ no: m[0].toUpperCase() }).first();
+      }
+      if (pur) {
+        setEditingPurchase(pur);
+        return;
+      }
+      showToast(`Purchase invoice ${voucherNo || ''} not found`, 'error');
+    } else if (voucherNo?.startsWith('JV')) {
+      navigate('/journal');
+    } else if (voucherNo?.startsWith('RCT')) {
+      navigate('/receipts');
+    } else if (voucherNo?.startsWith('PAY')) {
+      navigate('/payments');
+    }
+  };
+
+  // Determine manual rows to render ensuring total grid rows (system + manual) is at least 8
+  const manualRowsToRender = useMemo(() => {
+    const lastFilledIndex = rows.reduce((last, r, i) => {
+      return (r.accountName || r.accountId || Number(r.credit) > 0 || Number(r.debit) > 0 || r.detail) ? i : last;
+    }, -1);
+    const minManualNeeded = Math.max(lastFilledIndex + 1, Math.max(1, 8 - systemRowsForDate.length));
+    if (rows.length >= minManualNeeded) {
+      return rows.slice(0, minManualNeeded);
+    }
+    const padded = [...rows];
+    while (padded.length < minManualNeeded) {
+      padded.push(createEmptyRow(padded.length));
+    }
+    return padded;
+  }, [rows, systemRowsForDate.length]);
 
   // Previous Balance (green box):
-  // getCashBalance({ beforeKey: firstBookEntry }) for a saved book.
-  // For a new unsaved book, it is the full current cash balance.
+  // Strictly the cash balance before this book's date, including earlier numbered books on this date
   const previousCashBalance = useMemo(() => {
-    if (isSavedBook && firstBookEntry) {
-      return calculateCashBalanceFromEntries(cashBookEntries, accounts, {
-        beforeKey: firstBookEntry,
-      });
+    const balBeforeDate = calculateCashBalanceFromEntries(cashBookEntries, accounts, {
+      beforeDate: entryDate,
+    });
+
+    if (isSavedBook && Number(cashBookNo) > 1) {
+      const earlierBooksToday = cashBookEntries.filter(
+        (e) =>
+          e.date === entryDate &&
+          e.cashBookNo &&
+          Number(e.cashBookNo) < Number(cashBookNo)
+      );
+      const earlierNet = earlierBooksToday.reduce(
+        (sum, e) => sum + (Number(e.credit || 0) - Number(e.debit || 0)),
+        0
+      );
+      return balBeforeDate + earlierNet;
     }
-    // For a new unsaved book, take the full current cash balance
-    return calculateCashBalanceFromEntries(cashBookEntries, accounts);
-  }, [cashBookEntries, accounts, isSavedBook, firstBookEntry]);
+
+    return balBeforeDate;
+  }, [cashBookEntries, accounts, entryDate, isSavedBook, cashBookNo]);
 
   // Helper to extract existing expense head prefix
   const getExpenseHeadPrefix = (detail = '') => {
@@ -617,9 +721,15 @@ export default function CashBook() {
     }
   };
 
-  // Grid live calculations
-  const totalCredit = rows.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
-  const totalDebit = rows.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
+  // Grid live calculations (system rows + manual rows)
+  const totalSystemCredit = systemRowsForDate.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
+  const totalSystemDebit = systemRowsForDate.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
+
+  const totalManualCredit = rows.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
+  const totalManualDebit = rows.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
+
+  const totalCredit = totalSystemCredit + totalManualCredit;
+  const totalDebit = totalSystemDebit + totalManualDebit;
   const currentClosingBalance = previousCashBalance + totalCredit - totalDebit;
 
   // Denominations live calculations
@@ -636,16 +746,17 @@ export default function CashBook() {
     return { detailList, countSum, valSum };
   }, [denominations]);
 
-  // Difference between Physical Cash details and Grid Net Cash
-  const cashDifference = denominationValues.valSum - totalCredit;
+  // Difference between Physical Cash details and Current/Closing Balance
+  const cashDifference = denominationValues.valSum - currentClosingBalance;
 
-  // Handle Save / Update Book
+  // Handle Save / Update Book (saves only manual rows, never duplicates system rows)
   const handleSaveOrUpdate = async () => {
-    const validRows = rows.filter(
-      (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
+    const validManualRows = rows.filter(
+      (r) => !r.isSystemRow && (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
     );
 
-    if (validRows.length === 0) {
+    const hasDenominations = denominations && Object.values(denominations).some((v) => Number(v) > 0);
+    if (validManualRows.length === 0 && !hasDenominations && systemRowsForDate.length === 0) {
       alert('Please fill in at least one row with an Account Name and Credit/Debit amount.');
       return;
     }
@@ -656,7 +767,7 @@ export default function CashBook() {
           cashBookNo,
           date: entryDate,
           denominations,
-          rows,
+          rows: validManualRows,
         });
         showToast(`Cash Book #${String(cashBookNo).padStart(4, '0')} updated successfully!`);
       } else {
@@ -664,12 +775,11 @@ export default function CashBook() {
           cashBookNo,
           date: entryDate,
           denominations,
-          rows,
+          rows: validManualRows,
         });
         showToast(`Cash Book #${String(cashBookNo).padStart(4, '0')} saved successfully!`);
       }
 
-      // Requirement 1: stay on the same book, reload from DB, do NOT clear rows, do NOT increment number
       await loadBook(cashBookNo);
     } catch (err) {
       console.error('Failed to save/update Cash Book:', err);
@@ -717,9 +827,11 @@ export default function CashBook() {
       alert('No entries to verify. Please enter transaction rows.');
       return;
     }
-    if (denominationValues.valSum > 0 && cashDifference !== 0) {
+    const isMatched = Math.abs(cashDifference) < 0.001;
+    if (denominationValues.valSum > 0 && !isMatched) {
+      const statusText = cashDifference < 0 ? 'Short' : 'Excess';
       alert(
-        `Reconciliation Notice:\nPhysical Cash Count: ${fmt(denominationValues.valSum)}\nTotal Cash Received: ${fmt(totalCredit)}\nDifference: ${fmt(cashDifference)}\n\nPlease recount notes before saving.`
+        `Reconciliation Notice:\nPhysical Cash Count: ${fmt(denominationValues.valSum)}\nCurrent/Closing Balance: ${fmt(currentClosingBalance)}\nDifference: ${fmt(Math.abs(cashDifference))} ${statusText}\n\nPlease recount notes before saving.`
       );
     } else {
       alert(
@@ -741,13 +853,16 @@ export default function CashBook() {
   // Formatted top active balance representation
   const topParty = parties.find((p) => p.id === topAccountId || p.name === topAccountName);
   const activeBalanceDisplay = useMemo(() => {
+    let bal = null;
     if (topParty) {
-      const side = partySide(topParty.balance);
-      return `${fmt(side.amount)} ${side.side}`;
+      bal = topParty.balance;
+    } else if (topAccountType === 'mall' || activeAccountBalance !== 0) {
+      bal = activeAccountBalance;
     }
-    if (topAccountType === 'mall' || activeAccountBalance !== 0) {
-      const side = partySide(activeAccountBalance);
-      return `${fmt(side.amount)} ${side.side}`;
+    if (bal !== null && bal !== undefined) {
+      const side = balanceSide(bal);
+      if (side.amount === 0) return '0.00';
+      return `${fmt(side.amount)} ${side.ur} (${side.en})`;
     }
     return '0.00';
   }, [topParty, topAccountType, activeAccountBalance]);
@@ -813,9 +928,16 @@ export default function CashBook() {
           </div>
           <div className="inline-block bg-white border-2 border-black px-12 py-1 mt-1">
             <h1 className="text-2xl sm:text-3xl font-black text-[#800000] tracking-wider uppercase font-serif">
-              CASH BOOK
+              {isSavedBook ? 'CASH BOOK' : 'CASH BOOK — DAY BOOK'}
             </h1>
           </div>
+          {!isSavedBook && (
+            <div className="mt-1 text-xs font-bold text-blue-900 bg-blue-50 inline-block px-3 py-0.5 border border-blue-300">
+              {systemRowsForDate.length > 0
+                ? `Day Book View — ${systemRowsForDate.length} linked receipt/payment entry on ${formattedDateDDMMYY || entryDate}`
+                : `Day Book View — Unsaved Sheet for ${formattedDateDDMMYY || entryDate}`}
+            </div>
+          )}
         </div>
 
         {/* Top Info Bar (Bordered container) */}
@@ -1004,7 +1126,77 @@ export default function CashBook() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row, idx) => (
+                    {/* 1. Read-only linked system entries from Sales, Purchases, JV, etc. */}
+                    {systemRowsForDate.map((sysRow) => (
+                      <tr key={sysRow.id} className="bg-amber-50/70 hover:bg-amber-100/80 border-b border-black">
+                        {/* Acc/ No */}
+                        <td className="border border-black px-2 py-2 text-center">
+                          <span className="text-base font-mono font-bold tabular-nums text-gray-900">
+                            {sysRow.accountNo || '-'}
+                          </span>
+                        </td>
+
+                        {/* Account Name */}
+                        <td className="border border-black px-3 py-2 text-start">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-base font-bold text-gray-900 truncate">
+                              {sysRow.accountName || 'System Party'}
+                            </span>
+                            <span
+                              className="print:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-400 shrink-0"
+                              title="Linked system entry (Read-only)"
+                            >
+                              <Lock className="w-2.5 h-2.5 text-amber-900" />
+                              <span>{sysRow.sourceType || 'System'}</span>
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Detail Narration with Clickable Voucher Number */}
+                        <td className="border border-black px-2 py-1.5 text-start">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {sysRow.sourceVoucher && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenVoucher(sysRow)}
+                                title={`Click to edit source ${sysRow.sourceType || 'voucher'} ${sysRow.sourceVoucher}`}
+                                className="print:hidden px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-[#0000CC] border border-blue-500 text-xs font-mono font-bold rounded cursor-pointer underline flex items-center gap-1 shadow-none transition-colors"
+                              >
+                                <span>{sysRow.sourceVoucher}</span>
+                                <Pencil className="w-3 h-3 text-blue-700" />
+                              </button>
+                            )}
+                            <span className="hidden print:inline font-mono font-bold text-xs text-black">
+                              {sysRow.sourceVoucher ? `[${sysRow.sourceVoucher}] ` : ''}
+                            </span>
+                            <span className="text-sm text-gray-800 truncate" title={sysRow.detail}>
+                              {sysRow.detail}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Credit / Jamma (Cash Received) */}
+                        <td className="border border-black px-3 py-2 text-left" dir="ltr">
+                          <span className="text-base font-mono font-bold text-emerald-800 tabular-nums">
+                            {sysRow.credit && Number(sysRow.credit) > 0
+                              ? Number(sysRow.credit).toLocaleString('en-PK')
+                              : '-'}
+                          </span>
+                        </td>
+
+                        {/* Debit / Benaam (Cash Paid) */}
+                        <td className="border border-black px-3 py-2 text-left" dir="ltr">
+                          <span className="text-base font-mono font-bold text-red-800 tabular-nums">
+                            {sysRow.debit && Number(sysRow.debit) > 0
+                              ? Number(sysRow.debit).toLocaleString('en-PK')
+                              : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* 2. Manual Editable Rows */}
+                    {manualRowsToRender.map((row, idx) => (
                       <tr key={row.id} className="hover:bg-blue-50/40">
                         {/* Acc/ No Selector */}
                         <td className="border border-black p-0 text-center">
@@ -1266,12 +1458,16 @@ export default function CashBook() {
               <div className="mt-3 pt-2 border-t border-black flex items-center justify-between text-sm">
                 <span className="font-bold text-[#A52A2A]">Difference</span>
                 <div
-                  className={`bg-[#76FF03] border border-black px-3 py-1 font-mono font-bold text-base min-w-[110px] text-left tabular-nums ${
-                    cashDifference !== 0 ? 'text-red-900' : 'text-black'
+                  className={`border border-black px-3 py-1 font-mono font-bold text-sm min-w-[120px] text-center tabular-nums ${
+                    Math.abs(cashDifference) < 0.001
+                      ? 'bg-[#76FF03] text-black'
+                      : 'bg-[#FFEBEE] text-[#B71C1C]'
                   }`}
                   dir="ltr"
                 >
-                  {cashDifference ? fmt(cashDifference) : '0.00'}
+                  {Math.abs(cashDifference) < 0.001
+                    ? 'Matched'
+                    : `${fmt(Math.abs(cashDifference))} ${cashDifference < 0 ? 'Short' : 'Excess'}`}
                 </div>
               </div>
             </div>
@@ -1676,6 +1872,54 @@ export default function CashBook() {
           }}
           onCancel={() => setDeletingEntryId(null)}
         />
+
+        {/* Edit Source Sale Invoice Modal */}
+        <Modal
+          isOpen={!!editingSale}
+          onClose={() => setEditingSale(null)}
+          title={editingSale ? `Edit Source Sale Invoice — ${editingSale.no}` : 'Edit Sale Invoice'}
+          size="xl"
+        >
+          {editingSale && (
+            <SaleForm
+              customers={parties.filter((p) => p.type === 'Customer' || p.type === 'Both')}
+              warehouses={warehouses}
+              items={items}
+              stockEntries={stockEntries}
+              accounts={accounts}
+              initialData={editingSale}
+              onSubmit={async (data) => {
+                await saleService.update(editingSale.id, data);
+                showToast(`Sale invoice ${editingSale.no} updated successfully!`);
+                setEditingSale(null);
+              }}
+              onCancel={() => setEditingSale(null)}
+            />
+          )}
+        </Modal>
+
+        {/* Edit Source Purchase Invoice Modal */}
+        <Modal
+          isOpen={!!editingPurchase}
+          onClose={() => setEditingPurchase(null)}
+          title={editingPurchase ? `Edit Source Purchase Invoice — ${editingPurchase.no}` : 'Edit Purchase Invoice'}
+          maxWidth="max-w-3xl"
+        >
+          {editingPurchase && (
+            <PurchaseForm
+              suppliers={parties.filter((p) => p.type === 'Supplier' || p.type === 'Both')}
+              warehouses={warehouses}
+              items={items}
+              initialData={editingPurchase}
+              onSubmit={async (data) => {
+                await purchaseService.update(editingPurchase.id, data);
+                showToast(`Purchase invoice ${editingPurchase.no} updated successfully!`);
+                setEditingPurchase(null);
+              }}
+              onCancel={() => setEditingPurchase(null)}
+            />
+          )}
+        </Modal>
       </div>
     </div>
   );

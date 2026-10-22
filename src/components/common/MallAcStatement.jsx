@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
+import { balanceSide, formatBalanceWithSide } from '../../utils/partySide.js';
 
 /**
  * MallAcStatement — Bordered grid print statement for Sale/Purchase A/C (Mall A/C).
@@ -8,7 +9,7 @@ import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
  * - Full grid borders around every cell (crisp thin black lines)
  * - Light green shading on header row (#d4edda)
  * - RTL column order: بقایا | جمع | بنام | ریٹ | وزن | تعداد | بل | تفصیل | تاریخ
- * - جمع/نام row marker in first column (credit = جمع, debit = نام)
+ * - جمع/بنام row marker in first column (credit = جمع, debit = بنام)
  * - Print-ready: id="mallac-print-area" targeted by @media print [id$="-print-area"]
  * - سابقہ بقایا (Opening Balance) shown above the table
  * - Print timestamp top-left, title center, account type badge top-right
@@ -78,7 +79,10 @@ export default function MallAcStatement({
   const legalName = profile?.legalName || 'Shahid Yaseen Cotton Waste Merchant';
   const effectivePrintedBy = printedBy && printedBy !== 'Shahid Yaseen' ? printedBy : (legalName || 'Shahid Yaseen');
   /* ── Build rows with running balance (front-to-back chronological) ────── */
-  const rows = [...ledgerRows].reverse(); // service returns reversed; undo for print
+  const isReversed =
+    ledgerRows.length > 1 &&
+    new Date(ledgerRows[0].date).getTime() > new Date(ledgerRows[ledgerRows.length - 1].date).getTime();
+  const rows = isReversed ? [...ledgerRows].reverse() : [...ledgerRows];
   let running = openingBalance;
   let totalDebit = 0;
   let totalCredit = 0;
@@ -257,9 +261,12 @@ export default function MallAcStatement({
         }}
       >
         <span className="font-urdu font-bold text-[22px] print:text-[14pt]">سابقہ بیلنس (Opening Balance): </span>
-        <span className="num font-bold text-[22px] print:text-[14pt]">
+        <span
+          className="num font-bold text-[22px] print:text-[14pt]"
+          style={{ color: balanceSide(openingBalance).color || undefined }}
+        >
           {openingBalance !== 0
-            ? `${fmtAmt(Math.abs(openingBalance))} ${openingBalance >= 0 ? '(Cr)' : '(Dr)'}`
+            ? formatBalanceWithSide(openingBalance)
             : '0'}
         </span>
       </div>
@@ -290,7 +297,7 @@ export default function MallAcStatement({
           <col style={{ width: '14%' }} />   {/* پارٹی: Party Name (14%) */}
           <col style={{ width: '11%' }} />   {/* رقم: Amount (11%) */}
           <col style={{ width: '11%' }} />   {/* بیلنس: Balance (11%) */}
-          <col style={{ width: '2%' }} />    {/* حالت: جمع / نام (2%) */}
+          <col style={{ width: '2%' }} />    {/* حالت: جمع / بنام (2%) */}
         </colgroup>
 
         <thead>
@@ -313,16 +320,16 @@ export default function MallAcStatement({
             const isCredit = Number(row.credit || 0) > 0;
             const isStockRow = (row.category === 'Sale' || row.category === 'Purchase') && (row.quantity || row.weight);
 
-            // marker: جمع for credit (sale / cash receipt), نام for debit (purchase / expense / cash payment)
-            const marker = isCredit ? 'جمع' : 'نام';
-            const markerColor = isCredit ? '#000000' : '#c0392b';
+            // Row running balance side: marker comes from running balance side
+            const rowBalSide = balanceSide(row.runningBal);
+            const marker = rowBalSide.ur;
+            const markerColor = rowBalSide.color;
 
             // Amount shown: credit for jama, debit for benaam
             const amount = isCredit ? row.credit : row.debit;
 
             // Balance with Cr/Dr indicator
-            const balSign = row.runningBal >= 0 ? 'Cr' : 'Dr';
-            const balDisplay = `${fmtAmt(row.runningBal || 0)} ${balSign}`;
+            const balDisplay = rowBalSide.amount === 0 ? '0' : `${fmtAmt(rowBalSide.amount)} ${rowBalSide.en}`;
 
             // Qty/Weight/Rate — only for stock rows
             const qty = isStockRow ? fmtNum(row.quantity) : '';
@@ -404,7 +411,7 @@ export default function MallAcStatement({
                 <td
                   className="num-total text-start"
                   style={cell({
-                    color: row.runningBal >= 0 ? '#000000' : '#c0392b',
+                    color: rowBalSide.color || '#000000',
                     direction: 'ltr',
                   })}
                 >
@@ -437,13 +444,15 @@ export default function MallAcStatement({
             <td className="num-total text-start" style={cell({ direction: 'ltr' })}>
               {fmtAmt(processedRows.reduce((s, r) => s + (r.credit || 0) + (r.debit || 0), 0))}
             </td>
-            <td className="num-total text-start" style={cell({ direction: 'ltr' })}>
-              {(() => {
-                const sign = closingBalance >= 0 ? 'Cr' : 'Dr';
-                return `${fmtAmt(closingBalance)} ${sign}`;
-              })()}
+            <td className="num-total text-start" style={cell({ direction: 'ltr', color: balanceSide(closingBalance).color || undefined })}>
+              {formatBalanceWithSide(closingBalance)}
             </td>
-            <td className="font-urdu font-bold text-[18px] print:text-[12pt] text-center" style={cell()}>کل</td>
+            <td
+              className="font-urdu font-bold text-[18px] print:text-[12pt] text-center"
+              style={cell({ color: balanceSide(closingBalance).color || undefined })}
+            >
+              {balanceSide(closingBalance).ur}
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -582,11 +591,11 @@ export default function MallAcStatement({
                   <div
                     className="num-total text-[24px] print:text-[15pt]"
                     style={{
-                      color: closingBalance >= 0 ? '#1a6b2e' : '#c0392b',
+                      color: balanceSide(closingBalance).color || '#1a6b2e',
                       marginTop: '2px',
                     }}
                   >
-                    Rs. {fmtAmt(Math.abs(closingBalance))} {closingBalance >= 0 ? 'Cr' : 'Dr'}
+                    {closingBalance !== 0 ? formatBalanceWithSide(closingBalance, { withCurrency: true }) : 'Rs. 0'}
                   </div>
                 </td>
               </tr>

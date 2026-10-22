@@ -54,6 +54,11 @@ export default function PrintDocument({
   actionTitle = '',
   onPrint = null,
   className = '',
+  hideSignatures = false,
+  hideAuditFooter = false,
+  docNoLabel = '',
+  dateLabel = '',
+  titleSize = '',
 }) {
   const { profile, defaultLogo } = useCompanyProfile();
   const timestamp = formatAuditTimestamp(printTimestamp);
@@ -279,17 +284,17 @@ export default function PrintDocument({
 
           {/* Document Type Badge & Doc Details (Right in LTR) */}
           <div className="text-end flex-shrink-0">
-            <div className="text-sm font-extrabold text-[#1E3A5F] uppercase tracking-wider bg-[#FAF9F7] px-3 py-1 rounded border border-[#1E3A5F]/20 inline-block print-statement-title">
+            <div className={`font-extrabold text-[#1E3A5F] uppercase tracking-wider bg-[#FAF9F7] px-3 py-1 rounded border border-[#1E3A5F]/20 inline-block print-statement-title ${titleSize || 'text-sm'}`}>
               {title}
             </div>
             {documentNo && (
               <div className="text-xs font-mono font-bold text-[#1E3A5F] mt-1 print-note-text" dir="ltr">
-                {title.toLowerCase().includes('slip') ? 'Slip #:' : 'Doc #:'} {documentNo}
+                {docNoLabel || (title.toLowerCase().includes('slip') ? 'Slip #:' : 'Doc #:')} {documentNo}
               </div>
             )}
             {date && (
               <div className="text-xs text-gray-700 font-medium mt-0.5 print-note-text" dir="ltr">
-                Date: {date}
+                {dateLabel || 'Date:'} {date}
               </div>
             )}
           </div>
@@ -337,42 +342,48 @@ export default function PrintDocument({
       )}
 
       {/* ── Document Closing Footer (Production Slip Reference Standard) ─ */}
-      <div
-        className="print-footer-block w-full pt-2 mt-3"
-        style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-      >
-        {/* Audit Line */}
-        <div className="flex items-center justify-between text-[11px] text-gray-600 border-t border-b border-gray-300 py-1.5 mb-3 print-note-text">
-          <div className="flex items-center gap-2">
-            <span>Printed on: <strong className="font-mono">{timestamp}</strong></span>
-            <span>·</span>
-            <span>Printed by: <strong>{effectivePrintedBy}</strong></span>
-            <span>·</span>
-            <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
-          </div>
-          <div className="font-medium text-gray-500">
-            {address}
-          </div>
-        </div>
-
-        {/* Clean 3-Column Signature Block */}
-        <div className="grid grid-cols-3 gap-6 text-center text-xs text-gray-700 mt-2">
-          {resolvedSignatures.map((sig, idx) => (
-            <div key={idx} className="flex flex-col items-center">
-              {/* Working signature line with signing space */}
-              <div className="w-40 max-w-full h-6 border-b-2 border-gray-600 mb-1" />
-              <div className="font-bold text-gray-800 uppercase tracking-wide text-xs">
-                {sig.label}
+      {(!hideAuditFooter || !hideSignatures) && (
+        <div
+          className="print-footer-block w-full pt-2 mt-3"
+          style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+        >
+          {/* Audit Line */}
+          {!hideAuditFooter && (
+            <div className="flex items-center justify-between text-[11px] text-gray-600 border-t border-b border-gray-300 py-1.5 mb-3 print-note-text">
+              <div className="flex items-center gap-2">
+                <span>Printed on: <strong className="font-mono">{timestamp}</strong></span>
+                <span>·</span>
+                <span>Printed by: <strong>{effectivePrintedBy}</strong></span>
+                <span>·</span>
+                <span>System: <strong>Yaseen Merchants Offline Accounting</strong></span>
               </div>
-              {sig.sub && (
-                <div className="text-[11px] text-gray-500 mt-0.5 print-note-text">
-                  {sig.sub}
-                </div>
-              )}
+              <div className="font-medium text-gray-500">
+                {address}
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Clean 3-Column Signature Block */}
+          {!hideSignatures && (
+            <div className="grid grid-cols-3 gap-6 text-center text-xs text-gray-700 mt-2">
+              {resolvedSignatures.map((sig, idx) => (
+                <div key={idx} className="flex flex-col items-center">
+                  {/* Working signature line with signing space */}
+                  <div className="w-40 max-w-full h-6 border-b-2 border-gray-600 mb-1" />
+                  <div className="font-bold text-gray-800 uppercase tracking-wide text-xs">
+                    {sig.label}
+                  </div>
+                  {sig.sub && (
+                    <div className="text-[11px] text-gray-500 mt-0.5 print-note-text">
+                      {sig.sub}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
         </div>
       </div>

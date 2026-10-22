@@ -17,6 +17,8 @@ import { useFinances } from '../../hooks/useFinances.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useCashBook } from '../../hooks/useCashBook.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/database.js';
 import { fmt, formatDate } from '../../utils/formatters.js';
 import { splitPartyBalances } from '../../utils/partyBalances.js';
 import { calculateCashBalanceFromEntries } from '../../services/cashService.js';
@@ -41,9 +43,10 @@ export default function Dashboard() {
   const { purchases, addPurchase } = usePurchases();
   const { sales, addSale } = useSales();
   const { stockEntries } = useStock();
-  const { accounts } = useFinances();
+  const { accounts, expenses = [] } = useFinances();
   const { warehouses } = useWarehouses();
   const { cashBookEntries } = useCashBook();
+  const journalEntries = useLiveQuery(() => (db.journalEntries ? db.journalEntries.toArray() : []), []) || [];
 
   const [activeModal, setActiveModal] = useState(null); // 'purchase' | 'sale'
 
@@ -59,6 +62,19 @@ export default function Dashboard() {
     .filter((a) => !a.name.toLowerCase().includes('cash'))
     .reduce((sum, a) => sum + Number(a.balance || 0), 0);
   const totalCashBank = cashBalance + totalBankBalances;
+
+  // Mall A/C Net Trading Position (Sales - Purchases - Expenses + JV adjustments + Cash Book Mall adjustments)
+  const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.total || 0), 0);
+  const totalSales = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const jvMallCredit = journalEntries
+    .flatMap((j) => j.lines || [])
+    .filter((l) => l.accountType === 'mall' || l.accountType === 'expense')
+    .reduce((s, l) => s + Number(l.credit || 0) - Number(l.debit || 0), 0);
+  const cashBookMallAdj = cashBookEntries
+    .filter((e) => e.accountType === 'mall')
+    .reduce((s, e) => s + Number(e.credit || 0) - Number(e.debit || 0), 0);
+  const mallNetPosition = totalSales - (totalPurchases + totalExpenses) + jvMallCredit + cashBookMallAdj;
 
   const suppliers = parties.filter((p) => p.type === 'Supplier' || p.type === 'Both');
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
@@ -91,7 +107,7 @@ export default function Dashboard() {
       />
 
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard
           label="Total Stock Inventory"
           value={`${totalStockQty.toLocaleString('en-PK')} KG`}
@@ -123,6 +139,14 @@ export default function Dashboard() {
           icon={DollarSign}
           color="text-blue-900"
           onClick={() => navigate('/cash-book')}
+        />
+        <StatCard
+          label="Sale / Purchase (Mall)"
+          value={fmt(mallNetPosition)}
+          sub={mallNetPosition >= 0 ? 'Surplus / Jama (Cr)' : 'Deficit / Benaam (Dr)'}
+          icon={Scale}
+          color={mallNetPosition >= 0 ? 'text-[#1E3A5F]' : 'text-red-700'}
+          onClick={() => navigate('/sale-purchase-ledger')}
         />
       </div>
 
@@ -328,6 +352,7 @@ export default function Dashboard() {
           customers={customers}
           warehouses={warehouses}
           items={items}
+          stockEntries={stockEntries}
           onSubmit={async (data) => {
             await addSale(data);
             showToast('Sale invoice created successfully!');

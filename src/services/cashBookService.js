@@ -9,6 +9,53 @@ export function deriveMallHead(accountName = '', code = '') {
   return 'Mall';
 }
 
+export function extractVoucherInfo(entry) {
+  if (!entry) return null;
+  if (entry.sourceVoucher) {
+    let type = entry.sourceType;
+    if (!type) {
+      if (entry.sourceVoucher.startsWith('SAL')) type = 'Sale';
+      else if (entry.sourceVoucher.startsWith('PUR')) type = 'Purchase';
+      else if (entry.sourceVoucher.startsWith('JV')) type = 'Journal';
+      else if (entry.sourceVoucher.startsWith('RCT')) type = 'Receipt';
+      else if (entry.sourceVoucher.startsWith('PAY')) type = 'Payment';
+      else type = entry.type || 'System';
+    }
+    return {
+      voucherNo: entry.sourceVoucher,
+      sourceType: type,
+      sourceId: entry.sourceId || entry.linkedTransactionId || null,
+    };
+  }
+
+  const desc = entry.description || '';
+  const match = desc.match(/(SAL-\d+|PUR-\d+|JV-\d+|RCT-\d+|PAY-\d+)/i);
+  if (match) {
+    const vNo = match[1].toUpperCase();
+    let type = 'System';
+    if (vNo.startsWith('SAL')) type = 'Sale';
+    else if (vNo.startsWith('PUR')) type = 'Purchase';
+    else if (vNo.startsWith('JV')) type = 'Journal';
+    else if (vNo.startsWith('RCT')) type = 'Receipt';
+    else if (vNo.startsWith('PAY')) type = 'Payment';
+    return {
+      voucherNo: vNo,
+      sourceType: type,
+      sourceId: entry.linkedTransactionId || null,
+    };
+  }
+
+  if (entry.linkedTransactionId) {
+    return {
+      voucherNo: entry.refNo || entry.type || 'VOUCHER',
+      sourceType: entry.type === 'Receipt' ? 'Receipt' : entry.type === 'Payment' ? 'Payment' : 'System',
+      sourceId: entry.linkedTransactionId,
+    };
+  }
+
+  return null;
+}
+
 export const cashBookService = {
   async getAll() {
     const entries = await db.cashBookEntries.toArray();
@@ -148,7 +195,8 @@ export const cashBookService = {
       (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
     );
 
-    if (validRows.length === 0) {
+    const hasDenominations = denominations && Object.values(denominations).some((v) => Number(v) > 0);
+    if (validRows.length === 0 && !hasDenominations) {
       throw new Error('Please fill in at least one row with an Account and Amount.');
     }
 
@@ -216,7 +264,8 @@ export const cashBookService = {
       (r) => (r.accountName || r.accountId) && (Number(r.credit) > 0 || Number(r.debit) > 0)
     );
 
-    if (validRows.length === 0) {
+    const hasDenominations = denominations && Object.values(denominations).some((v) => Number(v) > 0);
+    if (validRows.length === 0 && !hasDenominations) {
       throw new Error('Please fill in at least one row with an Account and Amount.');
     }
 
@@ -327,7 +376,7 @@ export const cashBookService = {
   },
 
   /**
-   * Get sheet, rows and existence of a book by cashBookNo.
+   * Get sheet, rows, system entries and existence of a book by cashBookNo.
    */
   async getBook(cashBookNo) {
     const bookNoNum = Number(cashBookNo);
@@ -337,10 +386,36 @@ export const cashBookService = {
       .filter((e) => Number(e.cashBookNo) === bookNoNum)
       .sort((a, b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
 
+    const bookDate = sheet?.date || entries[0]?.date || null;
+    const systemEntries = bookDate
+      ? all
+          .filter((e) => !e.cashBookNo && e.date === bookDate)
+          .sort((a, b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id))
+      : [];
+
     return {
       sheet: sheet || null,
       entries,
+      systemEntries,
+      allEntries: [...systemEntries, ...entries],
       exists: !!sheet || entries.length > 0,
+      date: bookDate,
+    };
+  },
+
+  /**
+   * Get unnumbered system entries for a given date (automatic Day Book view).
+   */
+  async getDayBook(date) {
+    if (!date) return { date: null, systemEntries: [], exists: false };
+    const all = await db.cashBookEntries.toArray();
+    const systemEntries = all
+      .filter((e) => !e.cashBookNo && e.date === date)
+      .sort((a, b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
+    return {
+      date,
+      systemEntries,
+      exists: systemEntries.length > 0,
     };
   },
 
@@ -404,6 +479,9 @@ export const cashBookService = {
       lineIndex: entryData.lineIndex !== undefined ? entryData.lineIndex : null,
       cashBookNo: entryData.cashBookNo ? Number(entryData.cashBookNo) : null,
       refNo: entryData.refNo || (entryData.cashBookNo ? `CB-${String(entryData.cashBookNo).padStart(4, '0')}` : null),
+      sourceVoucher: entryData.sourceVoucher || null,
+      sourceType: entryData.sourceType || null,
+      sourceId: entryData.sourceId || null,
       createdAt: entryData.createdAt || new Date().toISOString(),
     };
 

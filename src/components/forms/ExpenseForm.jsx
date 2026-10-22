@@ -14,12 +14,15 @@ export default function ExpenseForm({ accounts = [], initialData = null, onSubmi
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const accObj = accounts.find((a) => a.name === account || a.id === account);
+
     onSubmit({
       date,
       description,
       category,
       amount: Number(amount),
-      account,
+      accountId: accObj ? accObj.id : null,
+      account: accObj ? accObj.name : account,
     });
   };
 

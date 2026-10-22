@@ -3,7 +3,7 @@ import ClassicLedgerView from '../../components/common/ClassicLedgerView.jsx';
 import { usePartyLedger } from '../../hooks/usePartyLedger.js';
 import Button from '../../components/ui/Button.jsx';
 import { fmt } from '../../utils/formatters.js';
-import { partySide } from '../../utils/partyBalances.js';
+import { balanceSide } from '../../utils/partySide.js';
 import { X, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -30,11 +30,15 @@ export default function PartyDetails({ party, onClose }) {
           <p className="text-xs text-gray-500">
             {party.type} | {party.city || 'No city'} | Phone: {party.phone || '-'}
             {party.balance !== undefined && (() => {
-              const { side, amount } = partySide(party.balance);
-              const isZero = Number(party.balance || 0) === 0;
+              const side = balanceSide(party.balance);
+              const isZero = side.amount === 0;
               return (
-                <span className="ms-2 font-mono font-bold text-gray-800" dir="ltr">
-                  | Balance: {fmt(amount)} {!isZero ? side : ''}
+                <span
+                  className="ms-2 font-mono font-bold"
+                  style={{ color: side.color || '#1f2937' }}
+                  dir="ltr"
+                >
+                  | Balance: {isZero ? '0' : `${fmt(side.amount)} ${side.ur} (${side.en})`}
                 </span>
               );
             })()}

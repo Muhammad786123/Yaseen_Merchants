@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import StockAdjustmentForm from '../../components/forms/StockAdjustmentForm.jsx';
+import StockTransferForm from '../../components/forms/StockTransferForm.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { useStock } from '../../hooks/useStock.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
@@ -18,6 +19,8 @@ import { useItems } from '../../hooks/useItems.js';
 import { useQualities } from '../../hooks/useQualities.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useStockAdjustments } from '../../hooks/useStockAdjustments.js';
+import { useStockTransfers } from '../../hooks/useStockTransfers.js';
+import { useClosingStock } from '../../hooks/useClosingStock.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { verifyStockConsistency } from '../../utils/stockUtils.js';
 import { fmt, fmtNum, formatDate } from '../../utils/formatters.js';
@@ -35,6 +38,7 @@ import {
   Printer,
   ChevronDown,
   ChevronRight,
+  ArrowRightLeft,
   Warehouse as WarehouseIcon,
 } from 'lucide-react';
 
@@ -63,9 +67,15 @@ export default function Stock() {
     updateStockAdjustment,
     deleteStockAdjustment,
   } = useStockAdjustments();
+  const {
+    stockTransfers,
+    addStockTransfer,
+    updateStockTransfer,
+    deleteStockTransfer,
+  } = useStockTransfers();
   const { showToast } = useApp();
 
-  // Tab state: 'item-wise' (default) | 'warehouse-wise' | 'adjustments'
+  // Tab state: 'item-wise' (default) | 'warehouse-wise' | 'adjustments' | 'transfers'
   const [activeTab, setActiveTab] = useState('item-wise');
 
   // Filters & Toggles
@@ -82,6 +92,61 @@ export default function Stock() {
   const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
   const [editingAdjustment, setEditingAdjustment] = useState(null);
   const [deletingAdjId, setDeletingAdjId] = useState(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState(null);
+  const [deletingTransferId, setDeletingTransferId] = useState(null);
+
+  // Closing Stock for profit & balance sheet (Option B)
+  const {
+    closingStockEntries,
+    latestClosingStock,
+    closingStockValue,
+    addEntry: addClosingStockEntry,
+    updateEntry: updateClosingStockEntry,
+    deleteEntry: deleteClosingStockEntry,
+  } = useClosingStock();
+
+  const [isClosingStockModalOpen, setIsClosingStockModalOpen] = useState(false);
+  const [closingStockDate, setClosingStockDate] = useState(new Date().toISOString().split('T')[0]);
+  const [closingStockAmount, setClosingStockAmount] = useState('');
+  const [editingClosingStockId, setEditingClosingStockId] = useState(null);
+  const [deletingClosingStockId, setDeletingClosingStockId] = useState(null);
+
+  const handleSaveClosingStock = async (e) => {
+    e.preventDefault();
+    if (!closingStockAmount || isNaN(Number(closingStockAmount))) {
+      showToast('Please enter a valid amount');
+      return;
+    }
+    if (editingClosingStockId) {
+      await updateClosingStockEntry(editingClosingStockId, {
+        date: closingStockDate,
+        amount: Number(closingStockAmount),
+      });
+      showToast('Closing stock value updated!');
+      setEditingClosingStockId(null);
+    } else {
+      await addClosingStockEntry({
+        date: closingStockDate,
+        amount: Number(closingStockAmount),
+      });
+      showToast('Closing stock value saved!');
+    }
+    setClosingStockAmount('');
+    setClosingStockDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleStartEditClosingStock = (entry) => {
+    setEditingClosingStockId(entry.id);
+    setClosingStockDate(entry.date);
+    setClosingStockAmount(entry.amount);
+  };
+
+  const handleCancelEditClosingStock = () => {
+    setEditingClosingStockId(null);
+    setClosingStockDate(new Date().toISOString().split('T')[0]);
+    setClosingStockAmount('');
+  };
 
   // Top summary totals directly from stockEntries
   const totalQty = useMemo(
@@ -92,6 +157,7 @@ export default function Stock() {
     () => stockEntries.reduce((sum, s) => sum + Number(s.value || 0), 0),
     [stockEntries]
   );
+
 
   // Run automated consistency check against ledger transactions
   const consistency = useMemo(
@@ -205,6 +271,12 @@ export default function Stock() {
     return itemsList;
   }, [stockEntries, items, showZeroStock]);
 
+  // Negative stock count for warning alert banner
+  const negativeStockCount = useMemo(
+    () => itemWiseData.filter((item) => item.totalQty < 0).length,
+    [itemWiseData]
+  );
+
   // Filtered Item-wise items
   const filteredItemWise = useMemo(() => {
     const qLower = search.trim().toLowerCase();
@@ -220,8 +292,8 @@ export default function Stock() {
       // 2. Category filter
       const matchCat = filterCat === 'All' || item.category === filterCat;
 
-      // 3. Zero stock filter
-      const matchZero = showZeroStock ? true : item.totalQty > 0;
+      // 3. Zero stock filter: only hide exactly zero stock when showZeroStock is false; negative stock is always shown
+      const matchZero = showZeroStock ? true : item.totalQty !== 0;
 
       return matchSearch && matchCat && matchZero;
     });
@@ -332,7 +404,7 @@ export default function Stock() {
             String(it.warehouseName || '').toLowerCase().includes(qLower);
 
           const matchCat = filterCat === 'All' || it.category === filterCat;
-          const matchZero = showZeroStock ? true : it.qty > 0;
+          const matchZero = showZeroStock ? true : it.qty !== 0;
           return matchSearch && matchCat && matchZero;
         });
 
@@ -425,6 +497,23 @@ export default function Stock() {
               )}
               <Button
                 variant="secondary"
+                icon={DollarSign}
+                onClick={() => {
+                  handleCancelEditClosingStock();
+                  setIsClosingStockModalOpen(true);
+                }}
+              >
+                Closing Stock Value (Rs)
+              </Button>
+              <Button
+                variant="secondary"
+                icon={ArrowRightLeft}
+                onClick={() => setIsTransferModalOpen(true)}
+              >
+                Transfer Between Godowns
+              </Button>
+              <Button
+                variant="secondary"
                 icon={RefreshCw}
                 onClick={handleManualSync}
                 disabled={isSyncing}
@@ -443,21 +532,54 @@ export default function Stock() {
         />
       </div>
 
+      {/* Grey Note: Stock shows purchased quantity only. Sales are not deducted. */}
+      <div className="p-3 bg-gray-100 border border-gray-300 text-gray-700 text-xs sm:text-sm font-semibold rounded-none flex flex-wrap items-center justify-between gap-2 no-print">
+        <span>Stock shows purchased quantity only. Sales are not deducted.</span>
+        <span className="font-urdu text-xs sm:text-sm text-gray-600" dir="rtl">
+          اسٹاک میں صرف خریدا گیا مال ظاہر ہوتا ہے۔ فروخت منہا نہیں کی جاتی۔
+        </span>
+      </div>
+
       {/* Summary Cards (Always visible on screen and print) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" dir="ltr">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" dir="ltr">
         <StatCard
-          label="Total Inventory Volume"
+          label="Total Purchased Volume"
           value={`${totalQty.toLocaleString('en-PK')} KG`}
           sub="Across all warehouses & items"
           icon={Package}
         />
         <StatCard
-          label="Total Stock Valuation"
+          label="Purchased Stock Valuation"
           value={fmt(totalVal)}
           sub="Calculated on live weighted average purchase costs"
           icon={DollarSign}
           color="text-[#1a6b2e]"
         />
+        <div
+          onClick={() => {
+            handleCancelEditClosingStock();
+            setIsClosingStockModalOpen(true);
+          }}
+          className="border-2 border-black bg-white p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+              Closing Stock Value (Rs)
+            </span>
+            <DollarSign className="w-5 h-5 text-[#1E3A5F]" />
+          </div>
+          <div className="text-2xl font-black font-mono mt-1 text-[#1E3A5F]">
+            {fmt(closingStockValue)}
+          </div>
+          <div className="text-xs text-gray-600 mt-1 flex items-center justify-between">
+            <span>
+              {latestClosingStock
+                ? `Active for P/L (${formatDate(latestClosingStock.date)})`
+                : 'Defaults to Rs. 0'}
+            </span>
+            <span className="underline font-bold text-[#1E3A5F]">Set Value</span>
+          </div>
+        </div>
       </div>
 
       {/* Tabs Row (Hidden on print) */}
@@ -507,6 +629,21 @@ export default function Stock() {
             <span>Manual Additions (دستی اندراج)</span>
             <span className="font-mono text-xs opacity-90">({stockAdjustments.length})</span>
           </button>
+
+          <button
+            id="tab-transfers"
+            type="button"
+            onClick={() => setActiveTab('transfers')}
+            className={`px-4 py-2 font-bold text-xs sm:text-sm border-t-2 border-x-2 border-black transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'transfers'
+                ? 'bg-[#1a6b2e] text-white -mb-[2px] pb-[10px]'
+                : 'bg-white text-black hover:bg-gray-100'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>Transfers (گودام منتقلی)</span>
+            <span className="font-mono text-xs opacity-90">({stockTransfers.length})</span>
+          </button>
         </div>
 
         {/* Print Button for Current Tab */}
@@ -523,11 +660,7 @@ export default function Stock() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder={
-              activeTab === 'warehouse-wise'
-                ? 'Search warehouse or item...'
-                : 'Search by item name or warehouse...'
-            }
+            placeholder="Search by item or warehouse"
             className="w-full sm:w-72"
           />
 
@@ -696,10 +829,17 @@ export default function Stock() {
                         {/* Total Qty (KG) */}
                         <td
                           style={{ border: BORDER_STYLE, padding: '6px 8px' }}
-                          className="text-left font-mono tabular-nums slashed-zero font-bold text-black text-base"
+                          className={`text-left font-mono tabular-nums slashed-zero font-bold text-base ${
+                            item.totalQty < 0 ? 'text-red-600' : 'text-black'
+                          }`}
                           dir="ltr"
                         >
-                          {item.totalQty.toLocaleString('en-PK')} KG
+                          <div className="flex items-center gap-2">
+                            <span>{item.totalQty.toLocaleString('en-PK')} KG</span>
+                            {item.totalQty < 0 && (
+                              <Badge variant="red">Negative stock</Badge>
+                            )}
+                          </div>
                         </td>
 
                         {/* Weighted Avg Rate */}
@@ -758,9 +898,6 @@ export default function Stock() {
                                 <thead>
                                   <tr className="bg-gray-100 text-gray-800 font-bold border-b border-gray-300">
                                     <th className="p-2 text-start">گودام (Warehouse Store)</th>
-                                    {item.hasAnyRealQuality && (
-                                      <th className="p-2 text-center">کوالٹی (Quality)</th>
-                                    )}
                                     <th className="p-2 text-left" dir="ltr">مقدار (Qty KG)</th>
                                     <th className="p-2 text-left" dir="ltr">ریٹ (Avg Rate)</th>
                                     <th className="p-2 text-left" dir="ltr">مالیت (Value Rs)</th>
@@ -790,25 +927,19 @@ export default function Stock() {
                                         </button>
                                       </td>
 
-                                      {/* Quality Grade (shown only if item has any real quality) */}
-                                      {item.hasAnyRealQuality && (
-                                        <td className="p-2 text-center">
-                                          {b.hasRealQuality ? (
-                                            <span className="bg-[#FFEB3B] border border-black px-1.5 py-0.5 font-bold text-xs text-black">
-                                              {b.quality}
-                                            </span>
-                                          ) : (
-                                            <span className="text-gray-400 font-mono">-</span>
-                                          )}
-                                        </td>
-                                      )}
-
                                       {/* Qty */}
                                       <td
-                                        className="p-2 text-left font-mono tabular-nums slashed-zero font-bold text-black"
+                                        className={`p-2 text-left font-mono tabular-nums slashed-zero font-bold ${
+                                          b.qty < 0 ? 'text-red-600' : 'text-black'
+                                        }`}
                                         dir="ltr"
                                       >
-                                        {b.qty.toLocaleString('en-PK')} KG
+                                        <div className="flex items-center gap-1.5">
+                                          <span>{b.qty.toLocaleString('en-PK')} KG</span>
+                                          {b.qty < 0 && (
+                                            <Badge variant="red" className="text-[10px]">Negative stock</Badge>
+                                          )}
+                                        </div>
                                       </td>
 
                                       {/* Avg Rate */}
@@ -960,7 +1091,9 @@ export default function Stock() {
                   <div className="flex items-center gap-4 text-sm font-mono tabular-nums slashed-zero font-bold">
                     <div className="text-gray-800">
                       <span className="text-xs font-sans text-gray-500 font-normal me-1">Total Qty:</span>
-                      <span className="text-black font-extrabold">{wh.totalQty.toLocaleString('en-PK')} KG</span>
+                      <span className={`font-extrabold ${wh.totalQty < 0 ? 'text-red-600' : 'text-black'}`}>
+                        {wh.totalQty.toLocaleString('en-PK')} KG
+                      </span>
                     </div>
                     <div className="text-gray-800">
                       <span className="text-xs font-sans text-gray-500 font-normal me-1">Avg Rate:</span>
@@ -982,18 +1115,13 @@ export default function Stock() {
                   >
                     <thead>
                       <tr className="bg-[#DFDFDF] border-b border-black text-gray-950 font-bold text-center">
-                        <th style={{ border: BORDER_STYLE, padding: '6px 10px', width: '34%' }} className="text-start font-urdu text-sm font-bold">
+                        <th style={{ border: BORDER_STYLE, padding: '6px 10px', width: '38%' }} className="text-start font-urdu text-sm font-bold">
                           آئٹم کا نام (Item Name)
                         </th>
-                        <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '14%' }} className="text-center text-xs font-bold">
+                        <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '16%' }} className="text-center text-xs font-bold">
                           کیٹیگری (Category)
                         </th>
-                        {wh.hasAnyRealQuality && (
-                          <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '12%' }} className="text-center text-xs font-bold">
-                            کوالٹی (Quality)
-                          </th>
-                        )}
-                        <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '14%' }} className="text-left font-bold" dir="ltr">
+                        <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '16%' }} className="text-left font-bold" dir="ltr">
                           مقدار (Qty KG)
                         </th>
                         <th style={{ border: BORDER_STYLE, padding: '6px 8px', width: '12%' }} className="text-left font-bold" dir="ltr">
@@ -1032,26 +1160,20 @@ export default function Stock() {
                             </Badge>
                           </td>
 
-                          {/* Quality Grade (shown only if warehouse has real quality) */}
-                          {wh.hasAnyRealQuality && (
-                            <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center">
-                              {it.hasRealQuality ? (
-                                <span className="bg-[#FFEB3B] border border-black px-1.5 py-0.5 font-bold text-xs text-black">
-                                  {it.quality}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 font-mono">-</span>
-                              )}
-                            </td>
-                          )}
-
                           {/* Qty */}
                           <td
                             style={{ border: BORDER_STYLE, padding: '6px 8px' }}
-                            className="text-left font-mono tabular-nums slashed-zero font-bold text-black text-base"
+                            className={`text-left font-mono tabular-nums slashed-zero font-bold text-base ${
+                              it.qty < 0 ? 'text-red-600' : 'text-black'
+                            }`}
                             dir="ltr"
                           >
-                            {it.qty.toLocaleString('en-PK')} KG
+                            <div className="flex items-center gap-1.5">
+                              <span>{it.qty.toLocaleString('en-PK')} KG</span>
+                              {it.qty < 0 && (
+                                <Badge variant="red" className="text-[10px]">Negative stock</Badge>
+                              )}
+                            </div>
                           </td>
 
                           {/* Avg Rate */}
@@ -1231,6 +1353,94 @@ export default function Stock() {
         </div>
       )}
 
+      {/* ── TAB 4: Transfers (گودام منتقلی) ── */}
+      {activeTab === 'transfers' && (
+        <div className="overflow-x-auto border-2 border-black bg-white">
+          <table
+            className="w-full border-collapse text-xs sm:text-sm text-black"
+            style={{ borderCollapse: 'collapse', border: BORDER_STYLE }}
+          >
+            <thead>
+              <tr className="bg-[#DFDFDF] text-center font-bold">
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }}>تاریخ (Date)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }}>ٹرانسفر نمبر (No)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-start">آئٹم نام (Item Name)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }}>کوالٹی (Quality)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }}>روانہ گودام (From Godown)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }}>موصول گودام (To Godown)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-left" dir="ltr">وزن (Qty KG)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-start">تفصیل (Remarks)</th>
+                <th style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="no-print">ایکشن (Actions)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stockTransfers.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-gray-500 font-urdu text-sm" style={{ border: BORDER_STYLE }}>
+                    کوئی گودام منتقلی ریکارڈ نہیں ہے۔ (No inter-godown transfers recorded yet)
+                  </td>
+                </tr>
+              ) : (
+                stockTransfers.map((trf) => (
+                  <tr key={trf.id} className="hover:bg-yellow-50/40 border-b border-black">
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center font-mono text-xs whitespace-nowrap">
+                      {formatDate(trf.date)}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center font-mono font-bold text-xs text-blue-900">
+                      {trf.no}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-start font-bold">
+                      {trf.itemName}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center">
+                      {isRealQuality(trf.quality) ? (
+                        <span className="bg-[#FFEB3B] border border-black px-1.5 py-0.5 font-bold text-xs text-black">
+                          {trf.quality}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-mono">-</span>
+                      )}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center font-semibold text-red-800">
+                      {trf.fromWarehouseName || trf.fromWarehouseId}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-center font-semibold text-emerald-800">
+                      {trf.toWarehouseName || trf.toWarehouseId}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-left font-mono tabular-nums font-bold text-blue-950" dir="ltr">
+                      {Number(trf.qty || 0).toLocaleString('en-PK')} KG
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 8px' }} className="text-start text-xs font-urdu text-gray-700">
+                      {trf.remarks || '—'}
+                    </td>
+                    <td style={{ border: BORDER_STYLE, padding: '6px 6px' }} className="text-center no-print">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTransfer(trf)}
+                          className="p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                          title="Edit Transfer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingTransferId(trf.id)}
+                          className="p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                          title="Delete Transfer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Manual Stock Entry Modal */}
       <Modal
         isOpen={isAddStockModalOpen || !!editingAdjustment}
@@ -1271,7 +1481,46 @@ export default function Stock() {
         />
       </Modal>
 
-      {/* Confirm Delete Dialog */}
+      {/* Stock Transfer Modal */}
+      <Modal
+        isOpen={isTransferModalOpen || !!editingTransfer}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setEditingTransfer(null);
+        }}
+        title={
+          editingTransfer
+            ? `Edit Stock Transfer — ${editingTransfer.no}`
+            : 'Transfer Stock Between Godowns (گودام ٹرانسفر)'
+        }
+      >
+        <StockTransferForm
+          warehouses={warehouses}
+          items={items}
+          qualities={qualities}
+          stockEntries={stockEntries}
+          initialData={editingTransfer}
+          onSubmit={async (data) => {
+            if (editingTransfer) {
+              await updateStockTransfer(editingTransfer.id, data);
+              showToast(`Stock transfer ${editingTransfer.no} updated successfully!`);
+            } else {
+              const res = await addStockTransfer(data);
+              showToast(
+                `Transfer ${res.no} (${data.qty.toLocaleString('en-PK')} KG from ${data.fromWarehouseName} to ${data.toWarehouseName}) completed successfully!`
+              );
+            }
+            setIsTransferModalOpen(false);
+            setEditingTransfer(null);
+          }}
+          onCancel={() => {
+            setIsTransferModalOpen(false);
+            setEditingTransfer(null);
+          }}
+        />
+      </Modal>
+
+      {/* Confirm Delete Stock Adjustment Dialog */}
       <ConfirmDialog
         isOpen={!!deletingAdjId}
         title="Delete Stock Record"
@@ -1282,6 +1531,156 @@ export default function Stock() {
           setDeletingAdjId(null);
         }}
         onCancel={() => setDeletingAdjId(null)}
+      />
+
+      {/* Confirm Delete Stock Transfer Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingTransferId}
+        title="Delete Stock Transfer"
+        message="Are you sure you want to delete this stock transfer record? This will return the stock to the source godown."
+        onConfirm={async () => {
+          await deleteStockTransfer(deletingTransferId);
+          showToast('Stock transfer deleted and stock reversed!');
+          setDeletingTransferId(null);
+        }}
+        onCancel={() => setDeletingTransferId(null)}
+      />
+
+      {/* Closing Stock Value Modal */}
+      <Modal
+        isOpen={isClosingStockModalOpen}
+        onClose={() => {
+          setIsClosingStockModalOpen(false);
+          handleCancelEditClosingStock();
+        }}
+        title="Closing Stock Value (Rs) — کلوزنگ اسٹاک ویلیو"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-gray-600">
+            This figure is used for Balance Sheet "Stock (Value)" and Gross Profit calculation (<code>mallTradingBalance = mallNetPosition + closingStockValue</code>). The latest entry by date is used automatically.
+          </p>
+
+          {/* Add / Edit Form */}
+          <form onSubmit={handleSaveClosingStock} className="p-3 bg-gray-50 border border-black space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-black">
+              {editingClosingStockId ? 'Edit Closing Stock Value' : 'Add Closing Stock Value'}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Valuation Date (تاریخ)
+                </label>
+                <input
+                  type="date"
+                  value={closingStockDate}
+                  onChange={(e) => setClosingStockDate(e.target.value)}
+                  required
+                  className="w-full bg-white border border-black px-2 py-1.5 text-xs font-mono outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Amount in Rs. (کلوزنگ اسٹاک رقم)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 10000"
+                  value={closingStockAmount}
+                  onChange={(e) => setClosingStockAmount(e.target.value)}
+                  required
+                  className="w-full bg-white border border-black px-2 py-1.5 text-xs font-mono font-bold outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              {editingClosingStockId && (
+                <Button variant="secondary" size="sm" type="button" onClick={handleCancelEditClosingStock}>
+                  Cancel Edit
+                </Button>
+              )}
+              <Button variant="primary" size="sm" type="submit">
+                {editingClosingStockId ? 'Update Value' : 'Save Closing Stock Value'}
+              </Button>
+            </div>
+          </form>
+
+          {/* List of Entries */}
+          <div className="border border-black">
+            <div className="bg-[#DFDFDF] px-3 py-1.5 border-b border-black text-xs font-bold flex justify-between">
+              <span>Closing Stock History ({closingStockEntries.length})</span>
+              <span>Latest is Active</span>
+            </div>
+            {closingStockEntries.length === 0 ? (
+              <div className="p-4 text-center text-xs text-gray-500 font-medium">
+                No closing stock value entered yet. Balance sheet and profit will use Rs. 0.
+              </div>
+            ) : (
+              <table className="w-full text-xs border-collapse">
+                <thead className="bg-gray-100 border-b border-black text-left">
+                  <tr>
+                    <th className="p-2 border-r border-black">Date</th>
+                    <th className="p-2 border-r border-black">Amount (Rs)</th>
+                    <th className="p-2 border-r border-black">Status</th>
+                    <th className="p-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closingStockEntries.map((entry, idx) => {
+                    const isLatest = idx === 0;
+                    return (
+                      <tr key={entry.id} className={`border-b border-gray-200 ${isLatest ? 'bg-emerald-50/50 font-bold' : ''}`}>
+                        <td className="p-2 border-r border-gray-200 font-mono">{formatDate(entry.date)}</td>
+                        <td className="p-2 border-r border-gray-200 font-mono font-bold text-[#1E3A5F]">{fmt(entry.amount)}</td>
+                        <td className="p-2 border-r border-gray-200">
+                          {isLatest ? (
+                            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-400">
+                              Active for Profit
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-[10px]">Historical</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditClosingStock(entry)}
+                              className="text-blue-600 hover:text-blue-900 p-1 cursor-pointer"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingClosingStockId(entry.id)}
+                              className="text-red-600 hover:text-red-900 p-1 cursor-pointer"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm Delete Closing Stock Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingClosingStockId}
+        title="Delete Closing Stock Entry"
+        message="Are you sure you want to delete this closing stock value? Profit and balance sheet will revert to the previous entry or 0."
+        onConfirm={async () => {
+          await deleteClosingStockEntry(deletingClosingStockId);
+          showToast('Closing stock value deleted!');
+          setDeletingClosingStockId(null);
+        }}
+        onCancel={() => setDeletingClosingStockId(null)}
       />
     </div>
   );

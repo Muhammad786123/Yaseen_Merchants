@@ -35,7 +35,7 @@ export const productionService = {
       editCount: 0,
     };
 
-    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+    await db.transaction('rw', [db.productions], async () => {
       await db.productions.add(newPrd);
     });
 
@@ -70,7 +70,7 @@ export const productionService = {
       editCount: (Number(existing.editCount) || 0) + 1,
     };
 
-    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+    await db.transaction('rw', [db.productions], async () => {
       await db.productions.put(updatedPrd);
     });
 
@@ -87,7 +87,7 @@ export const productionService = {
     const existing = await db.productions.get(id);
     if (!existing) return;
 
-    await db.transaction('rw', [db.productions, db.stockEntries], async () => {
+    await db.transaction('rw', [db.productions], async () => {
       await db.productions.delete(id);
     });
 

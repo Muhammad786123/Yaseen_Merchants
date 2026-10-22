@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import Button from '../ui/Button.jsx';
 import { safePrint } from '../../utils/printUtils.js';
 import { fmt, fmtNum, formatDate } from '../../utils/formatters.js';
+import { balanceSide, formatBalanceWithSide } from '../../utils/partySide.js';
 
 function fmtDateShort(d) {
   if (!d) return '';
@@ -239,10 +240,14 @@ export default function ClassicLedgerView({
           <div className="flex items-center justify-between text-xs pt-0.5">
             <div className="flex items-center gap-2">
               <span className="font-urdu font-bold text-sm" dir="rtl">سابقہ بیلنس (Opening Balance):</span>
-              <span className="num font-bold text-sm" dir="ltr">
+              <span
+                className="num font-bold text-sm"
+                dir="ltr"
+                style={{ color: mode === 'currency' ? balanceSide(openingBalance).color : undefined }}
+              >
                 {openingBalance
                   ? mode === 'currency'
-                    ? `${fmtNum(Math.abs(openingBalance))}${openingBalance > 0 ? ' Cr' : openingBalance < 0 ? ' Dr' : ''}`
+                    ? formatBalanceWithSide(openingBalance)
                     : `${fmtNum(openingBalance)} ${unitLabel}`
                   : '0'}
               </span>
@@ -281,7 +286,7 @@ export default function ClassicLedgerView({
               <col style={{ width: '12%' }} /> {/* بنام: Debit */}
               <col style={{ width: '12%' }} /> {/* جمع: Credit */}
               <col style={{ width: '11%' }} /> {/* بیلنس: Balance */}
-              <col style={{ width: '3%' }} />  {/* Marker: جمع/نام */}
+              <col style={{ width: '3%' }} />  {/* Marker: جمع/بنام */}
             </colgroup>
 
             <thead className="sticky top-0 z-10 bg-white shadow-xs">
@@ -312,17 +317,31 @@ export default function ClassicLedgerView({
               </tr>
             ) : (
               filteredRows.map((row, idx) => {
-                const isDebit = Number(row.debit) > 0;
-                const isCredit = Number(row.credit) > 0;
-                const rowMarker = row.marker
-                  ? row.marker === 'بنام'
-                    ? 'نام'
-                    : row.marker
-                  : isCredit
-                  ? 'جمع'
-                  : isDebit
-                  ? 'نام'
-                  : '—';
+                const rowBalNum = row.balance !== undefined && row.balance !== null ? Number(row.balance) : null;
+                const rowSide = rowBalNum !== null ? balanceSide(rowBalNum) : null;
+                let rowMarker = '';
+                let markerColor = undefined;
+
+                if (mode === 'currency') {
+                  if (rowSide) {
+                    rowMarker = rowSide.ur;
+                    markerColor = rowSide.color;
+                  }
+                } else {
+                  // Quantity mode (Stock / Warehouse / Item Ledger)
+                  if (rowBalNum !== null) {
+                    if (rowBalNum > 0) {
+                      rowMarker = 'جمع';
+                      markerColor = '#16a34a';
+                    } else if (rowBalNum < 0) {
+                      rowMarker = 'بنام';
+                      markerColor = '#dc2626';
+                    } else {
+                      rowMarker = '';
+                      markerColor = undefined;
+                    }
+                  }
+                }
 
                 return (
                   <tr
@@ -439,10 +458,15 @@ export default function ClassicLedgerView({
                         border: BORDER_STYLE,
                         padding: '2px 4px',
                         direction: 'ltr',
+                        color: mode === 'currency' ? rowSide?.color : (rowBalNum < 0 ? '#dc2626' : undefined),
                       }}
                     >
                       {row.balance !== undefined && row.balance !== null
-                        ? `${fmtNum(Math.abs(Number(row.balance)))}${Number(row.balance) > 0 ? ' Cr' : Number(row.balance) < 0 ? ' Dr' : ''}`
+                        ? mode === 'quantity'
+                          ? `${fmtNum(row.balance)} ${unitLabel || 'KG'}`
+                          : rowSide?.amount === 0
+                          ? '0'
+                          : `${fmtNum(rowSide?.amount)} ${rowSide?.en}`
                         : '—'}
                     </td>
 
@@ -452,7 +476,7 @@ export default function ClassicLedgerView({
                       style={{
                         border: BORDER_STYLE,
                         padding: '2px 2px',
-                        color: rowMarker === 'جمع' ? '#000000' : '#b71c1c',
+                        color: markerColor,
                       }}
                     >
                       {rowMarker}
@@ -491,7 +515,7 @@ export default function ClassicLedgerView({
                   direction: 'ltr',
                 }}
               >
-                {totalWeight ? fmtNum(totalWeight) : ''}
+                {mode === 'quantity' ? '' : (totalWeight ? fmtNum(totalWeight) : '')}
               </td>
 
               {/* Empty rate column */}
@@ -529,14 +553,38 @@ export default function ClassicLedgerView({
                   border: BORDER_STYLE,
                   padding: '3px 4px',
                   direction: 'ltr',
+                  color: mode === 'currency' ? balanceSide(finalBalance).color : (finalBalance < 0 ? '#dc2626' : undefined),
                 }}
               >
-                {fmtNum(Math.abs(finalBalance))}
-                {finalBalance > 0 ? ' Cr' : finalBalance < 0 ? ' Dr' : ''}
+                {mode === 'quantity'
+                  ? `${fmtNum(finalBalance)} ${unitLabel || 'KG'}`
+                  : formatBalanceWithSide(finalBalance)}
               </td>
 
               {/* Marker column */}
-              <td style={{ border: BORDER_STYLE, padding: '3px 2px' }}></td>
+              <td
+                className="font-urdu font-bold text-xs print:text-[10px] text-center"
+                style={{
+                  border: BORDER_STYLE,
+                  padding: '3px 2px',
+                  color:
+                    mode === 'currency'
+                      ? balanceSide(finalBalance).color
+                      : finalBalance > 0
+                      ? '#16a34a'
+                      : finalBalance < 0
+                      ? '#dc2626'
+                      : undefined,
+                }}
+              >
+                {mode === 'currency'
+                  ? balanceSide(finalBalance).ur
+                  : finalBalance > 0
+                  ? 'جمع'
+                  : finalBalance < 0
+                  ? 'بنام'
+                  : ''}
+              </td>
             </tr>
           </tfoot>
         </table>

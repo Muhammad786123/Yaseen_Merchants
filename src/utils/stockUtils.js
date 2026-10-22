@@ -13,18 +13,23 @@ export function computeStockPositions(
   productions = [],
   items = [],
   warehouses = [],
-  stockAdjustments = []
+  stockAdjustments = [],
+  stockTransfers = []
 ) {
   const positions = {};
 
   // Helper to find item details
   const getItemInfo = (itemId, itemName) => {
-    const found = items.find((i) => i.id === itemId || (itemName && i.name.toLowerCase() === itemName.toLowerCase()));
+    const found = items.find(
+      (i) =>
+        (itemId && i.id === itemId) ||
+        (itemName && i.name && i.name.toLowerCase() === itemName.toLowerCase())
+    );
     return {
       id: found?.id || itemId,
       name: found?.name || itemName || 'Unknown Item',
       category: found?.category || 'Raw Material',
-      quality: found?.quality || 'Cotton A',
+      quality: found?.quality || '',
     };
   };
 
@@ -33,8 +38,8 @@ export function computeStockPositions(
     const found = warehouses.find(
       (w) =>
         (warehouseId && w.id === warehouseId) ||
-        (warehouseName && w.name.toLowerCase() === warehouseName.toLowerCase()) ||
-        (warehouseId && w.name.toLowerCase() === warehouseId.toLowerCase())
+        (warehouseName && w.name && w.name.toLowerCase() === warehouseName.toLowerCase()) ||
+        (warehouseId && w.name && w.name.toLowerCase() === warehouseId.toLowerCase())
     );
     return {
       id: found?.id || warehouseId || 'w1',
@@ -51,7 +56,7 @@ export function computeStockPositions(
     p.items?.forEach((it) => {
       if (it.type === 'service') return; // Skip service lines
       const itInfo = getItemInfo(it.itemId, it.itemName);
-      const quality = it.quality || itInfo.quality || 'Cotton A';
+      const quality = it.quality || '';
       const qty = Number(it.qty || 0);
       const rate = Number(it.rate || 0);
       const amount = it.amount !== undefined ? Number(it.amount) : qty * rate;
@@ -59,6 +64,7 @@ export function computeStockPositions(
       if (qty > 0) {
         events.push({
           date: p.date,
+          createdAt: p.createdAt,
           type: 'IN',
           source: 'Purchase',
           refNo: p.no,
@@ -76,44 +82,20 @@ export function computeStockPositions(
     });
   });
 
-  // 2. Outward from Sales
-  sales.forEach((s) => {
-    const wInfo = getWarehouseInfo(s.warehouseId, s.warehouseName);
-    s.items?.forEach((it) => {
-      if (it.type === 'service') return;
-      const itInfo = getItemInfo(it.itemId, it.itemName);
-      const quality = it.quality || itInfo.quality || 'Cotton A';
-      const qty = Number(it.qty || 0);
-
-      if (qty > 0) {
-        events.push({
-          date: s.date,
-          type: 'OUT',
-          source: 'Sale',
-          refNo: s.no,
-          itemId: itInfo.id,
-          itemName: itInfo.name,
-          category: itInfo.category,
-          quality,
-          warehouseId: wInfo.id,
-          warehouseName: wInfo.name,
-          qty,
-        });
-      }
-    });
-  });
+  // 2. Outward from Sales: REMOVED per Option B (Sales must NOT affect stock)
 
   // 3. Outward from Issues
   issues.forEach((iss) => {
     const wInfo = getWarehouseInfo(iss.fromWarehouse, iss.fromWarehouse);
     iss.items?.forEach((it) => {
       const itInfo = getItemInfo(it.itemId, it.itemName);
-      const quality = it.quality || itInfo.quality || 'Cotton A';
+      const quality = it.quality || '';
       const qty = Number(it.issueQty || it.qty || 0);
 
       if (qty > 0) {
         events.push({
           date: iss.date,
+          createdAt: iss.createdAt,
           type: 'OUT',
           source: 'Issue',
           refNo: iss.no,
@@ -135,11 +117,12 @@ export function computeStockPositions(
     if (outputQty > 0) {
       const itInfo = getItemInfo(null, prd.product);
       const wInfo = getWarehouseInfo(null, 'Finished Goods Store');
-      const quality = prd.quality || 'Cotton A';
+      const quality = prd.quality || '';
       const rate = 115; // standard production output rate
 
       events.push({
         date: prd.date,
+        createdAt: prd.createdAt,
         type: 'IN',
         source: 'Production',
         refNo: prd.no,
@@ -160,7 +143,7 @@ export function computeStockPositions(
   stockAdjustments.forEach((adj) => {
     const itInfo = getItemInfo(adj.itemId, adj.itemName);
     const wInfo = getWarehouseInfo(adj.warehouseId, adj.warehouseName);
-    const quality = adj.quality || itInfo.quality || 'Cotton A';
+    const quality = adj.quality || '';
     const qty = Math.abs(Number(adj.qty || 0));
     const rate = Number(adj.rate || 0);
     const isReduce = adj.type === 'REDUCE' || Number(adj.qty) < 0;
@@ -169,6 +152,7 @@ export function computeStockPositions(
       if (isReduce) {
         events.push({
           date: adj.date,
+          createdAt: adj.createdAt,
           type: 'OUT',
           source: 'Adjustment',
           refNo: adj.no,
@@ -184,6 +168,7 @@ export function computeStockPositions(
       } else {
         events.push({
           date: adj.date,
+          createdAt: adj.createdAt,
           type: 'IN',
           source: 'Adjustment',
           refNo: adj.no,
@@ -202,12 +187,92 @@ export function computeStockPositions(
     }
   });
 
-  // Sort events chronologically to compute true moving weighted average rate
-  events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // 6. Transfers between warehouses
+  stockTransfers.forEach((trf) => {
+    const itInfo = getItemInfo(trf.itemId, trf.itemName);
+    const fromW = getWarehouseInfo(trf.fromWarehouseId, trf.fromWarehouseName);
+    const toW = getWarehouseInfo(trf.toWarehouseId, trf.toWarehouseName);
+    const quality = trf.quality || '';
+    const qty = Math.abs(Number(trf.qty || 0));
+
+    if (qty > 0) {
+      // OUT from source
+      events.push({
+        date: trf.date,
+        createdAt: trf.createdAt,
+        type: 'OUT',
+        source: 'Transfer',
+        refNo: trf.no,
+        transferId: trf.id,
+        fromWarehouseId: fromW.id,
+        fromWarehouseName: fromW.name,
+        toWarehouseId: toW.id,
+        toWarehouseName: toW.name,
+        itemId: itInfo.id,
+        itemName: itInfo.name,
+        category: itInfo.category,
+        quality,
+        warehouseId: fromW.id,
+        warehouseName: fromW.name,
+        qty,
+        note: trf.remarks || `Transfer to ${toW.name}`,
+      });
+
+      // IN at destination at source's average rate at that time
+      events.push({
+        date: trf.date,
+        createdAt: trf.createdAt,
+        type: 'IN',
+        source: 'Transfer',
+        refNo: trf.no,
+        transferId: trf.id,
+        fromWarehouseId: fromW.id,
+        fromWarehouseName: fromW.name,
+        toWarehouseId: toW.id,
+        toWarehouseName: toW.name,
+        itemId: itInfo.id,
+        itemName: itInfo.name,
+        category: itInfo.category,
+        quality,
+        warehouseId: toW.id,
+        warehouseName: toW.name,
+        qty,
+        note: trf.remarks || `Transfer from ${fromW.name}`,
+      });
+    }
+  });
+
+  // Sort events by date ascending, then IN events before OUT events on the same date, then by createdAt (or refNo) ascending
+  events.sort((a, b) => {
+    const timeA = new Date(a.date).getTime();
+    const timeB = new Date(b.date).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+
+    // IN events processed before OUT events on the same date
+    if (a.type !== b.type) {
+      return a.type === 'IN' ? -1 : 1;
+    }
+
+    // Secondary sort by createdAt ascending
+    if (a.createdAt && b.createdAt) {
+      const createdA = new Date(a.createdAt).getTime();
+      const createdB = new Date(b.createdAt).getTime();
+      if (!isNaN(createdA) && !isNaN(createdB) && createdA !== createdB) {
+        return createdA - createdB;
+      }
+    }
+
+    // Fallback: refNo ascending
+    const refA = String(a.refNo || '');
+    const refB = String(b.refNo || '');
+    return refA.localeCompare(refB);
+  });
+
+  const itemState = {}; // itemId -> { qty, rate } across ALL godowns
 
   // Process all events sequentially
   events.forEach((ev) => {
-    const key = `${ev.itemId}__${ev.quality}__${ev.warehouseName}`;
+    const key = `${ev.itemId}__${ev.warehouseName}`;
 
     if (!positions[key]) {
       positions[key] = {
@@ -215,7 +280,7 @@ export function computeStockPositions(
         itemId: ev.itemId,
         itemName: ev.itemName,
         category: ev.category,
-        quality: ev.quality,
+        quality: '',
         warehouseId: ev.warehouseId,
         warehouseName: ev.warehouseName,
         qty: 0,
@@ -227,24 +292,49 @@ export function computeStockPositions(
 
     const pos = positions[key];
 
+    // Update position quantity in this godown
     if (ev.type === 'IN') {
-      const inQty = Number(ev.qty || 0);
-      const inCost = ev.amount !== undefined ? Number(ev.amount) : inQty * Number(ev.rate || 0);
-      const newQty = pos.qty + inQty;
-      const newCost = pos.totalCost + inCost;
-      const newAvgRate = newQty > 0 ? newCost / newQty : (ev.rate || pos.avgRate);
-
-      pos.qty = newQty;
-      pos.totalCost = Math.max(0, newCost);
-      pos.avgRate = Number(newAvgRate.toFixed(2));
-      pos.value = Math.round(pos.qty * pos.avgRate);
+      pos.qty += Number(ev.qty || 0);
     } else if (ev.type === 'OUT') {
-      const outQty = Number(ev.qty || 0);
-      const newQty = Math.max(0, pos.qty - outQty);
-      pos.qty = newQty;
-      pos.totalCost = pos.qty * pos.avgRate;
-      pos.value = Math.round(pos.qty * pos.avgRate);
+      pos.qty -= Number(ev.qty || 0);
     }
+
+    // Every event whose source is NOT 'Transfer' (transfers only move stock between godowns)
+    if (ev.source !== 'Transfer') {
+      if (!itemState[ev.itemId]) {
+        itemState[ev.itemId] = { qty: 0, rate: 0 };
+      }
+      const state = itemState[ev.itemId];
+
+      if (ev.type === 'IN') {
+        const inQty = Number(ev.qty || 0);
+        const rate = Number(ev.rate || 0);
+        const cost = ev.amount !== undefined ? Number(ev.amount) : inQty * rate;
+
+        if (state.qty <= 0) {
+          state.rate = inQty > 0 ? cost / inQty : (ev.rate !== undefined ? rate : 0);
+        } else {
+          state.rate = (state.qty * state.rate + cost) / (state.qty + inQty);
+        }
+        state.qty += inQty;
+      } else if (ev.type === 'OUT') {
+        const outQty = Number(ev.qty || 0);
+        state.qty -= outQty;
+        // rate stays unchanged
+      }
+    }
+  });
+
+  // After the loop, set for every position:
+  // rate = itemState[itemId].rate; avgRate = round(rate, 2); totalCost = qty * rate; value = Math.round(qty * rate).
+  Object.values(positions).forEach((pos) => {
+    const state = itemState[pos.itemId];
+    const rate = state ? Number(state.rate || 0) : 0;
+    pos.rawRate = rate;
+    pos.rate = rate;
+    pos.avgRate = Number(rate.toFixed(2));
+    pos.totalCost = pos.qty * rate;
+    pos.value = Math.round(pos.qty * rate);
   });
 
   return Object.values(positions);
@@ -262,6 +352,7 @@ export async function syncStockEntriesToDb() {
     const items = await db.items.toArray();
     const warehouses = await db.warehouses.toArray();
     const stockAdjustments = db.stockAdjustments ? await db.stockAdjustments.toArray() : [];
+    const stockTransfers = db.stockTransfers ? await db.stockTransfers.toArray() : [];
 
     const computed = computeStockPositions(
       purchases,
@@ -270,7 +361,8 @@ export async function syncStockEntriesToDb() {
       productions,
       items,
       warehouses,
-      stockAdjustments
+      stockAdjustments,
+      stockTransfers
     );
 
     await db.stockEntries.clear();
@@ -312,13 +404,7 @@ export function verifyStockConsistency(
       });
     });
 
-    sales.forEach((s) => {
-      s.items?.forEach((it) => {
-        if ((it.itemId === item.id || it.itemName === item.name) && it.type !== 'service') {
-          ledgerOut += Number(it.qty || 0);
-        }
-      });
-    });
+    // Sales do NOT affect stock (Option B)
 
     issues.forEach((iss) => {
       iss.items?.forEach((it) => {
@@ -348,7 +434,7 @@ export function verifyStockConsistency(
       }
     });
 
-    const ledgerBalance = Math.max(0, ledgerIn - ledgerOut);
+    const ledgerBalance = ledgerIn - ledgerOut;
 
     // 2. Calculate Stock status total across all warehouses/qualities
     const stockStatusTotal = stockPositions

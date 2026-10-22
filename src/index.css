@@ -199,7 +199,7 @@ svg[class*="barcode"],
 
 @page {
   size: A4 portrait;
-  margin: 10mm;
+  margin: 8mm;
 }
 
 @page landscape_page {
@@ -260,6 +260,8 @@ svg[class*="barcode"],
   #invoice-print-area *,
   #sale-invoice-print-area,
   #sale-invoice-print-area *,
+  #bill-memo-print-area,
+  #bill-memo-print-area *,
   #cashbook-print-area,
   #cashbook-print-area *,
   [id$="-print-area"],
@@ -786,6 +788,64 @@ svg[class*="barcode"],
     font-size: 11pt !important;
     padding: 4px 5px !important;
     overflow: visible !important;
+  }
+
+  /* 21. Sale Bill / Memo Print Styling */
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  .sale-bill-memo-container {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+  }
+
+  #bill-memo-print-area {
+    visibility: visible !important;
+    position: static !important;
+    width: 190mm !important;
+    margin: 0 auto !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    direction: ltr !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+  }
+
+  #bill-memo-print-area * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #bill-memo-print-area .bg-black,
+  #bill-memo-print-area [style*="background-color: #000000"],
+  #bill-memo-print-area [style*="background-color: rgb(0, 0, 0)"] {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+
+  #bill-memo-print-area .bg-black *,
+  #bill-memo-print-area .text-white {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+
+  #bill-memo-print-area .table-header-hatch {
+    background: repeating-linear-gradient(45deg, #c8c8c8 0px, #c8c8c8 1px, #ebebeb 1px, #ebebeb 5px) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
 

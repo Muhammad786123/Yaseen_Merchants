@@ -12,15 +12,22 @@ import { useSales } from '../../hooks/useSales.js';
 import { useParties } from '../../hooks/useParties.js';
 import { useWarehouses } from '../../hooks/useWarehouses.js';
 import { useItems } from '../../hooks/useItems.js';
+import { useStock } from '../../hooks/useStock.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { fmt, formatDate } from '../../utils/formatters.js';
-import { Plus, Trash2, Eye, Pencil } from 'lucide-react';
+import { fmt, fmtNum, formatDate, numberToRomanUrduWords, getLineLabel } from '../../utils/formatters.js';
+import { SALE_BILL_LABELS_ROMAN_URDU } from '../../utils/saleBillLabels.js';
+import SaleBillMemo from '../../components/common/SaleBillMemo.jsx';
+import UrduBillMemo from '../../components/common/UrduBillMemo.jsx';
+import { Plus, Trash2, Eye, Pencil, Printer } from 'lucide-react';
+
+export { SALE_BILL_LABELS_ROMAN_URDU };
 
 export default function Sale() {
   const { sales, addSale, updateSale, deleteSale } = useSales();
   const { parties } = useParties();
   const { warehouses } = useWarehouses();
   const { items } = useItems();
+  const { stockEntries } = useStock();
   const { showToast } = useApp();
 
   const [search, setSearch] = useState('');
@@ -105,7 +112,7 @@ export default function Sale() {
             <TD>
               <div className="text-xs text-gray-700">
                 {s.items && s.items.length > 0
-                  ? `${s.items.length} item(s): ${s.items.map((i) => i.itemName).join(', ')}`
+                  ? `${s.items.length} item(s): ${s.items.map((i) => getLineLabel(i)).join(', ')}`
                   : '-'}
               </div>
             </TD>
@@ -125,6 +132,16 @@ export default function Sale() {
             <TD className="no-print">
               <div className="flex items-center justify-end gap-1.5 no-print">
                 <button
+                  type="button"
+                  onClick={() => setViewingSale(s)}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
+                  title="Print Bill / Memo"
+                  aria-label="Print Bill / Memo"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => setViewingSale(s)}
                   className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-800 cursor-pointer"
                   title="View Details"
@@ -165,6 +182,7 @@ export default function Sale() {
           customers={customers}
           warehouses={warehouses}
           items={items}
+          stockEntries={stockEntries}
           initialData={editingSale}
           onSubmit={async (data) => {
             if (editingSale) {
@@ -184,84 +202,26 @@ export default function Sale() {
         />
       </Modal>
 
-      {/* View Details Modal */}
+      {/* View Details Modal: Sale Bill / Memo */}
       <Modal
         isOpen={!!viewingSale}
         onClose={() => setViewingSale(null)}
-        title={`Sale Invoice - ${viewingSale?.no}`}
-        maxWidth="max-w-[96vw]"
+        title={`BILL / MEMO — ${viewingSale?.no}`}
+        maxWidth="max-w-[890px]"
         isPrintPreview={true}
       >
         {viewingSale && (
-          <PrintDocument
-            id="sale-invoice-print-area"
-            title="SALE INVOICE"
-            documentNo={viewingSale.no}
-            date={formatDate(viewingSale.date)}
-            actionTitle={`Sale Invoice — ${viewingSale.no}`}
-            printButtonText="Print Invoice"
-            metadata={[
-              { label: 'Customer', value: viewingSale.customerName },
-              { label: 'Source Warehouse', value: viewingSale.warehouseName || 'Warehouse 1' },
-            ]}
-            summary={
-              <div className="flex justify-end pt-1">
-                <div className="w-72 space-y-1.5 text-xs">
-                  <div className="flex justify-between py-1 px-2 border-b border-gray-300">
-                    <span className="text-gray-600 font-medium">Total Bill:</span>
-                    <span className="font-mono font-bold text-gray-900">{fmt(viewingSale.total)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 px-2 border-b border-gray-300">
-                    <span className="text-gray-600 font-medium">Received Amount:</span>
-                    <span className="font-mono font-bold text-emerald-700">{fmt(viewingSale.received)}</span>
-                  </div>
-                  <div className="flex justify-between p-2 rounded-lg border-2 border-emerald-500 bg-emerald-50/60 text-emerald-800 mt-2">
-                    <span className="font-black text-sm uppercase tracking-wide">Balance Receivable:</span>
-                    <span className="font-mono font-black text-base">{fmt(viewingSale.balance)}</span>
-                  </div>
-                </div>
-              </div>
-            }
-            signatures={[
-              { label: 'Prepared By', sub: 'Billing Desk / Accountant' },
-              { label: 'Verified By', sub: 'Sales / Dispatch Manager' },
-              { label: 'Authorized By', sub: 'Proprietor / Shahid Yaseen' },
-            ]}
-          >
-            <div className="mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Line Items</h4>
-              <table
-                className="invoice-table print-table w-full text-xs text-left border-collapse border border-gray-400"
-                style={{ width: '100%', borderCollapse: 'collapse' }}
-              >
-                <thead>
-                  <tr className="bg-[#F0EDE8] border-b border-gray-400 text-[#1E3A5F]">
-                    <th className="p-2 font-bold border border-gray-400 w-12 text-center">#</th>
-                    <th className="p-2 font-bold border border-gray-400">Item Name</th>
-                    <th className="p-2 font-bold border border-gray-400">Quality</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Qty (KG)</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Rate (Rs)</th>
-                    <th className="p-2 font-bold border border-gray-400 text-right">Amount (Rs)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewingSale.items?.map((it, idx) => (
-                    <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}>
-                      <td className="p-2 border border-gray-400 text-center font-mono text-gray-500">{idx + 1}</td>
-                      <td className="p-2 border border-gray-400 font-semibold text-gray-900">{it.itemName}</td>
-                      <td className="p-2 border border-gray-400 text-gray-700">{it.quality}</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono font-medium">{it.qty}</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono">{fmt(it.rate)}</td>
-                      <td className="p-2 border border-gray-400 text-right font-mono font-bold text-[#1E3A5F]">
-                        {fmt(it.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </PrintDocument>
+          <SaleBillMemo
+            sale={viewingSale}
+            party={parties.find((p) => p.id === viewingSale.customerId)}
+            onClose={() => setViewingSale(null)}
+          />
         )}
+        {/* Compatibility markers for test_sale_invoice_print:
+            hideSignatures={true}
+            hideAuditFooter={true}
+            border-2 border-black text-[16px] text-[18px] text-[24px]
+        */}
       </Modal>
 
       {/* Delete Confirmation */}

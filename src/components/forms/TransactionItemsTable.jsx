@@ -17,6 +17,10 @@ export default function TransactionItemsTable({
     const updated = [...lineItems];
     const currentLine = { ...updated[index], [field]: value };
 
+    if (field === 'count') {
+      currentLine.count = value === '' ? '' : (isNaN(Number(value)) ? value : Number(value));
+    }
+
     if (field === 'type') {
       if (value === 'service') {
         currentLine.itemId = '';
@@ -24,6 +28,7 @@ export default function TransactionItemsTable({
         currentLine.quality = '';
         currentLine.serviceDescription = currentLine.serviceDescription || 'Loading Service';
         currentLine.unitType = 'KG';
+        currentLine.count = '';
         currentLine.qty = 0;
         currentLine.rate = '';
         currentLine.amount = currentLine.amount || 500;
@@ -33,10 +38,11 @@ export default function TransactionItemsTable({
           const defaultItem = items[0];
           currentLine.itemId = defaultItem.id;
           currentLine.itemName = defaultItem.name;
-          currentLine.quality = defaultItem.quality || (qualities[0]?.name || '');
+          currentLine.quality = '';
           currentLine.unitType = 'KG';
-          currentLine.nugFactor = defaultItem.piecesToKg || defaultItem.nugFactor || 100;
-          currentLine.qty = 100;
+          currentLine.count = currentLine.count !== undefined ? currentLine.count : '';
+          currentLine.nugs = 0;
+          currentLine.qty = '';
           currentLine.rate = ''; // Rate starts empty per Decision 7
           currentLine.amount = 0;
         }
@@ -47,55 +53,23 @@ export default function TransactionItemsTable({
       const selectedItem = items.find((i) => i.id === value);
       if (selectedItem) {
         currentLine.itemName = selectedItem.name;
-        currentLine.quality = selectedItem.quality || (qualities[0]?.name || '');
-        currentLine.nugFactor = selectedItem.piecesToKg || selectedItem.nugFactor || 100;
+        currentLine.quality = '';
         // Rate starts empty per Decision 7
         currentLine.rate = '';
-
-        if (currentLine.unitType === 'Nug') {
-          currentLine.qty = Number(currentLine.nugs || 1) * currentLine.nugFactor;
-        }
         currentLine.amount = 0;
       }
     }
 
-    if (field === 'unitType') {
-      const factor = currentLine.nugFactor || 100;
-      if (value === 'Nug') {
-        currentLine.nugs = currentLine.nugs || 1;
-        currentLine.qty = currentLine.nugs * factor;
-      } else {
-        currentLine.nugs = 0;
-      }
-      currentLine.amount = Number(currentLine.qty || 0) * (parseFloat(currentLine.rate) || 0);
-    }
-
-    if (field === 'nugFactor') {
-      const factor = Number(value || 100);
-      currentLine.nugFactor = factor;
-      if (currentLine.unitType === 'Nug') {
-        currentLine.qty = Number(currentLine.nugs || 1) * factor;
-      }
-      currentLine.amount = Number(currentLine.qty || 0) * (parseFloat(currentLine.rate) || 0);
-    }
-
-    if (field === 'nugs') {
-      const nugsVal = Number(value || 0);
-      const factor = currentLine.nugFactor || 100;
-      currentLine.qty = nugsVal * factor;
-      currentLine.amount = currentLine.qty * (parseFloat(currentLine.rate) || 0);
-    }
-
     if (field === 'qty') {
-      const q = Number(value || 0);
-      currentLine.qty = q;
+      currentLine.qty = value;
+      const q = parseFloat(value) || 0;
       currentLine.amount = q * (parseFloat(currentLine.rate) || 0);
     }
 
     if (field === 'rate') {
       currentLine.rate = value;
       const r = parseFloat(value) || 0;
-      currentLine.amount = Number(currentLine.qty || 0) * r;
+      currentLine.amount = (parseFloat(currentLine.qty) || 0) * r;
     }
 
     if (field === 'amount' && currentLine.type === 'service') {
@@ -112,11 +86,11 @@ export default function TransactionItemsTable({
       type: 'stock',
       itemId: defaultItem ? defaultItem.id : '',
       itemName: defaultItem ? defaultItem.name : '',
-      quality: defaultItem ? (defaultItem.quality || '') : (qualities[0]?.name || ''),
+      quality: '',
       unitType: 'KG',
+      count: '',
       nugs: 0,
-      nugFactor: defaultItem ? (defaultItem.piecesToKg || defaultItem.nugFactor || 100) : 100,
-      qty: 100,
+      qty: '',
       rate: '', // Rate always starts blank per Decision 7
       amount: 0,
       serviceDescription: '',
@@ -131,8 +105,8 @@ export default function TransactionItemsTable({
       itemName: 'Service Line',
       quality: '',
       unitType: 'KG',
+      count: '',
       nugs: 0,
-      nugFactor: 0,
       qty: 0,
       rate: '',
       amount: 500,
@@ -176,10 +150,12 @@ export default function TransactionItemsTable({
       <div className="space-y-2">
         {lineItems.map((line, idx) => {
           const isService = line.type === 'service';
+          const selectedItem = !isService ? items.find((i) => i.id === line.itemId) : null;
+
           return (
             <div
               key={idx}
-              className={`p-2 border border-black bg-white transition-colors ${
+              className={`p-2 border border-black transition-colors ${
                 isService ? 'bg-amber-50/50' : 'bg-white'
               }`}
             >
@@ -222,7 +198,7 @@ export default function TransactionItemsTable({
                 <div className="space-y-2">
                   <div className="grid grid-cols-12 gap-2 items-center">
                     {/* Item Selector */}
-                    <div className="col-span-12 sm:col-span-5">
+                    <div className="col-span-10 sm:col-span-11">
                       <label className="block text-xs font-bold text-gray-800 mb-0.5">Item Name</label>
                       <Select
                         value={line.itemId}
@@ -232,30 +208,7 @@ export default function TransactionItemsTable({
                       />
                     </div>
 
-                    {/* Quality Grade */}
-                    <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Quality Grade</label>
-                      <Select
-                        value={line.quality}
-                        onChange={(v) => handleLineChange(idx, 'quality', v)}
-                        options={qualities.map((q) => ({ value: q.name, label: q.name }))}
-                      />
-                    </div>
-
-                    {/* Unit Selector (KG vs Nug) */}
-                    <div className="col-span-6 sm:col-span-3">
-                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Unit Type</label>
-                      <Select
-                        value={line.unitType || 'KG'}
-                        onChange={(v) => handleLineChange(idx, 'unitType', v)}
-                        options={[
-                          { value: 'KG', label: 'Kilograms (KG)' },
-                          { value: 'Nug', label: `Nug (${line.nugFactor || 100} KG/nug)` },
-                        ]}
-                      />
-                    </div>
-
-                    <div className="col-span-12 sm:col-span-1 text-end">
+                    <div className="col-span-2 sm:col-span-1 text-end">
                       <button
                         type="button"
                         onClick={() => removeRow(idx)}
@@ -270,41 +223,29 @@ export default function TransactionItemsTable({
 
                   {/* Quantity & Calculations Row */}
                   <div className="grid grid-cols-12 gap-2 items-center pt-1 border-t border-gray-200">
-                    {line.unitType === 'Nug' ? (
-                      <>
-                        <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-xs font-bold text-gray-800 mb-0.5">Nugs (Pieces)</label>
-                          <Input
-                            type="number"
-                            min="1"
-                            placeholder="Nugs"
-                            value={line.nugs || ''}
-                            onChange={(v) => handleLineChange(idx, 'nugs', v)}
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-3">
-                          <label className="block text-xs font-bold text-gray-800 mb-0.5">KG Equivalent</label>
-                          <Input
-                            type="number"
-                            value={line.qty}
-                            readOnly
-                            className="bg-gray-100 font-mono font-bold text-black"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-8 sm:col-span-6">
-                        <label className="block text-xs font-bold text-gray-800 mb-0.5">Quantity (KG)</label>
-                        <Input
-                          type="number"
-                          placeholder="Qty in KG"
-                          value={line.qty}
-                          onChange={(v) => handleLineChange(idx, 'qty', v)}
-                        />
-                      </div>
-                    )}
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5">Quantity (KG)</label>
+                      <Input
+                        type="number"
+                        placeholder="Qty in KG"
+                        value={line.qty}
+                        onChange={(v) => handleLineChange(idx, 'qty', v)}
+                      />
+                    </div>
 
-                    <div className="col-span-4 sm:col-span-3">
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-xs font-bold text-gray-800 mb-0.5" title="Count / تعداد (bags)">
+                        Bags / بوروں کی تعداد
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="Optional bags"
+                        value={line.count !== undefined && line.count !== null ? line.count : ''}
+                        onChange={(v) => handleLineChange(idx, 'count', v)}
+                      />
+                    </div>
+
+                    <div className="col-span-6 sm:col-span-3">
                       <label className="block text-xs font-bold text-gray-800 mb-0.5">
                         Rate (Rs. / KG) <span className="text-red-600">*</span>
                       </label>
@@ -317,7 +258,7 @@ export default function TransactionItemsTable({
                       />
                     </div>
 
-                    <div className="col-span-12 sm:col-span-3 text-end">
+                    <div className="col-span-6 sm:col-span-3 text-end">
                       <span className="block text-xs font-bold text-gray-600">Line Amount</span>
                       <span className="text-base font-mono font-black text-black" dir="ltr">
                         {fmt(line.amount)}

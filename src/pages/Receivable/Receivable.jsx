@@ -5,20 +5,21 @@ import Badge from '../../components/ui/Badge.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { fmt } from '../../utils/formatters.js';
-import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
+import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { balanceSide } from '../../utils/partySide.js';
 import { TrendingUp } from 'lucide-react';
 
 export default function Receivable() {
   const { parties } = useParties();
 
-  // Receivables single source of truth: balance < 0 (party owes us money, Naam / Debit)
+  // Receivables single source of truth: balance < 0 (party owes us money, Benaam / Debit)
   const { receivableParties: debtors, totalReceivable } = splitPartyBalances(parties);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Accounts Receivable"
-        subtitle="Outstanding payment debts due from buyers and customers (Naam / Debit accounts)"
+        subtitle="Outstanding payment debts due from buyers and customers (Benaam / Debit accounts)"
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -27,7 +28,7 @@ export default function Receivable() {
           value={fmt(totalReceivable)}
           sub={`From ${debtors.length} account(s)`}
           icon={TrendingUp}
-          color="text-emerald-600"
+          color="text-red-600"
         />
       </div>
 
@@ -40,11 +41,11 @@ export default function Receivable() {
             <TD mono className="font-bold text-gray-700">{d.code || '-'}</TD>
             <TD className="font-bold text-[#1E3A5F]">{d.name}</TD>
             <TD><Badge variant="blue">{d.type}</Badge></TD>
-            <TD><Badge variant="amber">بنام (Benaam / Debit)</Badge></TD>
+            <TD><Badge variant="red">بنام (Dr)</Badge></TD>
             <TD>{d.city || '-'}</TD>
             <TD className="num">{d.phone || '-'}</TD>
-            <TD right className="num font-bold text-emerald-600">
-              {fmt(partySide(d.balance).amount)}
+            <TD right className="num font-bold text-red-600">
+              {fmt(balanceSide(d.balance).amount)}
             </TD>
           </TR>
         ))}

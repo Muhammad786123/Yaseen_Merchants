@@ -77,7 +77,7 @@ export async function getItemUsageCount(itemId, itemName) {
 }
 
 /**
- * Checks how many transactions/items reference a given Quality Grade.
+ * Checks how many transactions/items reference a given Quality (Item).
  */
 export async function getQualityUsageCount(qualityId, qualityName) {
   let count = 0;
@@ -147,30 +147,30 @@ export async function getAccountUsageCount(accountId, accountName) {
   let count = 0;
   if (!accountId && !accountName) return 0;
 
+  const matches = (idVal, nameVal) => {
+    if (accountId && idVal) return idVal === accountId;
+    if (accountName && nameVal) return nameVal === accountName;
+    return false;
+  };
+
   const receipts = db.receipts ? await db.receipts.toArray() : [];
-  count += receipts.filter((r) => r.account === accountName || r.accountId === accountId).length;
+  count += receipts.filter((r) => matches(r.accountId, r.account)).length;
 
   const payments = db.payments ? await db.payments.toArray() : [];
-  count += payments.filter((p) => p.account === accountName || p.accountId === accountId).length;
+  count += payments.filter((p) => matches(p.accountId, p.account)).length;
 
   const expenses = db.expenses ? await db.expenses.toArray() : [];
-  count += expenses.filter((e) => e.account === accountName || e.accountId === accountId).length;
+  count += expenses.filter((e) => matches(e.accountId, e.account)).length;
 
   const cashBook = db.cashBookEntries ? await db.cashBookEntries.toArray() : [];
-  count += cashBook.filter(
-    (cb) => cb.bankAccountId === accountId || cb.bankAccountName === accountName
-  ).length;
+  count += cashBook.filter((cb) => matches(cb.bankAccountId, cb.bankAccountName)).length;
 
   const transfers = db.bankTransfers ? await db.bankTransfers.toArray() : [];
-  count += transfers.filter(
-    (t) => t.bankAccountId === accountId || t.bankAccountName === accountName
-  ).length;
+  count += transfers.filter((t) => matches(t.bankAccountId, t.bankAccountName)).length;
 
   const journals = db.journalEntries ? await db.journalEntries.toArray() : [];
   journals.forEach((j) => {
-    const hasAcc = (j.lines || []).some(
-      (l) => l.accountId === accountId || l.accountName === accountName
-    );
+    const hasAcc = (j.lines || []).some((l) => matches(l.accountId, l.accountName));
     if (hasAcc) count++;
   });
 

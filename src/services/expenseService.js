@@ -1,5 +1,6 @@
 import { db } from '../db/database.js';
 import { cashBookService } from './cashBookService.js';
+import { accountService } from './accountService.js';
 
 export const expenseService = {
   async getAll() {
@@ -13,7 +14,13 @@ export const expenseService = {
   async add(expenseData) {
     const id = expenseData.id || 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const amount = Number(expenseData.amount || 0);
-    const account = expenseData.account || 'Cash';
+
+    let accountObj = null;
+    if (expenseData.accountId) {
+      accountObj = await db.accounts.get(expenseData.accountId);
+    } else if (expenseData.account) {
+      accountObj = await db.accounts.where({ name: expenseData.account }).first();
+    }
 
     const newExpense = {
       id,
@@ -21,7 +28,8 @@ export const expenseService = {
       description: expenseData.description || '',
       category: expenseData.category || 'Labour',
       amount,
-      account,
+      accountId: accountObj ? accountObj.id : expenseData.accountId || null,
+      account: accountObj ? accountObj.name : expenseData.account || 'Cash',
       createdAt: expenseData.createdAt || new Date().toISOString(),
       updatedAt: null,
       editCount: 0,
@@ -30,7 +38,7 @@ export const expenseService = {
     await db.transaction('rw', [db.expenses, db.cashBookEntries, db.accounts], async () => {
       await db.expenses.add(newExpense);
 
-      if (account === 'Cash') {
+      if (newExpense.account === 'Cash') {
         await db.cashBookEntries.add({
           id: 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
           date: newExpense.date,
@@ -48,7 +56,8 @@ export const expenseService = {
           });
         }
       } else {
-        const bankAcc = await db.accounts.where({ name: account }).first();
+        const bankAcc = (newExpense.accountId ? await db.accounts.get(newExpense.accountId) : null) ||
+          (await db.accounts.where({ name: newExpense.account }).first());
         if (bankAcc) {
           await db.accounts.update(bankAcc.id, {
             balance: Number(bankAcc.balance || 0) - amount,
@@ -56,6 +65,10 @@ export const expenseService = {
         }
       }
     });
+
+    if (newExpense.accountId) {
+      await accountService.recalculateAccountBalance(newExpense.accountId);
+    }
 
     await cashBookService.recalculateCashBalance();
 
@@ -73,7 +86,14 @@ export const expenseService = {
     if (!existing) throw new Error('Expense record not found: ' + id);
 
     const newAmount = Number(expenseData.amount || 0);
-    const newAccount = expenseData.account || 'Cash';
+    const newAccount = expenseData.account || existing.account || 'Cash';
+
+    let accountObj = null;
+    if (expenseData.accountId) {
+      accountObj = await db.accounts.get(expenseData.accountId);
+    } else if (newAccount) {
+      accountObj = await db.accounts.where({ name: newAccount }).first();
+    }
 
     const updatedExpense = {
       ...existing,
@@ -81,7 +101,8 @@ export const expenseService = {
       description: expenseData.description !== undefined ? expenseData.description : existing.description,
       category: expenseData.category || existing.category,
       amount: newAmount,
-      account: newAccount,
+      accountId: accountObj ? accountObj.id : expenseData.accountId || existing.accountId || null,
+      account: accountObj ? accountObj.name : newAccount,
       updatedAt: new Date().toISOString(),
       editCount: (Number(existing.editCount) || 0) + 1,
     };
@@ -114,7 +135,8 @@ export const expenseService = {
           await db.cashBookEntries.delete(cb.id);
         }
       } else {
-        const bankAcc = await db.accounts.where({ name: existing.account }).first();
+        const bankAcc = (existing.accountId ? await db.accounts.get(existing.accountId) : null) ||
+          (await db.accounts.where({ name: existing.account }).first());
         if (bankAcc) {
           await db.accounts.update(bankAcc.id, {
             balance: Number(bankAcc.balance || 0) + Number(existing.amount || 0),
@@ -141,7 +163,8 @@ export const expenseService = {
           });
         }
       } else {
-        const bankAcc = await db.accounts.where({ name: newAccount }).first();
+        const bankAcc = (updatedExpense.accountId ? await db.accounts.get(updatedExpense.accountId) : null) ||
+          (await db.accounts.where({ name: newAccount }).first());
         if (bankAcc) {
           await db.accounts.update(bankAcc.id, {
             balance: Number(bankAcc.balance || 0) - newAmount,
@@ -152,6 +175,13 @@ export const expenseService = {
       // 3. Save updated expense
       await db.expenses.put(updatedExpense);
     });
+
+    if (existing.accountId) {
+      await accountService.recalculateAccountBalance(existing.accountId);
+    }
+    if (updatedExpense.accountId && updatedExpense.accountId !== existing.accountId) {
+      await accountService.recalculateAccountBalance(updatedExpense.accountId);
+    }
 
     await cashBookService.recalculateCashBalance();
 
@@ -194,7 +224,8 @@ export const expenseService = {
           await db.cashBookEntries.delete(cb.id);
         }
       } else {
-        const bankAcc = await db.accounts.where({ name: existing.account }).first();
+        const bankAcc = (existing.accountId ? await db.accounts.get(existing.accountId) : null) ||
+          (await db.accounts.where({ name: existing.account }).first());
         if (bankAcc) {
           await db.accounts.update(bankAcc.id, {
             balance: Number(bankAcc.balance || 0) + Number(existing.amount || 0),
@@ -204,6 +235,10 @@ export const expenseService = {
 
       await db.expenses.delete(id);
     });
+
+    if (existing.accountId) {
+      await accountService.recalculateAccountBalance(existing.accountId);
+    }
 
     await cashBookService.recalculateCashBalance();
   },

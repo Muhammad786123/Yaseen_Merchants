@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
+import { balanceSide } from '../../utils/partySide.js';
 
 /**
  * PrintFooter — Unified Closing Footer Block for all Statements & Ledgers.
@@ -69,7 +70,7 @@ export default function PrintFooter({
 
   /* ── 1. URDU BORDERLESS FOOTER (Monochrome Plain Reference Style) ────── */
   if (isUrdu) {
-    const balSign = closingBalance > 0 ? '(کریڈٹ)' : closingBalance < 0 ? '(ڈیبٹ)' : '';
+    const closeSide = balanceSide(closingBalance);
     const plainFont = "var(--font-urdu), 'Segoe UI', 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
     return (
       <div
@@ -136,10 +137,21 @@ export default function PrintFooter({
             </div>
             <div>
               <span style={{ fontWeight: 600 }}>آخری بقایا (Closing): </span>
-              <span dir="ltr" style={{ unicodeBidi: 'embed', fontFamily: 'monospace', fontWeight: 700, fontSize: '12pt' }}>
-                {fmtAmt(Math.abs(closingBalance))} Rs
+              <span
+                dir="ltr"
+                style={{
+                  unicodeBidi: 'embed',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  fontSize: '12pt',
+                  color: closeSide.color || undefined,
+                }}
+              >
+                {closeSide.amount === 0 ? '0.00 Rs' : `${fmtAmt(closeSide.amount)} Rs`}
               </span>{' '}
-              <span style={{ fontSize: '11pt', fontWeight: 600 }}>{balSign}</span>
+              <span style={{ fontSize: '11pt', fontWeight: 600, color: closeSide.color || undefined }}>
+                {closeSide.label ? `${closeSide.ur} (${closeSide.en})` : ''}
+              </span>
             </div>
           </div>
         </div>
@@ -241,7 +253,7 @@ export default function PrintFooter({
   }
 
   /* ── 2. ENGLISH BORDERED FOOTER ────────────────────────────────────────── */
-  const balSignEn = closingBalance >= 0 ? '(Cr)' : '(Dr)';
+  const closeSideEn = balanceSide(closingBalance);
   return (
     <div
       className={`print-footer-en ${className}`}
@@ -346,14 +358,16 @@ export default function PrintFooter({
                   style={{
                     fontSize: '12pt',
                     fontWeight: 900,
-                    color: closingBalance >= 0 ? '#1a6b2e' : '#c0392b',
+                    color: closeSideEn.color || '#1a6b2e',
                     marginTop: '2px',
                     direction: 'ltr',
                     unicodeBidi: 'isolate',
                     textAlign: 'left',
                   }}
                 >
-                  Rs. {fmtAmt(Math.abs(closingBalance))} {balSignEn}
+                  {closeSideEn.amount === 0
+                    ? 'Rs. 0.00'
+                    : `Rs. ${fmtAmt(closeSideEn.amount)} ${closeSideEn.ur} (${closeSideEn.en})`}
                 </div>
               </td>
             </tr>

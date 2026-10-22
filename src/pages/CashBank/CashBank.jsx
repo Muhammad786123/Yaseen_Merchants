@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/database.js';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -15,7 +17,7 @@ import { useApp } from '../../context/AppContext.jsx';
 import { fmt, formatDate, getTodayStr } from '../../utils/formatters.js';
 import { bankTransferService } from '../../services/bankTransferService.js';
 import { capitalService } from '../../services/capitalService.js';
-import { accountService } from '../../services/accountService.js';
+import { accountService, computeAccountDisplayName } from '../../services/accountService.js';
 import { getAccountUsageCount } from '../../utils/masterUsageChecker.js';
 import {
   Wallet,
@@ -32,6 +34,7 @@ import {
 export default function CashBank() {
   const { accounts, receipts, payments, expenses, updateAccount } = useFinances();
   const { bankTransfers, cashBookEntries } = useCashBook();
+  const journalEntries = useLiveQuery(() => (db.journalEntries ? db.journalEntries.toArray() : []), []) || [];
   const { showToast } = useApp();
 
   const [activeTab, setActiveTab] = useState('accounts'); // 'accounts' | 'transfers' | 'capital'
@@ -40,10 +43,16 @@ export default function CashBank() {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [deletingAccountId, setDeletingAccountId] = useState(null);
-  const [accountName, setAccountName] = useState('');
+  const [selectedAccountForLedger, setSelectedAccountForLedger] = useState(null);
+
+  // Bank Account Modal Form fields
+  const [bankNameOption, setBankNameOption] = useState('Meezan Bank');
+  const [customBankName, setCustomBankName] = useState('');
+  const [accountTitle, setAccountTitle] = useState('');
+  const [accountNo, setAccountNo] = useState('');
+  const [branch, setBranch] = useState('');
   const [accountCode, setAccountCode] = useState('');
   const [accountOpeningBalance, setAccountOpeningBalance] = useState(0);
-  const [selectedAccountForLedger, setSelectedAccountForLedger] = useState(null);
 
   // Transfers state
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -70,6 +79,60 @@ export default function CashBank() {
   // Bank accounts list (excluding Cash)
   const bankAccounts = accounts.filter((a) => !a.name.toLowerCase().includes('cash'));
   const totalLiquidity = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const cashAccount = accounts.find((a) => a.name.toLowerCase().includes('cash'));
+
+  // Derived effective bank name and display name preview
+  const effectiveBankName = bankNameOption === 'Other' ? customBankName.trim() : bankNameOption;
+  const computedDisplayName = computeAccountDisplayName(effectiveBankName, accountTitle, accountNo);
+
+  // Uniqueness check: full display name must be unique
+  const isDuplicateAccount = React.useMemo(() => {
+    if (!computedDisplayName) return false;
+    return accounts.some((a) => {
+      if (editingAccount && a.id === editingAccount.id) return false;
+      return a.name && a.name.trim().toLowerCase() === computedDisplayName.trim().toLowerCase();
+    });
+  }, [accounts, editingAccount, computedDisplayName]);
+
+  // Bank name options for dropdown
+  const presetBanks = ['Meezan Bank', 'Bank Alfalah', 'HBL', 'UBL', 'MCB Bank', 'Allied Bank'];
+  const existingBankNames = React.useMemo(() => {
+    const set = new Set(presetBanks);
+    bankAccounts.forEach((b) => {
+      if (b.bankName) set.add(b.bankName);
+      else if (b.name) {
+        const p = b.name.split(' - ')[0];
+        if (p) set.add(p.trim());
+      }
+    });
+    return Array.from(set);
+  }, [bankAccounts]);
+
+  // Group accounts by bank
+  const bankGroups = React.useMemo(() => {
+    const groups = {};
+    bankAccounts.forEach((acc) => {
+      let bName = acc.bankName;
+      if (!bName && acc.name) {
+        bName = acc.name.split(' - ')[0] || 'Other Banks';
+      }
+      bName = (bName || 'Other Banks').trim();
+      if (!groups[bName]) {
+        groups[bName] = {
+          bankName: bName,
+          accounts: [],
+          subtotal: 0,
+        };
+      }
+      groups[bName].accounts.push(acc);
+      groups[bName].subtotal += Number(acc.balance || 0);
+    });
+    return Object.values(groups);
+  }, [bankAccounts]);
+
+  const totalBankBalances = React.useMemo(() => {
+    return bankAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  }, [bankAccounts]);
 
   // Load capital entries
   const reloadCapital = async () => {
@@ -86,34 +149,99 @@ export default function CashBank() {
   }, []);
 
   // ── Account Handlers ─────────────────────────
+  const handleOpenAddModal = async () => {
+    setEditingAccount(null);
+    setBankNameOption('Meezan Bank');
+    setCustomBankName('');
+    setAccountTitle('');
+    setAccountNo('');
+    setBranch('');
+    setAccountOpeningBalance(0);
+    try {
+      const nextCode = await accountService.getNextCode();
+      setAccountCode(nextCode);
+    } catch {
+      setAccountCode(String(99101 + bankAccounts.length));
+    }
+    setIsAddAccountModalOpen(true);
+  };
+
+  const handleOpenEditModal = (acc) => {
+    setEditingAccount(acc);
+    let bName = acc.bankName || '';
+    let aTitle = acc.accountTitle || '';
+    if (!bName && acc.name) {
+      const parts = acc.name.split(' - ');
+      bName = parts[0] || '';
+      aTitle = parts.slice(1).join(' - ') || '';
+    }
+    if (existingBankNames.includes(bName)) {
+      setBankNameOption(bName);
+      setCustomBankName('');
+    } else {
+      setBankNameOption('Other');
+      setCustomBankName(bName);
+    }
+    setAccountTitle(aTitle);
+    setAccountNo(acc.accountNo || '');
+    setBranch(acc.branch || '');
+    setAccountCode(acc.code || '');
+    setAccountOpeningBalance(acc.openingBalance !== undefined ? acc.openingBalance : 0);
+  };
+
   const handleSaveAccount = async (e) => {
     e.preventDefault();
-    if (!accountName) return;
+    if (!effectiveBankName) {
+      alert('Bank Name is required');
+      return;
+    }
+    if (!accountTitle.trim()) {
+      alert('Account Title is required');
+      return;
+    }
+    if (isDuplicateAccount) {
+      alert('This account already exists');
+      return;
+    }
 
     try {
       if (editingAccount) {
         await accountService.update(editingAccount.id, {
-          name: accountName,
-          code: accountCode,
+          bankName: effectiveBankName,
+          accountTitle: accountTitle.trim(),
+          accountNo: accountNo.trim(),
+          branch: branch.trim(),
+          code: accountCode.trim(),
+          name: computedDisplayName,
           openingBalance: Number(accountOpeningBalance || 0),
         });
-        showToast(`Account "${accountName}" updated and balance recalculated!`);
+        showToast(`Account "${computedDisplayName}" updated!`);
         setEditingAccount(null);
       } else {
         await accountService.add({
-          name: accountName,
-          code: accountCode,
+          bankName: effectiveBankName,
+          accountTitle: accountTitle.trim(),
+          accountNo: accountNo.trim(),
+          branch: branch.trim(),
+          code: accountCode.trim(),
+          name: computedDisplayName,
           openingBalance: Number(accountOpeningBalance || 0),
         });
-        showToast('New bank account created successfully!');
+        showToast(`New bank account "${computedDisplayName}" created!`);
         setIsAddAccountModalOpen(false);
       }
-      setAccountName('');
-      setAccountCode('');
-      setAccountOpeningBalance(0);
     } catch (err) {
       alert(err.message || 'Error saving account');
     }
+  };
+
+  const handleDeleteAccountClick = async (acc) => {
+    const count = await getAccountUsageCount(acc.id, acc.name);
+    if (count > 0) {
+      alert(`This record is used in ${count} transactions. Delete or edit those first`);
+      return;
+    }
+    setDeletingAccountId(acc.id);
   };
 
   const handleDeleteAccount = async () => {
@@ -231,17 +359,33 @@ export default function CashBank() {
   };
 
   // Helper to generate chronological Bank ledger for a selected bank account
-  const getBankLedgerRows = (accName) => {
-    if (!accName) return [];
+  const getBankLedgerRows = () => {
+    if (!selectedAccountForLedger) return [];
+    const accId = selectedAccountForLedger.id;
+    const accName = selectedAccountForLedger.name;
+
+    const matchesAcc = (txAccId, txAccName) => {
+      if (txAccId && accId && String(txAccId) === String(accId)) return true;
+      if (txAccName && accName) {
+        const a1 = String(txAccName).trim().toLowerCase();
+        const a2 = String(accName).trim().toLowerCase();
+        if (a1 === a2) return true;
+        if (a2.includes(a1) || a1.includes(a2)) return true;
+      }
+      return false;
+    };
+
     const rows = [];
 
-    // Bank Receipts
+    // Bank Receipts (including Sales receipts into bank)
     receipts.forEach((r) => {
-      if (r.account === accName) {
+      if (matchesAcc(r.accountId, r.account)) {
+        const sourceVoucher = r.sourceVoucher || (r.description?.match(/SAL-\d+/i)?.[0]) || null;
         rows.push({
           date: r.date,
-          refNo: r.no,
-          type: 'Customer Receipt',
+          refNo: sourceVoucher ? `${r.no} (${sourceVoucher})` : r.no,
+          sourceVoucher,
+          type: sourceVoucher ? 'Sale Receipt' : 'Customer Receipt',
           description: r.description || `Payment from ${r.partyName}`,
           received: Number(r.amount || 0),
           paid: 0,
@@ -249,13 +393,15 @@ export default function CashBank() {
       }
     });
 
-    // Bank Payments
+    // Bank Payments (including Purchase payments from bank)
     payments.forEach((p) => {
-      if (p.account === accName) {
+      if (matchesAcc(p.accountId, p.account)) {
+        const sourceVoucher = p.sourceVoucher || (p.description?.match(/PUR-\d+/i)?.[0]) || null;
         rows.push({
           date: p.date,
-          refNo: p.no,
-          type: 'Supplier Payment',
+          refNo: sourceVoucher ? `${p.no} (${sourceVoucher})` : p.no,
+          sourceVoucher,
+          type: sourceVoucher ? 'Purchase Payment' : 'Supplier Payment',
           description: p.description || `Payment to ${p.partyName}`,
           received: 0,
           paid: Number(p.amount || 0),
@@ -265,7 +411,7 @@ export default function CashBank() {
 
     // Bank Expenses
     expenses.forEach((e) => {
-      if (e.account === accName) {
+      if (matchesAcc(e.accountId, e.account)) {
         rows.push({
           date: e.date,
           refNo: 'EXP',
@@ -279,7 +425,7 @@ export default function CashBank() {
 
     // Cash Book Bank Deposits & Withdrawals
     cashBookEntries.forEach((cb) => {
-      if (cb.bankAccountName === accName || cb.bankAccountId === selectedAccountForLedger?.id) {
+      if (matchesAcc(cb.bankAccountId, cb.bankAccountName)) {
         if (cb.type === 'Deposit') {
           rows.push({
             date: cb.date,
@@ -302,6 +448,26 @@ export default function CashBank() {
       }
     });
 
+    // Journal Voucher lines affecting this bank account
+    journalEntries.forEach((j) => {
+      (j.lines || []).forEach((line) => {
+        if (line.accountType === 'bank' && matchesAcc(line.accountId, line.accountName)) {
+          const deb = Number(line.debit || 0);
+          const cred = Number(line.credit || 0);
+          if (deb > 0 || cred > 0) {
+            rows.push({
+              date: j.date,
+              refNo: j.voucherNo || j.no || 'JV',
+              type: 'Journal Voucher',
+              description: line.detail || j.narration || `JV ${j.voucherNo || j.no}`,
+              received: deb,
+              paid: cred,
+            });
+          }
+        }
+      });
+    });
+
     rows.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     let running = Number(selectedAccountForLedger?.openingBalance || 0);
@@ -322,13 +488,7 @@ export default function CashBank() {
               <Button
                 variant="primary"
                 icon={Plus}
-                onClick={() => {
-                  setEditingAccount(null);
-                  setAccountName('');
-                  setAccountCode(String(99101 + bankAccounts.length));
-                  setAccountOpeningBalance(0);
-                  setIsAddAccountModalOpen(true);
-                }}
+                onClick={handleOpenAddModal}
               >
                 + Add Bank Account
               </Button>
@@ -426,131 +586,193 @@ export default function CashBank() {
       {/* ── TAB 1: ACCOUNTS & MASTER BANKS ────────────────────── */}
       {activeTab === 'accounts' && (
         <div className="space-y-6">
+          {/* Summary Liquidity Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {accounts.map((acc) => {
-              const isCash = acc.name.toLowerCase().includes('cash');
-              return (
-                <Card key={acc.id} className="relative overflow-hidden border-2 border-black p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
-                      {isCash ? 'Physical Cash' : `Bank (${acc.code || '99101'})`}
-                    </span>
-                    <div className="w-7 h-7 bg-gray-100 border border-black flex items-center justify-center text-[#1E3A5F]">
-                      {isCash ? <Wallet className="w-4 h-4" /> : <Landmark className="w-4 h-4" />}
-                    </div>
-                  </div>
-                  <h3 className="text-base font-bold text-black mb-1">{acc.name}</h3>
-                  <div className="text-xl font-black font-mono text-emerald-800 mb-1">{fmt(acc.balance)}</div>
-                  <div className="text-xs text-gray-500 mb-3">
-                    Opening: <span className="font-mono font-bold text-gray-800">{fmt(acc.openingBalance || 0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-300 no-print">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAccountForLedger(acc)}
-                      className="text-xs font-bold text-blue-900 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Ledger
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingAccount(acc);
-                          setAccountName(acc.name);
-                          setAccountCode(acc.code || '');
-                          setAccountOpeningBalance(acc.openingBalance || 0);
-                        }}
-                        className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
-                        title="Edit Account / Opening Balance"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      {!isCash && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const count = await getAccountUsageCount(acc.id, acc.name);
-                            if (count > 0) {
-                              alert(`This record is used in ${count} transactions. Delete or edit those first`);
-                              return;
-                            }
-                            setDeletingAccountId(acc.id);
-                          }}
-                          className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
-                          title="Delete Bank Account"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+            <Card className="p-4 border-2 border-black bg-white">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-gray-600">Total Liquidity</span>
+                <Landmark className="w-5 h-5 text-blue-900" />
+              </div>
+              <div className="text-2xl font-black font-mono text-emerald-800">{fmt(totalLiquidity)}</div>
+              <div className="text-xs text-gray-500 mt-1">Cash in hand + Commercial banks</div>
+            </Card>
+
+            <Card className="p-4 border-2 border-black bg-white">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-gray-600">Physical Cash</span>
+                <Wallet className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div className="text-2xl font-black font-mono text-emerald-800">{fmt(cashAccount?.balance || 0)}</div>
+              <div className="text-xs text-gray-500 mt-1">Cash Book main liquidity</div>
+            </Card>
+
+            <Card className="p-4 border-2 border-black bg-white">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-gray-600">Commercial Banks</span>
+                <Landmark className="w-5 h-5 text-amber-700" />
+              </div>
+              <div className="text-2xl font-black font-mono text-emerald-800">{fmt(totalBankBalances)}</div>
+              <div className="text-xs text-gray-500 mt-1">{bankAccounts.length} accounts across {bankGroups.length} banks</div>
+            </Card>
+
+            <Card className="p-4 border-2 border-black bg-white">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-gray-600">Bank Accounts</span>
+                <Building2 className="w-5 h-5 text-blue-700" />
+              </div>
+              <div className="text-2xl font-black font-mono text-black">{bankAccounts.length}</div>
+              <div className="text-xs text-gray-500 mt-1">Active registered accounts</div>
+            </Card>
           </div>
 
-          <Table
-            headers={['Account Code', 'Account Name', 'Type', 'Opening Balance', 'Current Balance', 'Actions']}
-            emptyText="No accounts registered."
-          >
-            {accounts.map((acc) => {
-              const isCash = acc.name.toLowerCase().includes('cash');
-              return (
-                <TR key={acc.id}>
-                  <TD mono className="font-bold text-black">{acc.code || '-'}</TD>
-                  <TD className="font-bold text-black">{acc.name}</TD>
-                  <TD>
-                    <Badge variant={isCash ? 'green' : 'blue'}>{isCash ? 'Physical Cash' : 'Commercial Bank'}</Badge>
-                  </TD>
-                  <TD mono right>{fmt(acc.openingBalance || 0)}</TD>
-                  <TD mono right className="font-bold text-emerald-800">{fmt(acc.balance)}</TD>
-                  <TD>
-                    <div className="flex items-center justify-end gap-1.5 no-print">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAccountForLedger(acc)}
-                        className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-700 cursor-pointer"
-                        title="View Account Ledger"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingAccount(acc);
-                          setAccountName(acc.name);
-                          setAccountCode(acc.code || '');
-                          setAccountOpeningBalance(acc.openingBalance || 0);
-                        }}
-                        className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
-                        title="Edit Account / Opening Balance"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      {!isCash && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const count = await getAccountUsageCount(acc.id, acc.name);
-                            if (count > 0) {
-                              alert(`This record is used in ${count} transactions. Delete or edit those first`);
-                              return;
-                            }
-                            setDeletingAccountId(acc.id);
-                          }}
-                          className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
-                          title="Delete Account"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+          {/* Physical Cash in Hand Row */}
+          {cashAccount && (
+            <div className="border-2 border-black bg-white p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 border border-black flex items-center justify-center text-emerald-800">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase bg-emerald-100 text-emerald-900 px-1.5 py-0.5 border border-emerald-400">
+                      Code: {cashAccount.code || '99020'}
+                    </span>
+                    <h3 className="text-base font-black text-black">{cashAccount.name}</h3>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Opening: <span className="font-mono font-bold text-black">{fmt(cashAccount.openingBalance || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-end">
+                  <span className="text-xs text-gray-500 font-bold uppercase block">Current Cash</span>
+                  <span className="text-xl font-black font-mono text-emerald-800">{fmt(cashAccount.balance)}</span>
+                </div>
+                <Button
+                  variant="secondary"
+                  icon={Eye}
+                  onClick={() => setSelectedAccountForLedger(cashAccount)}
+                >
+                  Cash Ledger
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Grouped Bank Accounts by Bank */}
+          <div className="space-y-6">
+            {bankGroups.length === 0 ? (
+              <div className="p-8 text-center border-2 border-black bg-white text-gray-500 font-bold">
+                No commercial bank accounts found. Click "+ Add Bank Account" above to register bank accounts.
+              </div>
+            ) : (
+              bankGroups.map((group) => (
+                <div key={group.bankName} className="border-2 border-black bg-white overflow-hidden shadow-sm">
+                  {/* Bank Header with bank name, account count, and subtotal */}
+                  <div className="bg-[#F4F1EA] border-b-2 border-black px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-blue-900 border border-black flex items-center justify-center text-white">
+                        <Landmark className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-base font-black text-black">
+                        {group.bankName}:{' '}
+                        <span className="font-bold text-gray-700">
+                          {group.accounts.length} {group.accounts.length === 1 ? 'account' : 'accounts'}
+                        </span>
+                      </h3>
                     </div>
-                  </TD>
-                </TR>
-              );
-            })}
-          </Table>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs uppercase font-bold text-gray-600">Subtotal ({group.bankName}):</span>
+                      <span className="font-mono text-emerald-900 font-black text-base px-2 py-0.5 bg-emerald-100 border border-emerald-400">
+                        {fmt(group.subtotal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Accounts Table */}
+                  <Table
+                    headers={['Account Code', 'Account Title / Name', 'Account No / IBAN', 'Branch', 'Opening Balance', 'Current Balance', 'Actions']}
+                    emptyText="No accounts in this bank."
+                  >
+                    {group.accounts.map((acc) => (
+                      <TR key={acc.id}>
+                        <TD mono className="font-bold text-black">{acc.code || '-'}</TD>
+                        <TD className="font-bold text-black">
+                          <div>{acc.name}</div>
+                          {acc.accountTitle && acc.accountTitle !== acc.name && (
+                            <div className="text-xs text-gray-500 font-normal">{acc.accountTitle}</div>
+                          )}
+                        </TD>
+                        <TD mono>{acc.accountNo || '-'}</TD>
+                        <TD>{acc.branch || '-'}</TD>
+                        <TD mono right>{fmt(acc.openingBalance || 0)}</TD>
+                        <TD mono right className="font-bold text-emerald-800">{fmt(acc.balance)}</TD>
+                        <TD>
+                          <div className="flex items-center justify-end gap-1.5 no-print">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccountForLedger(acc)}
+                              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-gray-100 text-gray-700 cursor-pointer"
+                              title="View Account Ledger"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(acc)}
+                              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-amber-50 text-amber-700 cursor-pointer"
+                              title="Edit Account"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAccountClick(acc)}
+                              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center p-1 border border-black bg-white hover:bg-red-50 text-red-700 cursor-pointer"
+                              title="Delete Account"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </TD>
+                      </TR>
+                    ))}
+                    {/* Bank Subtotal Row */}
+                    <tr className="bg-[#ECE7DF] font-bold border-t-2 border-black">
+                      <td colSpan={4} className="px-3 py-2 text-end text-xs uppercase font-bold text-gray-700">
+                        Subtotal — {group.bankName} ({group.accounts.length} {group.accounts.length === 1 ? 'account' : 'accounts'})
+                      </td>
+                      <td className="px-3 py-2 text-end font-mono text-xs text-gray-700">
+                        {fmt(group.accounts.reduce((s, a) => s + Number(a.openingBalance || 0), 0))}
+                      </td>
+                      <td className="px-3 py-2 text-end font-mono text-sm text-emerald-900 font-black">
+                        {fmt(group.subtotal)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </Table>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Grand Total of All Banks */}
+          <div className="bg-[#1E3A5F] text-white p-4 border-2 border-black flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Landmark className="w-6 h-6 text-amber-300" />
+              <div>
+                <div className="text-xs uppercase font-bold tracking-wider text-blue-200">Total of All Banks</div>
+                <div className="text-sm font-semibold text-gray-200">
+                  {bankAccounts.length} accounts across {bankGroups.length} commercial banks
+                </div>
+              </div>
+            </div>
+            <div className="text-end">
+              <div className="text-xs text-blue-200 font-bold uppercase">Total Balance (All Banks)</div>
+              <div className="text-2xl font-black font-mono text-amber-300">{fmt(totalBankBalances)}</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -692,30 +914,89 @@ export default function CashBank() {
           setIsAddAccountModalOpen(false);
           setEditingAccount(null);
         }}
-        title={editingAccount ? `Editing Account — ${editingAccount.name}` : 'Add New Commercial Bank'}
+        title={editingAccount ? `Editing Account — ${editingAccount.name}` : 'Add New Commercial Bank Account'}
       >
         <form onSubmit={handleSaveAccount} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Select
+                label="Bank Name"
+                value={bankNameOption}
+                onChange={setBankNameOption}
+                options={[
+                  ...existingBankNames.map((name) => ({ value: name, label: name })),
+                  { value: 'Other', label: '+ Other (Specify new bank)' },
+                ]}
+                required
+              />
+              {bankNameOption === 'Other' && (
+                <div className="mt-2">
+                  <Input
+                    label="Custom Bank Name"
+                    value={customBankName}
+                    onChange={setCustomBankName}
+                    placeholder="e.g. Askari Bank, Standard Chartered"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+
+            <Input
+              label="Account Code"
+              value={accountCode}
+              onChange={setAccountCode}
+              placeholder="e.g. 99101"
+              disabled={!editingAccount}
+              readOnly={!editingAccount}
+              required
+            />
+          </div>
+
           <Input
-            label="Account / Bank Name"
-            value={accountName}
-            onChange={setAccountName}
-            placeholder="e.g. Meezan Bank Ltd"
+            label="Account Title"
+            value={accountTitle}
+            onChange={setAccountTitle}
+            placeholder="e.g. Shahid Yaseen - Current 1"
             required
           />
-          <Input
-            label="Account Code"
-            value={accountCode}
-            onChange={setAccountCode}
-            placeholder="e.g. 99101"
-            required
-          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Account No / IBAN (Optional)"
+              value={accountNo}
+              onChange={setAccountNo}
+              placeholder="e.g. 0123456789012345"
+            />
+            <Input
+              label="Branch Name / Code (Optional)"
+              value={branch}
+              onChange={setBranch}
+              placeholder="e.g. Grain Market Branch"
+            />
+          </div>
+
           <Input
             label="Opening Balance (PKR)"
             type="number"
             value={accountOpeningBalance}
             onChange={setAccountOpeningBalance}
-            required
+            placeholder="0"
           />
+
+          {/* Live Display Name Preview & Duplicate Warning */}
+          <div className="p-3 bg-gray-50 border border-black rounded-none">
+            <div className="text-xs text-gray-600 font-bold uppercase mb-1">Display Name (Saved in system):</div>
+            <div className="text-sm font-black text-blue-900 font-mono">
+              {computedDisplayName || '<Bank Name> - <Account Title>'}
+            </div>
+            {isDuplicateAccount && (
+              <div className="mt-2 text-xs font-black text-red-600 flex items-center gap-1">
+                <span>⚠️ This account already exists</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-black">
             <Button
               variant="secondary"
@@ -727,7 +1008,7 @@ export default function CashBank() {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" disabled={isDuplicateAccount}>
               {editingAccount ? 'Update Account' : 'Save Account'}
             </Button>
           </div>

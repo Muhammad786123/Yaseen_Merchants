@@ -2,6 +2,7 @@ import React from 'react';
 import { formatDate } from '../../utils/formatters.js';
 import PrintFooter from './PrintFooter.jsx';
 import { useCompanyProfile } from '../../context/CompanyProfileContext.jsx';
+import { balanceSide, formatBalanceWithSide } from '../../utils/partySide.js';
 
 /**
  * UrduPartyStatement — Flat, dense, monochrome Party Statement matching the PERBALACC legacy reference.
@@ -102,13 +103,18 @@ export default function UrduPartyStatement({
       .trim();
 
     const bal = Number(r.balance || 0);
-    const status = bal > 0 ? 'Cr' : bal < 0 ? 'Dr' : '';
+    const sideInfo = balanceSide(bal);
+    const status = sideInfo.ur;
+    const sideEn = sideInfo.en;
+    const sideAmount = sideInfo.amount;
+    const sideColor = sideInfo.color;
+    const sideLabel = sideInfo.label;
 
-    return { ...r, transType, note, dr, cr, bal, status };
+    return { ...r, transType, note, dr, cr, bal, status, sideEn, sideAmount, sideColor, sideLabel };
   });
 
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].bal : openingBalance;
-  const finalStatus = finalBalance > 0 ? 'Cr' : finalBalance < 0 ? 'Dr' : '';
+  const finalSide = balanceSide(finalBalance);
 
   /* ── Column widths in exact Reference LTR order:
    *   Type → Bill No. → Status → Debit → Credit → Balance
@@ -177,6 +183,10 @@ export default function UrduPartyStatement({
         type: 'carry-forward',
         balance: rows[i - 1].bal,
         status: rows[i - 1].status,
+        sideAmount: rows[i - 1].sideAmount,
+        sideEn: rows[i - 1].sideEn,
+        sideColor: rows[i - 1].sideColor,
+        sideLabel: rows[i - 1].sideLabel,
         key: `cf-${i}`,
       });
       segments.push({ type: 'header', key: `hdr-${i}` });
@@ -428,10 +438,12 @@ export default function UrduPartyStatement({
                 >
                   <td colSpan={6} style={{ padding: '6px 10px', textAlign: 'right', direction: 'rtl' }}>
                     <span className="font-urdu font-bold text-[20px] print:text-[13pt]">آگے منتقل: </span>
-                    <span className="num-total" style={{ margin: '0 6px' }}>
-                      {formatRs(seg.balance)}
+                    <span className="num-total" style={{ margin: '0 6px', color: seg.sideColor || undefined }}>
+                      {formatRs(seg.sideAmount)}
                     </span>{' '}
-                    <span className="font-urdu font-bold text-[18px]">{seg.status}</span>
+                    <span className="font-urdu font-bold text-[18px]" style={{ color: seg.sideColor || undefined }}>
+                      {seg.sideLabel}
+                    </span>
                   </td>
                 </tr>
               );
@@ -455,7 +467,10 @@ export default function UrduPartyStatement({
                   <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
                     {row.billNo || '—'}
                   </td>
-                  <td className="font-urdu font-bold text-[18px] print:text-[12pt] text-center" style={{ padding: '6px 10px' }}>
+                  <td
+                    className="font-urdu font-bold text-[18px] print:text-[12pt] text-center"
+                    style={{ padding: '6px 10px', color: row.sideColor || undefined }}
+                  >
                     {row.status || '—'}
                   </td>
                   <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
@@ -464,9 +479,11 @@ export default function UrduPartyStatement({
                   <td className="num text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
                     {row.cr > 0 ? formatRs(row.cr) : ''}
                   </td>
-                  <td className="num-total text-start" style={{ padding: '6px 10px', direction: 'ltr' }}>
-                    {formatRs(Math.abs(row.bal))}
-                    {row.status ? ` ${row.status}` : ''}
+                  <td
+                    className="num-total text-start"
+                    style={{ padding: '6px 10px', direction: 'ltr', color: row.sideColor || undefined }}
+                  >
+                    {row.sideAmount === 0 ? '0 Rs' : `${formatRs(row.sideAmount)} ${row.sideEn}`}
                   </td>
                 </tr>
 
@@ -527,13 +544,14 @@ export default function UrduPartyStatement({
             <td className="num-total text-start" style={{ padding: '8px 10px', direction: 'ltr' }}>
               {formatRs(totalCredit)}
             </td>
-            <td className="num-total text-start" style={{ padding: '8px 10px', direction: 'ltr' }}>
-              {formatRs(Math.abs(finalBalance))}
-              {finalStatus ? ` ${finalStatus}` : ''}
+            <td
+              className="num-total text-start"
+              style={{ padding: '8px 10px', direction: 'ltr', color: finalSide.color || undefined }}
+            >
+              {finalSide.amount === 0 ? '0 Rs' : `${formatRs(finalSide.amount)} ${finalSide.ur} (${finalSide.en})`}
             </td>
           </tr>
         </tfoot>
-      </table>
       </table>
 
       {/* ── Closing Footer Block (Monochrome Plain Aesthetic) ───────────────*/}

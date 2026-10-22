@@ -25,7 +25,9 @@ export default function PurchaseForm({
       return initialData.items.map((it) => ({
         ...it,
         type: it.type || 'stock',
-        unitType: it.unitType || 'KG',
+        unitType: 'KG',
+        count: it.count !== undefined && it.count !== null && it.count !== '' ? Number(it.count) : '',
+        qty: it.qty !== undefined ? it.qty : '',
       }));
     }
     return [
@@ -35,9 +37,8 @@ export default function PurchaseForm({
         itemName: items[0]?.name || '',
         quality: items[0]?.quality || '',
         unitType: 'KG',
-        nugs: 0,
-        nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
-        qty: 100,
+        count: '',
+        qty: '',
         rate: '',
         amount: 0,
         serviceDescription: '',
@@ -63,9 +64,17 @@ export default function PurchaseForm({
     if (!supplierId) errs.supplierId = 'Supplier is required';
     if (!warehouseId) errs.warehouseId = 'Warehouse is required';
 
-    const validItems = lineItems.filter(
-      (it) => (it.type === 'service' && Number(it.amount) > 0) || (it.itemId && Number(it.qty) > 0)
-    );
+    const validItems = lineItems
+      .filter((it) => (it.type === 'service' && Number(it.amount) > 0) || (it.itemId && Number(it.qty) > 0))
+      .map((it) => {
+        if (it.type === 'service') return it;
+        return {
+          ...it,
+          count: it.count !== '' && it.count !== undefined && it.count !== null && !isNaN(Number(it.count))
+            ? Number(it.count)
+            : '',
+        };
+      });
     if (validItems.length === 0) {
       errs.items = 'Please add at least one line item with valid quantity/amount';
     }
@@ -76,7 +85,7 @@ export default function PurchaseForm({
     }
 
     const supplierObj = suppliers.find((s) => s.id === supplierId);
-    const warehouseObj = warehouses.find((w) => w.id === warehouseId);
+    const accObj = accounts.find((a) => a.name === paymentAccount || a.id === paymentAccount);
 
     onSubmit({
       date,
@@ -84,7 +93,8 @@ export default function PurchaseForm({
       supplierName: supplierObj ? supplierObj.name : '',
       warehouseId,
       warehouseName: warehouseObj ? warehouseObj.name : '',
-      paymentAccount,
+      paymentAccountId: accObj ? accObj.id : null,
+      paymentAccount: accObj ? accObj.name : paymentAccount,
       items: validItems,
       total,
       paid: Number(paid),

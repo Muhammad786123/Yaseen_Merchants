@@ -25,7 +25,7 @@ export const purchaseService = {
 
     await db.transaction(
       'rw',
-      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts],
       async () => {
         let linkedPaymentId = null;
 
@@ -35,6 +35,11 @@ export const purchaseService = {
           const payCount = await db.payments.count();
           const payNo = `PAY-${String(payCount + 1).padStart(4, '0')}`;
 
+          const bankAcc = (purchaseData.paymentAccountId ? await db.accounts.get(purchaseData.paymentAccountId) : null) ||
+            (await db.accounts.where({ name: paymentAccount }).first());
+
+          const isCash = paymentAccount === 'Cash' || paymentAccount === 'Cash Book' || (bankAcc && bankAcc.name.toLowerCase().includes('cash'));
+
           const paymentRecord = {
             id: payId,
             no: payNo,
@@ -42,8 +47,12 @@ export const purchaseService = {
             partyId: purchaseData.supplierId,
             partyName: purchaseData.supplierName,
             amount: paid,
-            account: paymentAccount,
+            accountId: bankAcc ? bankAcc.id : purchaseData.paymentAccountId || null,
+            account: isCash ? 'Cash' : (bankAcc ? bankAcc.name : paymentAccount),
             description: `Payment against purchase invoice ${no}`,
+            sourceVoucher: no,
+            sourceType: 'Purchase',
+            sourceId: id,
           };
           await db.payments.add(paymentRecord);
           linkedPaymentId = payId;
@@ -57,7 +66,7 @@ export const purchaseService = {
           }
 
           // Cash or Bank movement
-          if (paymentAccount === 'Cash') {
+          if (isCash) {
             await db.cashBookEntries.add({
               id: 'cb_' + Date.now() + Math.random().toString(36).substr(2, 4),
               date: paymentRecord.date,
@@ -68,6 +77,9 @@ export const purchaseService = {
               credit: 0,
               description: `Cash payment ${payNo} for purchase ${no}`,
               linkedTransactionId: payId,
+              sourceVoucher: no,
+              sourceType: 'Purchase',
+              sourceId: id,
             });
 
             const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
@@ -144,7 +156,7 @@ export const purchaseService = {
 
     await db.transaction(
       'rw',
-      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts],
       async () => {
         // Step 1: Reverse old purchase total from previous supplier
         if (existing.supplierId) {
@@ -169,7 +181,8 @@ export const purchaseService = {
             }
 
             // Restore Cash Book & Cash account balance
-            if (oldPay.account === 'Cash') {
+            const wasCash = oldPay.account === 'Cash' || oldPay.account === 'Cash Book' || oldPay.account?.toLowerCase().includes('cash');
+            if (wasCash) {
               const cbEntries = await db.cashBookEntries
                 .where({ linkedTransactionId: oldPay.id })
                 .toArray();
@@ -207,6 +220,11 @@ export const purchaseService = {
           const payCount = await db.payments.count();
           const payNo = `PAY-${String(payCount + 1).padStart(4, '0')}`;
 
+          const bankAcc = (purchaseData.paymentAccountId ? await db.accounts.get(purchaseData.paymentAccountId) : null) ||
+            (await db.accounts.where({ name: newPaymentAccount }).first());
+
+          const isNewCash = newPaymentAccount === 'Cash' || newPaymentAccount === 'Cash Book' || (bankAcc && bankAcc.name.toLowerCase().includes('cash'));
+
           const paymentRecord = {
             id: payId,
             no: payNo,
@@ -214,8 +232,12 @@ export const purchaseService = {
             partyId: purchaseData.supplierId,
             partyName: purchaseData.supplierName,
             amount: newPaid,
-            account: newPaymentAccount,
+            accountId: bankAcc ? bankAcc.id : purchaseData.paymentAccountId || null,
+            account: isNewCash ? 'Cash' : (bankAcc ? bankAcc.name : newPaymentAccount),
             description: `Payment against purchase invoice ${existing.no}`,
+            sourceVoucher: existing.no,
+            sourceType: 'Purchase',
+            sourceId: id,
           };
           await db.payments.add(paymentRecord);
           newLinkedPaymentId = payId;
@@ -229,7 +251,7 @@ export const purchaseService = {
           }
 
           // Cash or Bank movement
-          if (newPaymentAccount === 'Cash') {
+          if (isNewCash) {
             await db.cashBookEntries.add({
               id: 'cb_' + Date.now() + Math.random().toString(36).substr(2, 4),
               date: paymentRecord.date,
@@ -240,6 +262,9 @@ export const purchaseService = {
               credit: 0,
               description: `Cash payment ${payNo} for purchase ${existing.no}`,
               linkedTransactionId: payId,
+              sourceVoucher: existing.no,
+              sourceType: 'Purchase',
+              sourceId: id,
             });
 
             const cashAcc = await db.accounts.where({ name: 'Cash' }).first();
@@ -308,7 +333,7 @@ export const purchaseService = {
 
     await db.transaction(
       'rw',
-      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts, db.stockEntries],
+      [db.purchases, db.parties, db.payments, db.cashBookEntries, db.accounts],
       async () => {
         // 1. Reverse supplier party balance without clamp
         if (existing.supplierId) {
@@ -331,7 +356,8 @@ export const purchaseService = {
               });
             }
 
-            if (oldPay.account === 'Cash') {
+            const wasCash = oldPay.account === 'Cash' || oldPay.account === 'Cash Book' || oldPay.account?.toLowerCase().includes('cash');
+            if (wasCash) {
               const cbEntries = await db.cashBookEntries
                 .where({ linkedTransactionId: oldPay.id })
                 .toArray();

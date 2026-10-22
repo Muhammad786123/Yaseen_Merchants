@@ -5,7 +5,8 @@ import Badge from '../../components/ui/Badge.jsx';
 import StatCard from '../../components/dashboard/StatCard.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { fmt } from '../../utils/formatters.js';
-import { splitPartyBalances, partySide } from '../../utils/partyBalances.js';
+import { splitPartyBalances } from '../../utils/partyBalances.js';
+import { balanceSide } from '../../utils/partySide.js';
 import { TrendingDown } from 'lucide-react';
 
 export default function Payable() {
@@ -27,7 +28,7 @@ export default function Payable() {
           value={fmt(totalPayable)}
           sub={`Owed to ${creditors.length} account(s)`}
           icon={TrendingDown}
-          color="text-red-600"
+          color="text-emerald-600"
         />
       </div>
 
@@ -40,11 +41,11 @@ export default function Payable() {
             <TD mono className="font-bold text-gray-700">{c.code || '-'}</TD>
             <TD className="font-bold text-[#1E3A5F]">{c.name}</TD>
             <TD><Badge variant="orange">{c.type}</Badge></TD>
-            <TD><Badge variant="green">جمع (Jama / Credit)</Badge></TD>
+            <TD><Badge variant="green">جمع (Cr)</Badge></TD>
             <TD>{c.city || '-'}</TD>
             <TD className="num">{c.phone || '-'}</TD>
-            <TD right className="num font-bold text-red-600">
-              {fmt(partySide(c.balance).amount)}
+            <TD right className="num font-bold text-emerald-600">
+              {fmt(balanceSide(c.balance).amount)}
             </TD>
           </TR>
         ))}

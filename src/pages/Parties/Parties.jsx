@@ -11,7 +11,7 @@ import PartyDetails from './PartyDetails.jsx';
 import { useParties } from '../../hooks/useParties.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { fmt } from '../../utils/formatters.js';
-import { partySide } from '../../utils/partyBalances.js';
+import { balanceSide } from '../../utils/partySide.js';
 import { Plus, Edit, Trash2, Eye, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -86,8 +86,8 @@ export default function Parties() {
         emptyText="No parties found matching your criteria."
       >
         {filteredParties.map((p) => {
-          const { side, amount } = partySide(p.balance);
-          const isZero = Number(p.balance || 0) === 0;
+          const side = balanceSide(p.balance);
+          const isZero = side.amount === 0;
           return (
             <TR key={p.id}>
               <TD mono className="font-bold text-gray-700">
@@ -119,15 +119,10 @@ export default function Parties() {
               <TD mono right>{fmt(p.openingBalance || 0)}</TD>
               <TD mono right>
                 <span
-                  className={`font-black ${
-                    !isZero && side === 'Cr'
-                      ? 'text-red-700'
-                      : !isZero && side === 'Dr'
-                      ? 'text-[#1a6b2e]'
-                      : 'text-gray-800'
-                  }`}
+                  className="font-black"
+                  style={{ color: side.color || '#1f2937' }}
                 >
-                  {fmt(amount)} {!isZero ? side : ''}
+                  {isZero ? '0' : `${fmt(side.amount)} ${side.ur} (${side.en})`}
                 </span>
               </TD>
             <TD className="no-print">

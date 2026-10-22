@@ -87,6 +87,9 @@ export const journalService = {
             line.detail ? ' - ' + line.detail : entry.narration ? ' - ' + entry.narration : ''
           }`,
           linkedTransactionId: entry.id,
+          sourceVoucher: entry.voucherNo || entry.no,
+          sourceType: 'Journal',
+          sourceId: entry.id,
           createdAt: entry.createdAt || new Date().toISOString(),
           accountType: 'general',
           accountName: 'Journal Voucher',

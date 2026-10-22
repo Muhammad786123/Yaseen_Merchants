@@ -1,6 +1,7 @@
 import { db } from '../db/database.js';
 import { cashBookService } from './cashBookService.js';
 import { partyService } from './partyService.js';
+import { accountService } from './accountService.js';
 
 export const receiptService = {
   async getAll() {
@@ -13,6 +14,13 @@ export const receiptService = {
     const no = receiptData.no || `RCT-${String(count + 1).padStart(4, '0')}`;
     const amount = Number(receiptData.amount || 0);
 
+    let accountObj = null;
+    if (receiptData.accountId) {
+      accountObj = await db.accounts.get(receiptData.accountId);
+    } else if (receiptData.account) {
+      accountObj = await db.accounts.where({ name: receiptData.account }).first();
+    }
+
     const newReceipt = {
       id,
       no,
@@ -20,7 +28,8 @@ export const receiptService = {
       partyId: receiptData.partyId,
       partyName: receiptData.partyName,
       amount,
-      account: receiptData.account || 'Cash',
+      accountId: accountObj ? accountObj.id : receiptData.accountId || null,
+      account: accountObj ? accountObj.name : receiptData.account || 'Cash',
       description: receiptData.description || '',
       createdAt: receiptData.createdAt || new Date().toISOString(),
       updatedAt: null,
@@ -61,14 +70,19 @@ export const receiptService = {
           });
         }
       } else {
-        const accountObj = await db.accounts.where({ name: receiptData.account }).first();
-        if (accountObj) {
-          await db.accounts.update(accountObj.id, {
-            balance: Number(accountObj.balance || 0) + amount,
+        const bankAcc = (newReceipt.accountId ? await db.accounts.get(newReceipt.accountId) : null) ||
+          (await db.accounts.where({ name: newReceipt.account }).first());
+        if (bankAcc) {
+          await db.accounts.update(bankAcc.id, {
+            balance: Number(bankAcc.balance || 0) + amount,
           });
         }
       }
     });
+
+    if (newReceipt.accountId) {
+      await accountService.recalculateAccountBalance(newReceipt.accountId);
+    }
 
     await partyService.recalculateAllBalances();
     await cashBookService.recalculateCashBalance();
@@ -81,7 +95,12 @@ export const receiptService = {
 
     const oldAmount = Number(existing.amount || 0);
     const newAmount = Number(receiptData.amount || 0);
-    const newAccount = receiptData.account || existing.account || 'Cash';
+    let accountObj = null;
+    if (receiptData.accountId) {
+      accountObj = await db.accounts.get(receiptData.accountId);
+    } else if (newAccount) {
+      accountObj = await db.accounts.where({ name: newAccount }).first();
+    }
 
     const updated = {
       ...existing,
@@ -89,7 +108,8 @@ export const receiptService = {
       partyId: receiptData.partyId || existing.partyId,
       partyName: receiptData.partyName || existing.partyName,
       amount: newAmount,
-      account: newAccount,
+      accountId: accountObj ? accountObj.id : receiptData.accountId || existing.accountId || null,
+      account: accountObj ? accountObj.name : newAccount,
       description: receiptData.description !== undefined ? receiptData.description : existing.description,
       updatedAt: new Date().toISOString(),
       editCount: (Number(existing.editCount) || 0) + 1,
@@ -125,7 +145,8 @@ export const receiptService = {
           await db.cashBookEntries.delete(cb.id);
         }
       } else {
-        const oldBank = await db.accounts.where({ name: existing.account }).first();
+        const oldBank = (existing.accountId ? await db.accounts.get(existing.accountId) : null) ||
+          (await db.accounts.where({ name: existing.account }).first());
         if (oldBank) {
           await db.accounts.update(oldBank.id, {
             balance: Number(oldBank.balance || 0) - oldAmount,
@@ -164,7 +185,8 @@ export const receiptService = {
           });
         }
       } else {
-        const newBank = await db.accounts.where({ name: newAccount }).first();
+        const newBank = (updated.accountId ? await db.accounts.get(updated.accountId) : null) ||
+          (await db.accounts.where({ name: newAccount }).first());
         if (newBank) {
           await db.accounts.update(newBank.id, {
             balance: Number(newBank.balance || 0) + newAmount,
@@ -175,6 +197,13 @@ export const receiptService = {
       // 3. Save updated receipt
       await db.receipts.put(updated);
     });
+
+    if (existing.accountId) {
+      await accountService.recalculateAccountBalance(existing.accountId);
+    }
+    if (updated.accountId && updated.accountId !== existing.accountId) {
+      await accountService.recalculateAccountBalance(updated.accountId);
+    }
 
     await partyService.recalculateAllBalances();
     await cashBookService.recalculateCashBalance();
@@ -217,7 +246,8 @@ export const receiptService = {
           await db.cashBookEntries.delete(cb.id);
         }
       } else {
-        const bank = await db.accounts.where({ name: existing.account }).first();
+        const bank = (existing.accountId ? await db.accounts.get(existing.accountId) : null) ||
+          (await db.accounts.where({ name: existing.account }).first());
         if (bank) {
           await db.accounts.update(bank.id, {
             balance: Number(bank.balance || 0) - amount,
@@ -228,6 +258,10 @@ export const receiptService = {
       // 3. Delete receipt
       await db.receipts.delete(id);
     });
+
+    if (existing.accountId) {
+      await accountService.recalculateAccountBalance(existing.accountId);
+    }
 
     await partyService.recalculateAllBalances();
     await cashBookService.recalculateCashBalance();

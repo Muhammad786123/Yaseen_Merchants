@@ -102,6 +102,14 @@ db.version(8).stores({
   cashBookEntries: 'id, cashBookNo, date, type, partyId, bankAccountId, linkedTransactionId',
 });
 
+db.version(9).stores({
+  stockTransfers: 'id, no, date, fromWarehouseId, toWarehouseId, itemId, quality, createdAt',
+});
+
+db.version(10).stores({
+  closingStockEntries: 'id, date, amount, createdAt',
+});
+
 /**
  * Clear all transactional, inventory, ledger, and party tables and reset database to clean state.
  * Preserves system configuration: Settings/Company Profile, Document Numbering, and Users.
@@ -117,7 +125,9 @@ export async function clearAllDatabaseData() {
     await db.payments.clear();
     await db.expenses.clear();
     if (db.stockAdjustments) await db.stockAdjustments.clear();
+    if (db.stockTransfers) await db.stockTransfers.clear();
     if (db.journalEntries) await db.journalEntries.clear();
+    if (db.closingStockEntries) await db.closingStockEntries.clear();
 
     // 2. Ledgers, Cash Book, Banking & Capital
     await db.cashBookEntries.clear();

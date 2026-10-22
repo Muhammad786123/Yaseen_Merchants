@@ -12,6 +12,7 @@ export default function SaleForm({
   items = [],
   qualities = [],
   accounts = [],
+  stockEntries = [],
   initialData = null,
   onSubmit,
   onCancel,
@@ -25,7 +26,9 @@ export default function SaleForm({
       return initialData.items.map((it) => ({
         ...it,
         type: it.type || 'stock',
-        unitType: it.unitType || 'Nug',
+        unitType: 'KG',
+        count: it.count !== undefined && it.count !== null && it.count !== '' ? Number(it.count) : '',
+        qty: it.qty !== undefined ? it.qty : '',
       }));
     }
     return [
@@ -34,10 +37,9 @@ export default function SaleForm({
         itemId: items[0]?.id || '',
         itemName: items[0]?.name || '',
         quality: items[0]?.quality || '',
-        unitType: 'Nug',
-        nugs: 1,
-        nugFactor: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
-        qty: items[0]?.piecesToKg || items[0]?.nugFactor || 100,
+        unitType: 'KG',
+        count: '',
+        qty: '',
         rate: '',
         amount: 0,
         serviceDescription: '',
@@ -50,18 +52,46 @@ export default function SaleForm({
   useEffect(() => {
     if (!initialData) {
       if (customers.length > 0 && !customerId) setCustomerId(customers[0].id);
-      if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
     }
-  }, [customers, warehouses, initialData]);
+  }, [customers, initialData]);
 
   const total = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const balance = total - Number(received || 0);
+
+  const doSubmit = () => {
+    const customerObj = customers.find((c) => c.id === customerId);
+    const validItems = lineItems
+      .filter((it) => (it.type === 'service' && Number(it.amount) > 0) || (it.itemId && Number(it.qty) > 0))
+      .map((it) => {
+        if (it.type === 'service') return it;
+        return {
+          ...it,
+          count: it.count !== '' && it.count !== undefined && it.count !== null && !isNaN(Number(it.count))
+            ? Number(it.count)
+            : '',
+        };
+      });
+
+    const accObj = accounts.find((a) => a.name === receivedAccount || a.id === receivedAccount);
+    onSubmit({
+      date,
+      customerId,
+      customerName: customerObj ? customerObj.name : '',
+      warehouseId: initialData?.warehouseId || '',
+      warehouseName: initialData?.warehouseName || '',
+      receivedAccountId: accObj ? accObj.id : null,
+      receivedAccount: accObj ? accObj.name : receivedAccount,
+      items: validItems,
+      total,
+      received: Number(received),
+      balance,
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const errs = {};
     if (!customerId) errs.customerId = 'Customer is required';
-    if (!warehouseId) errs.warehouseId = 'Warehouse is required';
 
     const validItems = lineItems.filter(
       (it) => (it.type === 'service' && Number(it.amount) > 0) || (it.itemId && Number(it.qty) > 0)
@@ -75,26 +105,12 @@ export default function SaleForm({
       return;
     }
 
-    const customerObj = customers.find((c) => c.id === customerId);
-    const warehouseObj = warehouses.find((w) => w.id === warehouseId);
-
-    onSubmit({
-      date,
-      customerId,
-      customerName: customerObj ? customerObj.name : '',
-      warehouseId,
-      warehouseName: warehouseObj ? warehouseObj.name : '',
-      receivedAccount,
-      items: validItems,
-      total,
-      received: Number(received),
-      balance,
-    });
+    doSubmit();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <DatePicker label="Sale Date" value={date} onChange={setDate} required />
         <Select
           label="Customer Account"
@@ -104,14 +120,6 @@ export default function SaleForm({
           required
           error={errors.customerId}
         />
-        <Select
-          label="Source Warehouse"
-          value={warehouseId}
-          onChange={setWarehouseId}
-          options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-          required
-          error={errors.warehouseId}
-        />
       </div>
 
       {/* Shared Line Items Component with Service Support */}
@@ -119,6 +127,8 @@ export default function SaleForm({
         lineItems={lineItems}
         items={items}
         qualities={qualities}
+        stockEntries={stockEntries}
+        showStockAvailability={false}
         onChange={setLineItems}
         allowServices={true}
         error={errors.items}

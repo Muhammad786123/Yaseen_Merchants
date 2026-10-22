@@ -1,6 +1,7 @@
 import { db } from '../db/database.js';
-import { fmt } from '../utils/formatters.js';
+import { fmt, getLineLabel } from '../utils/formatters.js';
 import { partySide } from '../utils/partyBalances.js';
+import { issueTotalValue } from './issueService.js';
 
 /**
  * Builds the complete transaction list for a party across all vouchers and ledgers.
@@ -143,9 +144,9 @@ export function buildPartyTransactions(partyId, preloaded = null) {
       if (items.length > 0) {
         itemsDesc = items
           .map((i) => {
-            if (i.type === 'service') return i.serviceDescription || 'Service';
+            if (i.type === 'service') return getLineLabel(i);
             const name = i.itemName || i.quality || 'Goods';
-            const nugStr = i.nugs || i.bags ? `${i.nugs || i.bags} bags ` : '';
+            const nugStr = i.count || i.nugs || i.bags ? `${i.count || i.nugs || i.bags} bags ` : '';
             const rateStr = i.rate ? ` @ ${fmt(i.rate)}` : '';
             return `${nugStr}${name}${rateStr}`;
           })
@@ -197,9 +198,9 @@ export function buildPartyTransactions(partyId, preloaded = null) {
       if (items.length > 0) {
         itemsDesc = items
           .map((i) => {
-            if (i.type === 'service') return i.serviceDescription || 'Service';
+            if (i.type === 'service') return getLineLabel(i);
             const name = i.itemName || i.quality || 'Goods';
-            const nugStr = i.nugs || i.bags ? `${i.nugs || i.bags} bags ` : '';
+            const nugStr = i.count || i.nugs || i.bags ? `${i.count || i.nugs || i.bags} bags ` : '';
             const rateStr = i.rate ? ` @ ${fmt(i.rate)}` : '';
             return `${nugStr}${name}${rateStr}`;
           })
@@ -306,13 +307,16 @@ export function buildPartyTransactions(partyId, preloaded = null) {
     if (
       iss.partyId === partyId ||
       iss.supplierId === partyId ||
-      iss.customerId === partyId
+      iss.customerId === partyId ||
+      partyId === 'mall' ||
+      partyId === 'mall_ac'
     ) {
       const items = iss.items || [];
       const totalNugs = items.reduce((sum, i) => sum + Number(i.nugs || 0), 0);
       const totalKg = items.reduce((sum, i) => sum + Number(i.issueQty || i.qty || 0), 0);
       const rate = items[0]?.rate || '-';
       const detail = `Issue — ${iss.toArea || 'Material Issue'}`;
+      const val = issueTotalValue(iss);
 
       transactions.push({
         id: iss.id,
@@ -325,7 +329,7 @@ export function buildPartyTransactions(partyId, preloaded = null) {
         quantity: totalNugs > 0 ? totalNugs : '-',
         weight: totalKg > 0 ? totalKg : '-',
         rate,
-        debit: Number(iss.totalValue || 0),
+        debit: val,
         credit: 0,
       });
     }
@@ -575,4 +579,83 @@ export const partyService = {
 
     return changedParties;
   },
+  getPartyBalanceBeforeInvoice,
 };
+
+/**
+ * Computes a party's exact running balance immediately BEFORE a specific invoice.
+ *
+ * Traverses chronological party transactions up to (but not including) this invoice.
+ * If the invoice is already in the ledger, stops right before it.
+ * If the invoice is new/draft, returns the full running balance before this new invoice.
+ *
+ * @param {string|number|Object} partyIdOrObj
+ * @param {string|number|Object} invoiceIdOrNoOrObj
+ * @param {Object} [preloaded]
+ * @returns {Promise<number>}
+ */
+export async function getPartyBalanceBeforeInvoice(partyIdOrObj, invoiceIdOrNoOrObj, preloaded = null) {
+  if (!partyIdOrObj) return 0;
+
+  const partyId =
+    typeof partyIdOrObj === 'object' && partyIdOrObj !== null
+      ? partyIdOrObj.id || partyIdOrObj.customerId
+      : partyIdOrObj;
+
+  const invoiceIdOrNo =
+    typeof invoiceIdOrNoOrObj === 'object' && invoiceIdOrNoOrObj !== null
+      ? invoiceIdOrNoOrObj.id || invoiceIdOrNoOrObj.no || invoiceIdOrNoOrObj.billNo
+      : invoiceIdOrNoOrObj;
+
+  let party =
+    typeof partyIdOrObj === 'object' && partyIdOrObj !== null && partyIdOrObj.openingBalance !== undefined
+      ? partyIdOrObj
+      : preloaded?.party;
+
+  if (!party && db && db.parties && partyId) {
+    party = await db.parties.get(partyId);
+  }
+  const openingBalance = Number(party?.openingBalance || 0);
+
+  let preloadedData = preloaded;
+  if (!preloadedData && db && db.purchases && db.sales) {
+    const [purchases, sales, receipts, payments, cashBookEntries, issues, journalEntries] = await Promise.all([
+      db.purchases.toArray(),
+      db.sales.toArray(),
+      db.receipts ? db.receipts.toArray() : [],
+      db.payments ? db.payments.toArray() : [],
+      db.cashBookEntries ? db.cashBookEntries.toArray() : [],
+      db.issues ? db.issues.toArray() : [],
+      db.journalEntries ? db.journalEntries.toArray() : [],
+    ]);
+    preloadedData = {
+      purchases,
+      sales,
+      receipts,
+      payments,
+      cashBookEntries,
+      issues,
+      journalEntries,
+    };
+  }
+
+  const transactions = buildPartyTransactions(partyId, preloadedData);
+
+  let runningBalance = openingBalance;
+  for (const t of transactions) {
+    const isTarget =
+      invoiceIdOrNo &&
+      (String(t.id) === String(invoiceIdOrNo) ||
+        String(t.no) === String(invoiceIdOrNo) ||
+        String(t.billNo) === String(invoiceIdOrNo));
+
+    if (isTarget) {
+      break;
+    }
+    runningBalance += Number(t.credit || 0) - Number(t.debit || 0);
+  }
+
+  return runningBalance;
+}
+
+

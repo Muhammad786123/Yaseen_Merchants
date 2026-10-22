@@ -4,12 +4,20 @@ import PageHeader from '../../components/common/PageHeader.jsx';
 import ClassicLedgerView from '../../components/common/ClassicLedgerView.jsx';
 import Select from '../../components/ui/Select.jsx';
 import Button from '../../components/ui/Button.jsx';
+import Modal from '../../components/ui/Modal.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import StockTransferForm from '../../components/forms/StockTransferForm.jsx';
 import { useItems } from '../../hooks/useItems.js';
+import { useQualities } from '../../hooks/useQualities.js';
+import { useWarehouses } from '../../hooks/useWarehouses.js';
+import { useStock } from '../../hooks/useStock.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
 import { useSales } from '../../hooks/useSales.js';
 import { useIssues } from '../../hooks/useIssues.js';
 import { useProductions } from '../../hooks/useProductions.js';
 import { useStockAdjustments } from '../../hooks/useStockAdjustments.js';
+import { useStockTransfers } from '../../hooks/useStockTransfers.js';
+import { useApp } from '../../context/AppContext.jsx';
 import { Layers } from 'lucide-react';
 
 export default function StockLedger() {
@@ -19,15 +27,26 @@ export default function StockLedger() {
   const paramItemId = searchParams.get('item');
 
   const { items } = useItems();
+  const { qualities } = useQualities();
+  const { warehouses } = useWarehouses();
+  const { stockEntries } = useStock();
   const { purchases } = usePurchases();
   const { sales } = useSales();
   const { issues } = useIssues();
   const { productions } = useProductions();
   const { stockAdjustments } = useStockAdjustments();
+  const {
+    stockTransfers,
+    updateStockTransfer,
+    deleteStockTransfer,
+  } = useStockTransfers();
+  const { showToast } = useApp();
 
   const [selectedItemId, setSelectedItemId] = useState(paramItemId || items[0]?.id || '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [editingTransfer, setEditingTransfer] = useState(null);
+  const [deletingTransferId, setDeletingTransferId] = useState(null);
 
   useEffect(() => {
     if (paramItemId) {
@@ -65,28 +84,7 @@ export default function StockLedger() {
     });
   });
 
-  sales.forEach((s) => {
-    s.items?.forEach((it) => {
-      if (
-        (it.itemId === selectedItemId || (selectedItem && it.itemName === selectedItem.name)) &&
-        it.type !== 'service'
-      ) {
-        movements.push({
-          date: s.date,
-          type: 'Sale',
-          refNo: s.no,
-          party: s.customerName,
-          quantity: it.nugs || it.bags || 0,
-          weight: Number(it.weight || it.qty || 0),
-          inQty: 0,
-          outQty: Number(it.qty || 0),
-          rate: Number(it.rate || 0),
-          warehouse: s.warehouseName,
-          detail: `فروخت برائے ${s.customerName || 'خریدار'}${it.quality ? ` [${it.quality}]` : ''} - گودام: ${s.warehouseName || ''}`,
-        });
-      }
-    });
-  });
+  // Sales do NOT appear in Stock Ledger (Option B - Stock shows purchased quantity only)
 
   issues.forEach((iss) => {
     iss.items?.forEach((it) => {
@@ -157,6 +155,50 @@ export default function StockLedger() {
     }
   });
 
+  // Inter-godown transfers (both OUT from source and IN at destination)
+  stockTransfers.forEach((trf) => {
+    if (
+      trf.itemId === selectedItemId ||
+      (selectedItem && trf.itemName && trf.itemName.toLowerCase() === selectedItem.name.toLowerCase())
+    ) {
+      const qty = Number(trf.qty || 0);
+
+      // Out from source
+      movements.push({
+        date: trf.date,
+        type: 'Transfer (Out)',
+        refNo: trf.no,
+        transferId: trf.id,
+        transferData: trf,
+        party: `ٹرانسفر بنام ${trf.toWarehouseName || trf.toWarehouseId}`,
+        quantity: 0,
+        weight: qty,
+        inQty: 0,
+        outQty: qty,
+        rate: 0,
+        warehouse: trf.fromWarehouseName,
+        detail: `گودام منتقلی (Out) — روانہ ${trf.fromWarehouseName || ''} تا ${trf.toWarehouseName || ''}${trf.quality ? ` [${trf.quality}]` : ''}${trf.remarks ? ` (${trf.remarks})` : ''}`,
+      });
+
+      // In at destination
+      movements.push({
+        date: trf.date,
+        type: 'Transfer (In)',
+        refNo: trf.no,
+        transferId: trf.id,
+        transferData: trf,
+        party: `ٹرانسفر از ${trf.fromWarehouseName || trf.fromWarehouseId}`,
+        quantity: 0,
+        weight: qty,
+        inQty: qty,
+        outQty: 0,
+        rate: 0,
+        warehouse: trf.toWarehouseName,
+        detail: `گودام منتقلی (In) — موصول از ${trf.fromWarehouseName || ''} تا ${trf.toWarehouseName || ''}${trf.quality ? ` [${trf.quality}]` : ''}${trf.remarks ? ` (${trf.remarks})` : ''}`,
+      });
+    }
+  });
+
   movements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const openingStock = Number(selectedItem?.openingStock || 0);
@@ -173,14 +215,18 @@ export default function StockLedger() {
       rate: m.rate > 0 ? m.rate : '',
       debit: m.outQty > 0 ? m.outQty : 0,  // بنام (Outward)
       credit: m.inQty > 0 ? m.inQty : 0,  // جمع (Inward)
-      balance: Math.max(0, runningQty),   // بقایا (Balance)
-      marker: m.inQty > 0 ? 'جمع' : 'بنام',
+      balance: runningQty,   // بقایا (Balance)
       rawType: m.type,
+      transferData: m.transferData,
     };
   });
 
   const handleRowClick = (row) => {
     if (!row) return;
+    if (row.transferData) {
+      setEditingTransfer(row.transferData);
+      return;
+    }
     const t = (row.rawType || '').toLowerCase();
     const bill = (row.billNo || '').toLowerCase();
     if (bill.startsWith('adj') || t.includes('adj') || t.includes('opening')) {
@@ -240,6 +286,52 @@ export default function StockLedger() {
             />
           </div>
         }
+      />
+
+      {/* Edit Stock Transfer Modal */}
+      <Modal
+        isOpen={!!editingTransfer}
+        onClose={() => setEditingTransfer(null)}
+        title={editingTransfer ? `Edit Stock Transfer — ${editingTransfer.no}` : 'Edit Stock Transfer'}
+      >
+        <div className="space-y-4">
+          <StockTransferForm
+            warehouses={warehouses}
+            items={items}
+            qualities={qualities}
+            stockEntries={stockEntries}
+            initialData={editingTransfer}
+            onSubmit={async (data) => {
+              await updateStockTransfer(editingTransfer.id, data);
+              showToast(`Stock transfer ${editingTransfer.no} updated successfully!`);
+              setEditingTransfer(null);
+            }}
+            onCancel={() => setEditingTransfer(null)}
+          />
+          <div className="pt-2 border-t border-gray-200 flex justify-start">
+            <button
+              type="button"
+              onClick={() => setDeletingTransferId(editingTransfer.id)}
+              className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+            >
+              Delete this transfer record
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm Delete Stock Transfer Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingTransferId}
+        title="Delete Stock Transfer"
+        message="Are you sure you want to delete this stock transfer record? This will reverse the transfer and return stock to the source godown."
+        onConfirm={async () => {
+          await deleteStockTransfer(deletingTransferId);
+          showToast('Stock transfer deleted and stock reversed!');
+          setDeletingTransferId(null);
+          setEditingTransfer(null);
+        }}
+        onCancel={() => setDeletingTransferId(null)}
       />
     </div>
   );

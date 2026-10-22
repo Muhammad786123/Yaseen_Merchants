@@ -20,7 +20,7 @@ export default function ProductionForm({ initialData = null, onSubmit, onCancel 
     onSubmit({
       date,
       product,
-      inputs: [{ itemName: 'Cotton Waste A', quality: 'Cotton A', qty: Number(totalInput) }],
+      inputs: [{ itemName: 'Cotton Waste A', quality: '', qty: Number(totalInput) }],
       totalInput: Number(totalInput),
       outputQty: Number(outputQty),
       wasteQty: Number(wasteQty),

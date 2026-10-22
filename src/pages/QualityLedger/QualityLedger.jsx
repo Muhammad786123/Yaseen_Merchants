@@ -4,48 +4,50 @@ import PageHeader from '../../components/common/PageHeader.jsx';
 import ClassicLedgerView from '../../components/common/ClassicLedgerView.jsx';
 import Select from '../../components/ui/Select.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { useQualities } from '../../hooks/useQualities.js';
+import { useItems } from '../../hooks/useItems.js';
 import { usePurchases } from '../../hooks/usePurchases.js';
 import { useSales } from '../../hooks/useSales.js';
 import { useIssues } from '../../hooks/useIssues.js';
 import { useStockAdjustments } from '../../hooks/useStockAdjustments.js';
-import { Award } from 'lucide-react';
+import { useStockTransfers } from '../../hooks/useStockTransfers.js';
+import { Layers } from 'lucide-react';
 
 export default function QualityLedger() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const paramQualityId = searchParams.get('quality');
+  const paramItemId = searchParams.get('item') || searchParams.get('quality');
 
-  const { qualities } = useQualities();
+  const { items } = useItems();
   const { purchases } = usePurchases();
   const { sales } = useSales();
   const { issues } = useIssues();
   const { stockAdjustments } = useStockAdjustments();
+  const { stockTransfers } = useStockTransfers();
 
-  const [selectedQualityId, setSelectedQualityId] = useState(
-    paramQualityId || qualities[0]?.id || ''
+  const [selectedItemId, setSelectedItemId] = useState(
+    paramItemId || items[0]?.id || ''
   );
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
-    if (paramQualityId) {
-      setSelectedQualityId(paramQualityId);
-    } else if (!selectedQualityId && qualities.length > 0) {
-      setSelectedQualityId(qualities[0].id);
+    if (paramItemId) {
+      setSelectedItemId(paramItemId);
+    } else if (!selectedItemId && items.length > 0) {
+      setSelectedItemId(items[0].id);
     }
-  }, [qualities, paramQualityId, selectedQualityId]);
+  }, [items, paramItemId, selectedItemId]);
 
-  const selectedQuality = qualities.find((q) => q.id === selectedQualityId);
-  const qualityName = selectedQuality?.name || '';
+  const selectedItem = items.find((i) => i.id === selectedItemId);
+  const itemName = selectedItem?.name || '';
 
-  // Compile all movements of this specific quality grade across items & warehouses
+  // Compile all movements of this specific item across all warehouses
   const movements = [];
 
   purchases.forEach((p) => {
     (p.items || []).forEach((it) => {
-      if (it.quality === qualityName && it.type !== 'service') {
+      if ((it.itemId === selectedItemId || it.itemName === itemName) && it.type !== 'service') {
         movements.push({
           date: p.date,
           type: 'Purchase',
@@ -64,30 +66,11 @@ export default function QualityLedger() {
     });
   });
 
-  sales.forEach((s) => {
-    (s.items || []).forEach((it) => {
-      if (it.quality === qualityName && it.type !== 'service') {
-        movements.push({
-          date: s.date,
-          type: 'Sale',
-          refNo: s.no,
-          party: s.customerName,
-          itemName: it.itemName,
-          warehouse: s.warehouseName,
-          quantity: it.nugs || it.bags || 0,
-          weight: Number(it.weight || it.qty || 0),
-          inQty: 0,
-          outQty: Number(it.qty || 0),
-          rate: Number(it.rate || 0),
-          detail: `${it.itemName || 'مال'} - فروخت برائے ${s.customerName || 'خریدار'} (${s.warehouseName || ''})`,
-        });
-      }
-    });
-  });
+  // Sales do NOT appear in Quality Ledger (Option B - Sales do not affect stock)
 
   issues.forEach((iss) => {
     (iss.items || []).forEach((it) => {
-      if (it.quality === qualityName) {
+      if (it.itemId === selectedItemId || it.itemName === itemName) {
         movements.push({
           date: iss.date,
           type: 'Issue',
@@ -106,9 +89,9 @@ export default function QualityLedger() {
     });
   });
 
-  // Manual Stock Adjustments for this quality grade
+  // Manual Stock Adjustments for this item
   stockAdjustments.forEach((adj) => {
-    if (adj.quality === qualityName) {
+    if (adj.itemId === selectedItemId || adj.itemName === itemName) {
       const isReduce = adj.type === 'REDUCE' || Number(adj.qty) < 0;
       const qty = Math.abs(Number(adj.qty || 0));
       const rate = Number(adj.rate || 0);
@@ -136,6 +119,27 @@ export default function QualityLedger() {
     }
   });
 
+  // Stock Transfers for this item
+  stockTransfers.forEach((trf) => {
+    if (trf.itemId === selectedItemId || trf.itemName === itemName) {
+      const qty = Number(trf.qty || 0);
+      movements.push({
+        date: trf.date,
+        type: 'Transfer',
+        refNo: trf.no,
+        party: `${trf.fromWarehouseName || 'گودام'} ➔ ${trf.toWarehouseName || 'گودام'}`,
+        itemName: trf.itemName,
+        warehouse: `${trf.fromWarehouseName} ➔ ${trf.toWarehouseName}`,
+        quantity: 0,
+        weight: qty,
+        inQty: 0,
+        outQty: 0,
+        rate: 0,
+        detail: `منتقلی: ${trf.fromWarehouseName || ''} سے ${trf.toWarehouseName || ''} (${qty} KG)`,
+      });
+    }
+  });
+
   movements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   let runningQty = 0;
@@ -151,8 +155,7 @@ export default function QualityLedger() {
       rate: m.rate > 0 ? m.rate : '',
       debit: m.outQty > 0 ? m.outQty : 0,  // بنام (Outward)
       credit: m.inQty > 0 ? m.inQty : 0,  // جمع (Inward)
-      balance: Math.max(0, runningQty),   // بقایا (Balance)
-      marker: m.inQty > 0 ? 'جمع' : 'بنام',
+      balance: runningQty,   // بقایا (Balance)
       rawType: m.type,
     };
   });
@@ -173,22 +176,22 @@ export default function QualityLedger() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Quality Grade A/C Ledger"
-        subtitle="Traditional bordered PERBALACC-style movement statement recording all purchases, issues, and sales of this quality grade across all warehouses"
+        title="Item Ledger (آئٹم کھاتہ)"
+        subtitle="Traditional bordered PERBALACC-style movement statement recording all purchases, issues, transfers, and sales of this item across all warehouses"
         actions={
-          <Button variant="secondary" icon={Award} onClick={() => navigate('/qualities')}>
-            Manage Qualities
+          <Button variant="secondary" icon={Layers} onClick={() => navigate('/items')}>
+            Manage Items
           </Button>
         }
       />
 
       <ClassicLedgerView
-        accountType="Quality"
-        acCode={selectedQuality?.id || 'Q-01'}
-        accountName={qualityName}
-        urduName={selectedQuality?.urduName || selectedQuality?.nameUrdu || qualityName}
-        englishName={qualityName}
-        badgeText="کوالٹی"
+        accountType="Item"
+        acCode={selectedItem?.code || selectedItem?.id || 'ITM-01'}
+        accountName={itemName}
+        urduName={selectedItem?.urduName || selectedItem?.nameUrdu || itemName}
+        englishName={itemName}
+        badgeText="آئٹم"
         rows={ledgerRows}
         openingBalance={0}
         dateFrom={dateFrom}
@@ -201,15 +204,15 @@ export default function QualityLedger() {
         entitySelector={
           <div className="w-full sm:w-80">
             <Select
-              label="Select Quality Classification"
-              value={selectedQualityId}
+              label="Select Catalog Item"
+              value={selectedItemId}
               onChange={(val) => {
-                setSelectedQualityId(val);
-                navigate(`/quality-ledger?quality=${val}`, { replace: true });
+                setSelectedItemId(val);
+                navigate(`/item-ledger?item=${val}`, { replace: true });
               }}
-              options={qualities.map((q) => ({
-                value: q.id,
-                label: q.name,
+              options={items.map((i) => ({
+                value: i.id,
+                label: `${i.code ? `${i.code} - ` : ''}${i.name}`,
               }))}
             />
           </div>

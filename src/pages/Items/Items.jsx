@@ -45,9 +45,6 @@ export default function Items() {
         subtitle="Raw cotton waste materials and finished recycled products"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => navigate('/qualities')}>
-              Quality Grades
-            </Button>
             <Button variant="secondary" onClick={() => navigate('/stock-ledger')}>
               Stock Ledger
             </Button>
